@@ -2786,7 +2786,7 @@ function simDirectBody(){
   const m=S.simConn||{}, transport=m.transport||'pipe', proto=m.protocol||'SunRise';
   return `
     ${canDirect?'':`<div class="help" style="margin-top:12px;border-style:solid;border-color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-      <span>This page is in a sandboxed browser tab, which can't open MSFS's local SimConnect socket. Open <b class="mono">skyledgertest.html</b> inside a socket-capable host (Electron / NW.js / WebView2 with Node) to use the built-in client with <b>no extra process</b> — or use the WebSocket bridge tab.</span></div>`}
+      <span>This page is in a sandboxed browser tab, which can't open MSFS's local SimConnect socket. Open <b class="mono">index.html</b> inside a socket-capable host (Electron / NW.js / WebView2 with Node) to use the built-in client with <b>no extra process</b> — or use the WebSocket bridge tab.</span></div>`}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px">
       <div class="form-row" style="margin-top:0"><label>Sim version</label>
         <select class="field" onchange="setSimConn('protocol',this.value)" style="width:100%">
