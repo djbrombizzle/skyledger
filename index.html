@@ -2786,7 +2786,7 @@ function simDirectBody(){
   const m=S.simConn||{}, transport=m.transport||'pipe', proto=m.protocol||'SunRise';
   return `
     ${canDirect?'':`<div class="help" style="margin-top:12px;border-style:solid;border-color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-      <span>This page is in a sandboxed browser tab, which can't open MSFS's local SimConnect socket. Open <b class="mono">skyledgertest.html</b> inside a socket-capable host (Electron / NW.js / WebView2 with Node) to use the built-in client with <b>no extra process</b> — or use the WebSocket bridge tab.</span></div>`}
+      <span>This page is in a sandboxed browser tab, which can't open MSFS's local SimConnect socket. Open <b class="mono">index.html</b> inside a socket-capable host (Electron / NW.js / WebView2 with Node) to use the built-in client with <b>no extra process</b> — or use the WebSocket bridge tab.</span></div>`}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px">
       <div class="form-row" style="margin-top:0"><label>Sim version</label>
         <select class="field" onchange="setSimConn('protocol',this.value)" style="width:100%">
@@ -3000,8 +3000,8 @@ function firstAircraft(id,mode){
      skyConfig('https://YOURREF.supabase.co','YOUR-ANON-KEY')
    ========================================================================= */
 const SUPA = {
-  url:  (function(){try{return localStorage.getItem('sky_supa_url')}catch(e){return ''}})()  || '',  // e.g. https://abcd1234.supabase.co
-  anon: (function(){try{return localStorage.getItem('sky_supa_anon')}catch(e){return ''}})() || '',  // your anon / public key
+  url:  (function(){try{return localStorage.getItem('sky_supa_url')}catch(e){return ''}})()  || 'https://qoaipsfcidpymboojfwa.supabase.co',  // Supabase project URL
+  anon: (function(){try{return localStorage.getItem('sky_supa_anon')}catch(e){return ''}})() || 'sb_publishable_6Pj7jeRN0AQBcjl44MoCNA_zjsvFs79',  // publishable (public) key — safe to commit
 };
 function skyConfig(url,anon){ localStorage.setItem('sky_supa_url',url); localStorage.setItem('sky_supa_anon',anon); location.reload(); }
 function cloudEnabled(){ return /^https:\/\//.test(SUPA.url) && !!SUPA.anon && SUPA.anon.length>20; }
