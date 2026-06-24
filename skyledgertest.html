@@ -426,6 +426,7 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
     <a class="nav-item" data-nav="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9L2 12z"/></svg>Active Trip<span class="badge" id="activeBadge" style="display:none">1</span></a>
     <a class="nav-item" data-nav="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>VATSIM Events<span class="badge" id="eventBadge" style="display:none">0</span></a>
     <a class="nav-item" data-nav="weather"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 18a4 4 0 000-8 6 6 0 00-11.6 1.5A3.5 3.5 0 006 18h11z"/></svg>Weather</a>
+    <a class="nav-item" data-nav="airport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Airports</a>
     <div class="nav-label">Assets</div>
     <a class="nav-item" data-nav="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16l9-12 9 12M5 16h14l-2 4H7l-2-4z"/></svg>My Fleet</a>
     <a class="nav-item" data-nav="market"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-4h16l1 4M4 9v10a1 1 0 001 1h14a1 1 0 001-1V9M3 9h18M9 13h6"/></svg>Marketplace</a>
@@ -646,7 +647,7 @@ const AIRCRAFT = [
   {id:'be350',name:'Beechcraft King Air 350i',cls:'turboprop',pax:9,range:1800,cruise:312,burn:100,maint:430,price:8200000,lease:2600},
   {id:'cj4',name:'Citation CJ4 Gen2',cls:'light',pax:9,range:2165,cruise:451,burn:200,maint:600,price:10700000,lease:3400},
   {id:'e55p',name:'Phenom 300E',cls:'light',pax:9,range:2010,cruise:453,burn:210,maint:620,price:11200000,lease:3600},
-  {id:'lr75',name:'Learjet 75 Liberty',cls:'light',pax:8,range:2080,cruise:465,burn:250,maint:680,price:9900000,lease:3300},
+  {id:'f50',name:'Dassault Falcon 50',cls:'midsize',pax:9,range:3000,cruise:475,burn:300,maint:800,price:12500000,lease:4400},
   {id:'cl350lat',name:'Citation Latitude',cls:'midsize',pax:9,range:2700,cruise:483,burn:290,maint:780,price:18500000,lease:5200},
   {id:'h900',name:'Hawker 900XP',cls:'midsize',pax:8,range:2930,cruise:447,burn:300,maint:760,price:9500000,lease:4200},
   {id:'sov',name:'Citation Sovereign+',cls:'midsize',pax:12,range:3200,cruise:460,burn:280,maint:790,price:18000000,lease:5000},
@@ -963,9 +964,9 @@ function weightedOrigin(){
   return pick(HUBS);
 }
 function classForDistance(d){
-  if(d<350) return pick(['turboprop','turboprop','light']);
-  if(d<900) return pick(['turboprop','light','light','midsize']);   // turboprops do real regional work
-  if(d<1500) return pick(['light','light','midsize']);
+  if(d<350) return pick(['turboprop','turboprop','turboprop','light']);
+  if(d<900) return pick(['turboprop','turboprop','light','light','midsize']);   // turboprops do real regional work
+  if(d<1500) return pick(['turboprop','light','light','midsize']);
   if(d<2600) return pick(['midsize','supermid']);
   if(d<4200) return pick(['supermid','heavy']);
   return pick(['heavy','ulr']);
@@ -1151,6 +1152,7 @@ function bestAircraftFor(c){
 let view='dash';
 const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:['Active Trip',''],
   events:['VATSIM Events','live network'],weather:['Weather','live METAR + radar'],
+  airport:['Airport Explorer','charters · aircraft · fees'],
   fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator',''],
   ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network']};
 function nav(v){ view=v; renderAll(); }
@@ -1164,7 +1166,7 @@ function renderAll(){
   $('#eventBadge').style.display=liveEv?'inline-block':'none'; $('#eventBadge').textContent=liveEv;
   renderTop();
   const p=$('#page');
-  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,fleet:rFleet,market:rMarket,operator:rOperator,ratings:rRatings,ledger:rLedger,map:rMap}[view])(p);
+  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,fleet:rFleet,market:rMarket,operator:rOperator,ratings:rRatings,ledger:rLedger,map:rMap}[view])(p);
   if(view==='map') setTimeout(initMap,40);
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
   save();
@@ -1258,7 +1260,7 @@ function dashCharterRow(c){
 }
 
 /* ---------- CHARTER BOARD ---------- */
-let boardFilter={cat:'all',ready:false,q:'',aircraft:'all'};
+let boardFilter={cat:'all',cls:'all',ready:false,q:'',aircraft:'all'};
 function selectedFleetAc(){
   if(boardFilter.aircraft&&boardFilter.aircraft!=='all'){
     const f=S.fleet.find(x=>x.id===boardFilter.aircraft&&!x.busy);
@@ -1278,6 +1280,7 @@ function rBoard(p){
   let list=S.board.filter(c=>c.expires>now);
   if(sel) list=list.filter(c=>acForCharter(c));                 // only charters this aircraft can fly
   if(boardFilter.cat!=='all') list=list.filter(c=>c.cat===boardFilter.cat);
+  if(boardFilter.cls!=='all') list=list.filter(c=>c.cls===boardFilter.cls);
   if(boardFilter.ready) list=list.filter(c=>{const pl=planFor(c);return pl&&pl.ready;});
   if(boardFilter.event) list=list.filter(c=>c.rwEvent);
   if(boardFilter.q){const q=boardFilter.q.toUpperCase();list=list.filter(c=>c.dep.includes(q)||c.arr.includes(q)||APTBY[c.dep].name.toUpperCase().includes(q)||APTBY[c.arr].name.toUpperCase().includes(q));}
@@ -1294,6 +1297,12 @@ function rBoard(p){
       ${evCount?`<button class="chip ${boardFilter.event?'on':''}" onclick="setBF('event',${!boardFilter.event})">${boardFilter.event?'':''}Events (${evCount})</button>`:''}
       <button class="chip ${boardFilter.ready?'on':''}" onclick="setBF('ready',${!boardFilter.ready})">✓ Ready now</button>
       <button class="btn ghost sm" onclick="doRefresh()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7M21 4v5h-5"/></svg>Refresh</button>
+    </div>
+    <div class="bar" style="margin-top:-6px">
+      <div class="chiprow">
+        <button class="chip ${boardFilter.cls==='all'?'on':''}" onclick="setBF('cls','all')">All sizes</button>
+        ${Object.keys(CLASSES).map(k=>`<button class="chip ${boardFilter.cls===k?'on':''}" onclick="setBF('cls','${k}')">${CLASSES[k].label}</button>`).join('')}
+      </div>
     </div>
     <div class="bar" style="margin-top:-6px">
       <div class="chiprow">
@@ -1322,10 +1331,15 @@ function timeLeft(ms){const d=ms-Date.now();if(d<0)return'expired';const h=Math.
 /* ---- RENTAL-TO-FLY: take any charter you're rated for, renting an aircraft on-site if you don't own one ---- */
 const RENTAL_MARKUP=1.3;              // on-demand rental costs a bit more than a standing lease
 function ratedFor(c){ return S.maxTier>=c.tier; }
-function rentalTypeFor(c){
-  const cand=AIRCRAFT.filter(a=>CLASSES[a.cls].tier>=c.tier && CLASSES[a.cls].tier<=S.maxTier && a.range>=c.dist && a.pax>=(c.pax||0))
-    .sort((x,y)=>x.lease-y.lease);    // cheapest suitable type you're rated for
-  return cand[0]||null;
+function rentalTypeFor(c){ return rentalTypesFor(c)[0]||null; }
+/* every suitable rental type you're rated for, so the renter can pick within the type group.
+   Preference: aircraft in the charter's own class first; if that group can't cover the
+   range/seats, widen to larger classes you hold a rating for. Sorted cheapest-first. */
+function rentalTypesFor(c){
+  const fits=a=>a.range>=c.dist && a.pax>=(c.pax||0) && CLASSES[a.cls].tier<=S.maxTier && CLASSES[a.cls].tier>=c.tier;
+  let group=AIRCRAFT.filter(a=>a.cls===c.cls && fits(a));
+  if(!group.length) group=AIRCRAFT.filter(fits);          // widen if the native class can't do it
+  return group.sort((x,y)=>x.lease-y.lease);
 }
 /* auto market rental rate for a type — used until a real owner lists one at their own price */
 function rentalRateFor(a){ return Math.round(a.lease*RENTAL_MARKUP); }
@@ -1394,19 +1408,27 @@ function charterCard(c){
 
 /* ---------- ACCEPT MODAL (FBO selection + transparent P&L) ---------- */
 let _acc=null;
-function openAccept(cid){
+function openAccept(cid, keep){
   const c=S.board.find(x=>x.id===cid); if(!c)return;
   const plan=planFor(c); if(!plan){showToast('You can’t take this charter yet','bad');return;}
-  // owned/leased jet, or a virtual on-site rental
-  const ac = plan.rental
-    ? {id:null, type:plan.type, tail:'(rental)', loc:c.dep, owned:false, rental:true, rentalRate:plan.rate}
-    : plan.ac;
+  // rental: a choice of suitable jets in the same type group; owned/leased: the assigned jet
+  let rentalTypes=null, ac;
+  if(plan.rental){
+    rentalTypes=rentalTypesFor(c);
+    const selType=(keep&&keep.rentalType&&rentalTypes.some(a=>a.id===keep.rentalType))
+      ? keep.rentalType : ((rentalTypes[0]&&rentalTypes[0].id)||plan.type);
+    ac={id:null, type:selType, tail:'(rental)', loc:c.dep, owned:false, rental:true, rentalRate:rentalRateFor(ACBY[selType])};
+  } else {
+    ac=plan.ac;
+  }
   const acm=ACBY[ac.type];
   ensureExit(c.arr);                       // GUARANTEE a way out of the arrival field exists
   const depF=fbosFor(c.dep), arrF=fbosFor(c.arr);
   let depIdx=0; depF.forEach((f,i)=>{if(f.fuel<depF[depIdx].fuel)depIdx=i;});           // cheapest fuel
   let arrIdx=0; arrF.forEach((f,i)=>{if(rampFeeFor(c.arr,f,acm.cls)<rampFeeFor(c.arr,arrF[arrIdx],acm.cls))arrIdx=i;}); // cheapest ramp
-  _acc={c,ac,acm,depF,arrF,depIdx,arrIdx,ready:ac.loc===c.dep,rental:!!ac.rental};
+  if(keep){ if(keep.depIdx!=null&&keep.depIdx<depF.length)depIdx=keep.depIdx;
+            if(keep.arrIdx!=null&&keep.arrIdx<arrF.length)arrIdx=keep.arrIdx; }
+  _acc={c,ac,acm,depF,arrF,depIdx,arrIdx,ready:ac.loc===c.dep,rental:!!ac.rental,rentalTypes};
   const reposNm=ac.loc===c.dep?0:haversine(ac.loc,c.dep);
   const onlineEst=Math.round(c.payout*CFG.onlineBonus);
   // onward options out of the arrival field
@@ -1421,14 +1443,18 @@ function openAccept(cid){
     </div>
     <div class="modal-body">
       <div id="accWx" style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">${wxStrip(c.dep)+wxStrip(c.arr)}</div>
-      <div class="form-row" style="margin-top:14px"><label>${ac.rental?'Rental aircraft':'Assigned aircraft'}</label>
-        <div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px">
-          <span class="tail">${ac.rental?'🔑':ac.tail}</span><span style="font-weight:600">${acm.name}</span>
-          <span class="tag ${ac.rental?'muted-t':ac.owned?'ok':'muted-t'}">${ac.rental?'Rented on-site':ac.owned?'Owned':'Leased'}</span>
-          <span class="sec-spacer" style="flex:1"></span><span class="muted mono" style="font-size:12px">at ${c.dep}</span>
-        </div></div>
+      <div class="form-row" style="margin-top:14px"><label>${ac.rental?'Rental aircraft — choose your jet':'Assigned aircraft'}</label>
+        ${ac.rental&&rentalTypes&&rentalTypes.length>1
+          ? `<select class="field" id="rentTypeSel" onchange="setAccRental(this.value)" style="width:100%;font-weight:600">
+              ${rentalTypes.map(a=>`<option value="${a.id}" ${a.id===ac.type?'selected':''}>🔑 ${a.name} · ${CLASSES[a.cls].label} · ${a.pax} pax · ${money(rentalRateFor(a))}/day</option>`).join('')}
+            </select>`
+          : `<div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px">
+              <span class="tail">${ac.rental?'🔑':ac.tail}</span><span style="font-weight:600">${acm.name}</span>
+              <span class="tag ${ac.rental?'muted-t':ac.owned?'ok':'muted-t'}">${ac.rental?'Rented on-site':ac.owned?'Owned':'Leased'}</span>
+              <span class="sec-spacer" style="flex:1"></span><span class="muted mono" style="font-size:12px">at ${c.dep}</span>
+            </div>`}</div>
       ${ac.rental?`<div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
-        <span>You don't own a suitable aircraft, so you'll <b>rent a ${acm.name}</b> at ${c.dep} for <b>${money(ac.rentalRate)}/day</b> (auto market rate). No positioning leg — it's waiting at the field. Buy this type to stop renting and set your own rate when you list it.</span></div>`:''}
+        <span>You don't own a suitable aircraft, so you'll <b>rent a ${acm.name}</b> at ${c.dep} for <b>${money(ac.rentalRate)}/day</b> (auto market rate)${rentalTypes&&rentalTypes.length>1?` — pick another ${CLASSES[c.cls].label} above to compare`:''}. No positioning leg — it's waiting at the field. Buy this type to stop renting and set your own rate when you list it.</span></div>`:''}
       ${reposNm?`<div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
         <span>This jet is at <b>${ac.loc}</b>. You'll fly a <b>${reposNm}nm positioning leg</b> to ${c.dep} first (counts toward hours &amp; rep), then the revenue leg.</span></div>`:''}
       <div class="help" style="margin-top:12px;border-style:solid;border-color:var(--pos-soft);background:var(--pos-soft)">
@@ -1456,6 +1482,8 @@ function openAccept(cid){
   renderAccPnl();
 }
 function setAccFbo(which,idx){ if(_acc){_acc[which+'Idx']=+idx; renderAccPnl();} }
+/* switch the rented aircraft type, preserving the chosen FBOs */
+function setAccRental(typeId){ if(!_acc)return; openAccept(_acc.c.id,{rentalType:typeId,depIdx:_acc.depIdx,arrIdx:_acc.arrIdx}); }
 function accEcon(){
   const {c,acm,depF,arrF,depIdx,arrIdx,ac,ready}=_acc;
   const depFuel=depF[depIdx].fuel, arrRamp=rampFeeFor(c.arr,arrF[arrIdx],acm.cls);
@@ -1639,7 +1667,7 @@ function legRow(l,i,acm){
     ${l.done?'<span class="muted" style="font-size:12px">flown</span>':active?'<span class="tag warnt">open</span>':'<span class="muted" style="font-size:12px">queued</span>'}
   </div>`;
 }
-function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12',be250:'BE20',be350:'B350',cj4:'C25C',e55p:'E55P',lr75:'LJ75',
+function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12',be250:'BE20',be350:'B350',cj4:'C25C',e55p:'E55P',f50:'FA50',
   cl350lat:'C68A',h900:'H25B',sov:'C680',prae600:'E550',cl350:'CL35',long:'C700',citx:'C750',f8x:'FA8X',glex:'GL5T',g650:'GLF6',
   glob7500:'GL7T',g700:'GLF7',bbj:'B38M'}[acm.id]||'C700';}
 
@@ -1672,7 +1700,8 @@ function completeLeg(idx,verified,atc,capArg){
   let cost=e.opcost;
   if(!ac.owned) cost+=ac.rental?rentalCost(ac.rentalRate,e.block):Math.round(acm.lease*(e.block/8));
   S.cash-=cost;
-  S.ledger.push({t:Date.now(),k:`${leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-cost,note:acm.name});
+  const ferry=!!(t.charter&&t.charter.ferry);
+  S.ledger.push({t:Date.now(),k:`${ferry?'Ferry':leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-cost,note:acm.name});
   leg.done=true; leg.verified=leg.verified||!!verified;
   ac.loc=leg.to; ac.hours+=e.block; ac.cond=Math.max(40,ac.cond-rnd(0.4,1.6));
   S.hours+=e.block; S.nm+=e.dist;
@@ -1682,11 +1711,11 @@ function completeLeg(idx,verified,atc,capArg){
   leg.grade = grade;
   S.grades.push({t:Date.now(),score:grade.score,letter:grade.letter,route:`${leg.from}→${leg.to}`,tier:CLASSES[acm.cls].tier,tracked:!!cap});
   if(S.grades.length>40) S.grades=S.grades.slice(-40);
-  // qualifying flight toward next rating: a clean revenue leg flown in a top-tier aircraft
-  if(leg.kind==='revenue' && CLASSES[acm.cls].tier===S.maxTier && grade.score>=60) S.tierQual++;
+  // qualifying flight toward next rating: a clean revenue leg flown in a top-tier aircraft (ferries don't count)
+  if(leg.kind==='revenue' && !ferry && CLASSES[acm.cls].tier===S.maxTier && grade.score>=60) S.tierQual++;
   // ---- dynamic economy: a revenue leg delivers demand to the arrival field and clears it at departure ----
   let mktMsg='';
-  if(leg.kind==='revenue'){
+  if(leg.kind==='revenue' && !ferry){
     bumpDemand(leg.to, +CFG.arriveBump);    // pax/cargo delivered -> they'll want to leave
     bumpDemand(leg.from, -CFG.departDraw);               // served outbound demand here
     const nd=demandAt(leg.to);
@@ -1697,24 +1726,29 @@ function completeLeg(idx,verified,atc,capArg){
 }
 function settleTrip(){
   const t=S.active, c=t.charter, ac=S.fleet.find(f=>f.id===t.acId);
-  let payout=c.payout, bonusNote=[];
-  if(t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
-  S.cash+=payout;
-  S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
-  // reputation
-  let rep=Math.round(c.dist/22)+12;
-  if(t.legs.find(l=>l.kind==='revenue').verified)rep=Math.round(rep*1.5);
-  if(c.cat==='medevac'||c.cat==='vvip')rep+=25;
-  if(c.rwEvent)rep+=15;                       // small prestige for working a real-world event
+  const ferry=!!c.ferry;
+  let payout=ferry?0:c.payout, bonusNote=[];
+  if(!ferry && t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
+  if(payout){
+    S.cash+=payout;
+    S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
+  }
+  // reputation (a no-revenue ferry earns only token rep)
+  let rep=ferry?Math.max(1,Math.round(c.dist/120)):Math.round(c.dist/22)+12;
+  if(!ferry){
+    if(t.legs.find(l=>l.kind==='revenue').verified)rep=Math.round(rep*1.5);
+    if(c.cat==='medevac'||c.cat==='vvip')rep+=25;
+    if(c.rwEvent)rep+=15;                       // small prestige for working a real-world event
+  }
   S.rep+=rep; S.flights++;
   // FBO passive cut if charter originated at your FBO
-  if(S.fbo===c.dep){const cut=Math.round(c.payout*0.04);S.cash+=cut;S.ledger.push({t:Date.now(),k:`FBO origin fee ${c.dep}`,a:cut,note:'Your FBO'});}
+  if(!ferry && S.fbo===c.dep){const cut=Math.round(c.payout*0.04);S.cash+=cut;S.ledger.push({t:Date.now(),k:`FBO origin fee ${c.dep}`,a:cut,note:'Your FBO'});}
   ac.busy=false; const arrived=c.arr;
   if(ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // rental returned to the market
   S.active=null;
   ensureExit(arrived);                        // guarantee a way out of where you just landed
   const oldRank=rankFor(S.rep-rep), newRank=rankFor(S.rep);
-  showToast(`Trip settled · ${money(payout)} · +${rep} rep`,'good');
+  showToast(ferry?`Ferry complete · aircraft now at ${arrived} · +${rep} rep`:`Trip settled · ${money(payout)} · +${rep} rep`,'good');
   if(oldRank!==newRank) setTimeout(()=>showToast(`Promoted to ${newRank}! 🎖`,'good'),700);
   if(upgradeReady()) setTimeout(()=>showToast(`Type rating upgrade available — visit Type Ratings ✈`,'good'),1100);
   refreshBoard(false); nav('dash');
@@ -2202,6 +2236,203 @@ function rWeather(p){
 function addWx(v){ v=(v||'').trim().toUpperCase(); if(!v)return; wxAdd='';
   if(!S.wxWatch)S.wxWatch=[]; if(!S.wxWatch.includes(v))S.wxWatch.push(v);
   fetchWx([v]).then(()=>{ if(!WX[v])WX[v]={icao:v,cat:'—',raw:'No report found',vis:0,ceil:null,wdir:null}; if(view==='weather')rWeather($('#page')); });
+}
+
+/* ---------- AIRPORT EXPLORER ---------- */
+let airportQ='';
+let _rentCache={};
+/* aircraft sitting at a field that you're rated to rent (deterministic per field + rating) */
+function rentableAt(ic){
+  const a=APTBY[ic]; if(!a) return [];
+  const key=ic+'|'+S.maxTier;
+  if(_rentCache[key]) return _rentCache[key];
+  const pool=AIRCRAFT.filter(x=>CLASSES[x.cls].tier<=S.maxTier);
+  const n=Math.min(pool.length, a.cls==='i'?5:a.cls==='m'?4:3);
+  const ranked=pool.map(ac=>({ac,r:hashStr(ac.id+ic)})).sort((p,q)=>p.r-q.r).slice(0,n);
+  const out=ranked.map(({ac,r})=>({type:ac.id, tail:genTail(), rate:rentalRateFor(ac), cond:70+(r%28)}));
+  _rentCache[key]=out; return out;
+}
+function setAirportQ(v){ airportQ=(v||'').trim().toUpperCase(); if(view==='airport')rAirport($('#page')); }
+function rAirport(p){
+  const q=(airportQ||'').toUpperCase().trim();
+  const ic=APTBY[q]?q:null;
+  const head=`
+    <div class="bar">
+      <div><div class="eyebrow">Airport Explorer</div><div class="sec-title" style="font-size:15px">Look up any field</div></div>
+      <div class="sec-spacer" style="flex:1"></div>
+      <input class="field mono" id="aptIn" placeholder="ICAO… e.g. KTEB" value="${airportQ}" style="width:170px;text-transform:uppercase;letter-spacing:.04em"
+        oninput="airportQ=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')setAirportQ(this.value)">
+      <button class="btn sky sm" onclick="setAirportQ($('#aptIn').value)">Go</button>
+    </div>`;
+  if(!ic){
+    const sugg=[...new Set([S.base,...S.fleet.map(f=>f.loc),...HUBS])].filter(x=>APTBY[x]).slice(0,18);
+    p.innerHTML=head+`
+      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>Type an ICAO to see every charter <b>from</b> or <b>to</b> that field, the aircraft parked there (yours or on the rental market), and full FBO fuel &amp; ramp pricing. You can <b>rent an on-site jet and ferry it anywhere</b> for repositioning (no revenue).${q?` <span class="neg">“${q}” isn't in the Skyledger network.</span>`:''}</span></div>
+      <div class="sec-head" style="margin-top:6px"><div class="sec-title" style="font-size:15px">Quick jump</div></div>
+      <div class="chiprow">${sugg.map(x=>`<button class="chip" onclick="setAirportQ('${x}')">${x} · ${APTBY[x].name}${wxDot(x)}</button>`).join('')}</div>`;
+    return;
+  }
+  const a=APTBY[ic], now=Date.now();
+  const fromList=S.board.filter(c=>c.dep===ic&&c.expires>now).sort((x,y)=>y.payout-x.payout);
+  const toList=S.board.filter(c=>c.arr===ic&&c.expires>now).sort((x,y)=>y.payout-x.payout);
+  const fleetHere=S.fleet.filter(f=>f.loc===ic);
+  const rentHere=rentableAt(ic);
+  const rw=rwAt(ic), d=demandAt(ic);
+  const fbos=fbosFor(ic);
+  const clsLabel={s:'Regional',m:'Metro',i:'International'}[a.cls]||a.cls;
+  fetchWx([ic]).then(()=>{const el=$('#aptWx');if(el)el.innerHTML=wxStrip(ic);});
+  const fleetRowMini=f=>{
+    const idle=!f.busy && !(f.rentedUntil&&f.rentedUntil>Date.now());
+    return `<div class="mini">
+      <div class="mini-ic" style="color:var(--navy)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div>
+      <div><div class="t mono">${f.tail} <span class="tag ${f.owned?'ok':'muted-t'}" style="margin-left:4px">${f.owned?'Owned':'Leased'}</span></div>
+        <div class="s">${ACBY[f.type].name} · ${CLASSES[ACBY[f.type].cls].label}${idle?'':' · busy'}</div></div>
+      <div class="amt">${idle?`<button class="btn ghost sm" onclick="openFerry('owned','${f.id}')">Ferry to…</button>`:'<span class="muted" style="font-size:11px">unavailable</span>'}</div></div>`;
+  };
+  const rentRowMini=r=>{
+    const ac=ACBY[r.type];
+    return `<div class="mini">
+      <div class="mini-ic" style="color:var(--brass)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg></div>
+      <div><div class="t">🔑 ${ac.name}</div><div class="s">${CLASSES[ac.cls].label} · ${ac.pax} pax · ${money(r.rate)}/day</div></div>
+      <div class="amt"><button class="btn ghost sm" onclick="openFerry('rental','${r.type}')">Rent &amp; ferry</button></div></div>`;
+  };
+  p.innerHTML=head+`
+    <div class="card card-pad" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div><div style="font-family:var(--mono);font-weight:700;font-size:30px;line-height:1">${ic}</div>
+          <div class="muted" style="font-size:12.5px;margin-top:2px">${a.name}</div></div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+          <span class="tag cls">${clsLabel}</span><span class="tag muted-t">${a.region}</span>
+          ${d>=1.12?`<span class="tag demand">📈 ${demandLevel(d)} demand</span>`:''}
+          ${rw?`<span class="tag evt-tag">${rw.icon} ${rw.name}</span>`:''}
+          ${S.fbo===ic?'<span class="tag ok">★ Your FBO</span>':''}
+        </div>
+        <span class="sec-spacer" style="flex:1"></span>
+        <div id="aptWx" style="min-width:170px">${wxStrip(ic)}</div>
+      </div>
+    </div>
+
+    <div class="sec-head"><div><div class="eyebrow">Ground services</div><div class="sec-title">FBOs · fuel &amp; fees</div></div>
+      <div class="sec-spacer"></div><span class="muted" style="font-size:11.5px">landing fee (midsize) ${money(landingFeeFor(ic,'midsize'))}</span></div>
+    <div class="mkt-table" style="margin-bottom:18px">
+      <div class="mkt-head" style="grid-template-columns:1.7fr 1fr 1fr 1fr .8fr"><div>FBO</div><div>Jet-A /gal</div><div>Ramp · light</div><div>Ramp · heavy</div><div></div></div>
+      ${fbos.map(f=>`<div class="mkt-row" style="grid-template-columns:1.7fr 1fr 1fr 1fr .8fr">
+        <div class="mkt-cell mname" data-l="FBO">${f.name}</div>
+        <div class="mkt-cell mono" data-l="Jet-A">$${f.fuel.toFixed(2)}</div>
+        <div class="mkt-cell mono" data-l="Ramp light">${money(rampFeeFor(ic,f,'light'))}</div>
+        <div class="mkt-cell mono" data-l="Ramp heavy">${money(rampFeeFor(ic,f,'heavy'))}</div>
+        <div class="mkt-cell" data-l="">${f.premium?'<span class="tag warnt">premium</span>':'<span class="tag ok">standard</span>'}</div></div>`).join('')}
+    </div>
+
+    <div class="split" style="align-items:start">
+      <div>
+        <div class="sec-head"><div class="sec-title">Charters from ${ic} <span class="muted" style="font-size:12px">(${fromList.length})</span></div></div>
+        <div class="rows">${fromList.map(charterCard).join('')||emptyState('No outbound charters','Nothing departing here right now — refresh the board or check back.')}</div>
+        <div class="sec-head" style="margin-top:18px"><div class="sec-title">Charters to ${ic} <span class="muted" style="font-size:12px">(${toList.length})</span></div></div>
+        <div class="rows">${toList.map(charterCard).join('')||emptyState('No inbound charters','No charters are heading here at the moment.')}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card card-pad">
+          <div class="eyebrow">On the ramp</div><div class="sec-title" style="margin:2px 0 10px">Your aircraft here</div>
+          ${fleetHere.length?fleetHere.map(fleetRowMini).join(''):'<div class="muted" style="font-size:12.5px">None of your fleet is parked at '+ic+'.</div>'}
+        </div>
+        <div class="card card-pad">
+          <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Rental market</div><div class="sec-spacer" style="flex:1"></div><span class="muted" style="font-size:11px">on-site</span></div>
+          <div class="sec-title" style="margin:2px 0 10px">Aircraft to rent &amp; ferry</div>
+          ${rentHere.length?rentHere.map(rentRowMini).join(''):'<div class="muted" style="font-size:12.5px">No rental aircraft available here.</div>'}
+          <div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <span>Ferry flies the aircraft empty to any field in range for <b>no revenue</b> — you pay fuel, fees and (for rentals) the daily rate. Handy for positioning before a big charter.</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- FERRY (empty reposition, no revenue) ---------- */
+let _ferry=null;
+function openFerry(kind,ref){
+  if(S.active){ showToast('Finish or abandon your active trip first','bad'); return; }
+  let type,rate=0,dep,owned,tail;
+  if(kind==='owned'){
+    const f=S.fleet.find(x=>x.id===ref);
+    if(!f||f.busy||(f.rentedUntil&&f.rentedUntil>Date.now())){ showToast('Aircraft not available','bad'); return; }
+    type=f.type; dep=f.loc; owned=true; tail=f.tail;
+  } else {
+    type=ref; dep=(airportQ||'').toUpperCase();
+    if(!APTBY[dep]){ showToast('Open an airport first','bad'); return; }
+    rate=rentalRateFor(ACBY[type]); owned=false; tail='(rental)';
+  }
+  const acm=ACBY[type];
+  const dests=APT.map(x=>x[0]).filter(x=>x!==dep&&APTBY[x]).map(x=>[x,haversine(dep,x)]).filter(x=>x[1]>=60).sort((p,q)=>p[1]-q[1]);
+  const inRange=dests.filter(x=>x[1]<=acm.range*0.95);
+  const defDest=((inRange[0]||dests[0])||[null])[0];
+  _ferry={kind,ref,type,rate,dep,owned,tail,dest:defDest};
+  modal(`
+    <div class="modal-head"><div class="eyebrow">${owned?'Reposition':'Rent &amp; reposition'} · no revenue</div>
+      <h2>Ferry ${owned?tail:acm.name}</h2>
+      <div class="lead">${acm.name} · ${CLASSES[acm.cls].label} · from <b class="mono">${dep}</b> (${APTBY[dep].name})${owned?'':` · rental ${money(rate)}/day`}</div></div>
+    <div class="modal-body">
+      <div class="form-row" style="margin-top:4px"><label>Destination</label>
+        <select class="field" id="ferryDest" onchange="setFerryDest(this.value)" style="width:100%">
+          ${dests.map(([x,dd])=>`<option value="${x}" ${x===defDest?'selected':''} ${dd>acm.range*0.95?'disabled':''}>${x} · ${APTBY[x].name} · ${dd.toLocaleString()}nm${dd>acm.range*0.95?' (out of range)':''}</option>`).join('')}
+        </select></div>
+      <div id="ferryPnl"></div>
+      <div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
+        <span>An empty positioning flight: no charter payout, but it still counts toward your hours and is graded with Sim Link. ${owned?'':'The rental is returned to the market when you land.'}</span></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" onclick="_ferry=null;closeModal()" style="flex:1">Cancel</button>
+        <button class="btn brass" onclick="launchFerry()" style="flex:2">Launch ferry
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>`);
+  renderFerryPnl();
+}
+function setFerryDest(ic){ if(_ferry){_ferry.dest=ic; renderFerryPnl();} }
+function ferryEcon(){
+  if(!_ferry||!_ferry.dest) return null;
+  const {type,dep,dest,owned,rate}=_ferry, acm=ACBY[type];
+  const leg=legEcon(dep,dest,acm);
+  const lease=owned?0:rentalCost(rate,leg.block);
+  return {leg,lease,cost:leg.opcost+lease,acm};
+}
+function renderFerryPnl(){
+  const el=$('#ferryPnl'); if(!el||!_ferry)return;
+  const e=ferryEcon();
+  if(!e){ el.innerHTML='<div class="pnl" style="margin-top:14px"><div class="pnl-row"><span>Select a destination</span></div></div>'; return; }
+  const {leg,lease,cost,acm}=e;
+  el.innerHTML=`<div class="pnl" style="margin-top:14px">
+      <div class="pnl-row"><span>Charter value (ferry)</span><span class="num">$0</span></div>
+      <div class="pnl-row"><span>Fuel · ${Math.round(acm.burn*leg.block).toLocaleString()} gal @ $${leg.fuelPrice.toFixed(2)}</span><span class="num neg">-${money(leg.fuel)}</span></div>
+      <div class="pnl-row"><span>Maintenance reserve (${leg.block.toFixed(1)} blk hrs)</span><span class="num neg">-${money(leg.maint)}</span></div>
+      <div class="pnl-row"><span>Ramp + landing${leg.intlNav?' + intl/overflight':''}</span><span class="num neg">-${money(leg.handling+leg.intlNav)}</span></div>
+      ${lease?`<div class="pnl-row"><span>Aircraft rental (auto rate)</span><span class="num neg">-${money(lease)}</span></div>`:''}
+      <div class="pnl-row tot"><span>Net cost to reposition</span><span class="num neg">-${money(cost)}</span></div>
+    </div>`;
+}
+function launchFerry(){
+  if(!_ferry||!_ferry.dest){ showToast('Pick a destination','bad'); return; }
+  if(S.active){ showToast('Finish your active trip first','bad'); return; }
+  const {kind,ref,type,rate,dep,dest,owned}=_ferry, acm=ACBY[type];
+  if(haversine(dep,dest)>acm.range*0.95){ showToast('Destination is out of range','bad'); return; }
+  let ac;
+  if(kind==='owned'){
+    ac=S.fleet.find(x=>x.id===ref);
+    if(!ac||ac.busy){ showToast('Aircraft unavailable','bad'); return; }
+  } else {
+    ac={id:uid(),type,tail:genTail(),loc:dep,owned:false,rental:true,rentalRate:rate,cond:Math.round(rnd(86,98)),hours:0,busy:true};
+    S.fleet.push(ac);
+  }
+  ac.busy=true;
+  const dist=haversine(dep,dest);
+  const df=cheapestFuelFbo(dep), af=cheapestRampFbo(dest,acm.cls);
+  const charter={id:uid(),dep,arr:dest,dist,cls:acm.cls,tier:CLASSES[acm.cls].tier,cat:'empty_leg',pax:0,payout:0,
+    client:'Ferry flight (no revenue)',expires:Date.now()+72*3600e3,surge:false,hot:false,repo:true,ferry:true};
+  S.active={cid:charter.id,acId:ac.id,charter,legs:[{from:dep,to:dest,kind:'revenue',done:false,verified:false}],
+    started:Date.now(),verifiedAny:false,rental:!owned,
+    fbo:{dep:df.name,depFuel:df.fuel,arr:af.name,arrRamp:rampFeeFor(dest,af,acm.cls)}};
+  S.board=S.board.filter(x=>x.id!==charter.id);
+  _ferry=null; closeModal();
+  showToast(`Ferry built · ${dep} → ${dest} · fly the leg in your sim`,'good'); nav('active');
 }
 
 /* ---------- LEDGER ---------- */
@@ -2767,6 +2998,9 @@ if(S){
   if(!S.wxWatch)S.wxWatch=[]; if(S.simbriefUser===undefined)S.simbriefUser='';
   if(!S.demand)S.demand={}; if(S.lastEco===undefined)S.lastEco=0;
   if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
+  // retired aircraft: migrate Learjet 75 to a comparable light jet so old saves keep working
+  (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });
+  (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
   refreshUsed(); rentalTick();                 // top up used listings, settle any finished rentals
   if(Date.now()-(S.lastBoard||0)>20*60e3) refreshBoard(false);
   renderAll();
