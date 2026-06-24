@@ -783,6 +783,7 @@ const money1k = n=>{const a=Math.abs(n);return (n<0?'-$':'$')+(a>=1e6?(a/1e6).to
 const rnd = (a,b)=>a+Math.random()*(b-a);
 const pick = a=>a[Math.floor(Math.random()*a.length)];
 const uid = ()=>Math.random().toString(36).slice(2,9);
+const genPirepCode = ()=>Math.random().toString(36).slice(2,8).toUpperCase();
 function rankFor(rep){let r=RANKS[0];for(const x of RANKS)if(rep>=x.min)r=x;return r.name;}
 function nextRank(rep){for(const x of RANKS)if(rep<x.min)return x;return null;}
 
@@ -892,6 +893,7 @@ function newGame(name,base){
     simMode:(typeof SkySimConnect!=='undefined'&&SkySimConnect.available())?'direct':'bridge',
     simConn:{transport:'pipe',pipe:(typeof SkySimConnect!=='undefined'?SkySimConnect.DEFAULT_PIPE:''),host:'localhost',port:2048,protocol:'SunRise'},
     simbriefUser:'', wxWatch:[],
+    pirepCode:genPirepCode(),      // pairing code for the MSFS toolbar PIREP panel
     demand:{}, lastEco:0,          // dynamic outbound-demand economy
     used:[], lastUsed:0            // pre-owned aircraft market
   };
@@ -1598,6 +1600,7 @@ function rActive(p){
             : `<p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
                <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
         </div>
+        ${pirepCard()}
         <div class="card card-pad" id="sbCard">${simbriefCard(c,acm)}</div>
         <button class="btn danger" onclick="abandonTrip()">Abandon trip (forfeit)</button>
       </div>
@@ -3024,6 +3027,7 @@ function migrateSave(){
   if(!S.wxWatch)S.wxWatch=[]; if(S.simbriefUser===undefined)S.simbriefUser='';
   if(!S.demand)S.demand={}; if(S.lastEco===undefined)S.lastEco=0;
   if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
+  if(!S.pirepCode)S.pirepCode=genPirepCode();
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
 }
@@ -3135,7 +3139,7 @@ async function cloudSaveNow(){
   try{
     await sb.from('saves').upsert({user_id:AUTH.user.id,data:S,updated_at:new Date().toISOString()},{onConflict:'user_id'});
     await sb.from('profiles').upsert({id:AUTH.user.id,pilot:S.pilot,rep:Math.round(S.rep||0),cash:Math.round(S.cash||0),
-      flights:S.flights||0,base:S.base||'',updated_at:new Date().toISOString()},{onConflict:'id'});
+      flights:S.flights||0,base:S.base||'',pirep_code:S.pirepCode||'',updated_at:new Date().toISOString()},{onConflict:'id'});
   }catch(e){ /* offline / RLS — ignore */ }
 }
 async function cloudActivity(text){
@@ -3161,6 +3165,60 @@ function updateOnlinePill(){
   const b=$('#commBadge'); if(!b)return;
   const n=(RT.online||[]).length;
   if(cloudEnabled()&&AUTH.user&&n){ b.style.display='inline-block'; b.textContent=n; } else b.style.display='none';
+}
+
+/* ---- PIREP INGESTION (from the MSFS toolbar panel) ----
+   A PIREP carries the same "capture" the live Sim Link produces, so we apply it
+   to the current open leg through the normal grading pipeline. Two delivery
+   paths: paste the code, or auto-pull from Supabase (panel submitted it). */
+function decodePirep(text){
+  if(!text) return null; text=String(text).trim();
+  try{ return JSON.parse(decodeURIComponent(escape(atob(text)))); }catch(e){}
+  try{ return JSON.parse(text); }catch(e){}
+  return null;
+}
+function applyPirep(pirep){
+  if(!pirep){ showToast("Couldn't read that PIREP code",'bad'); return false; }
+  if(!S.active){ showToast('No active trip to log this PIREP against','bad'); return false; }
+  const t=S.active, idx=t.legs.findIndex(l=>!l.done);
+  if(idx<0){ showToast('All legs already flown — settle the trip','bad'); return false; }
+  const c=pirep.cap||pirep;
+  const cap={ departed:c.departed!==false, landingFpm:Math.abs(+c.landingFpm||0),
+    overspeed:!!c.overspeed, stall:!!c.stall, overstress:!!c.overstress, maxG:+c.maxG||1, crashed:!!c.crashed };
+  completeLeg(idx,false,false,cap);   // grades + completes the leg (shows its own toast)
+  return true;
+}
+function submitPirepText(){
+  const el=$('#pirepIn'); if(!el)return;
+  if(applyPirep(decodePirep(el.value))) el.value='';
+}
+async function cloudPullPireps(quiet){
+  const sb=getSB(); if(!sb||!AUTH.user||!S||!S.pirepCode)return;
+  try{
+    const {data,error}=await sb.from('pireps').select('*').eq('code',S.pirepCode).order('created_at',{ascending:true});
+    if(error){ if(!quiet)showToast('Could not check for PIREPs','bad'); return; }
+    if(!data||!data.length){ if(!quiet)showToast('No new PIREP found yet','bad'); return; }
+    let applied=0;
+    for(const row of data){
+      if(S.active && applyPirep(row.data)) applied++;
+      try{ await sb.from('pireps').delete().eq('id',row.id); }catch(e){}
+    }
+    if(!quiet && !applied) showToast('PIREP received, but no open leg to apply it to','bad');
+  }catch(e){}
+}
+function pirepCard(){
+  const code=S.pirepCode||'', cloud=cloudEnabled()&&AUTH.user;
+  return `<div class="card card-pad">
+    <div class="eyebrow">MSFS toolbar PIREP</div>
+    <div class="sec-title" style="margin:2px 0 8px">Log this leg from the sim</div>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Track the flight with the Skyledger toolbar panel in MSFS, then file the PIREP here to grade the open leg — no live connection needed.</p>
+    ${cloud?`<div class="help" style="margin-bottom:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
+        <span>Panel pairing code: <b class="mono" style="font-size:14px">${code}</b> — enter it once in the MSFS panel and your PIREPs arrive automatically.</span></div>
+      <button class="btn sky sm" style="width:100%;justify-content:center;margin-bottom:12px" onclick="cloudPullPireps(false)">Check for submitted PIREP</button>`:''}
+    <div class="form-row" style="margin-top:0"><label>Or paste a PIREP code</label>
+      <textarea class="field" id="pirepIn" placeholder="Paste the code shown in the MSFS panel…" style="width:100%;min-height:58px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea></div>
+    <button class="btn brass sm" style="width:100%;justify-content:center;margin-top:10px" onclick="submitPirepText()">File PIREP &amp; grade leg</button>
+  </div>`;
 }
 
 /* ---- COMMUNITY PAGE ---- */
@@ -3269,6 +3327,9 @@ async function pollLive(first){
 }
 pollLive(true);
 setInterval(()=>pollLive(false), 8*60e3);    // refresh events/weather every 8 min
+
+/* auto-pick up PIREPs submitted from the MSFS toolbar panel while a trip is open */
+setInterval(()=>{ if(S&&S.active&&view==='active'&&cloudEnabled()&&AUTH.user) cloudPullPireps(true); }, 15000);
 
 </script>
 </body>
