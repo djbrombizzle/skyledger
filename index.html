@@ -438,6 +438,8 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
     <div class="nav-label">Records</div>
     <a class="nav-item" data-nav="ledger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>Ledger</a>
     <a class="nav-item" data-nav="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15"/></svg>Live Map</a>
+    <a class="nav-item" data-nav="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+    <a class="nav-item" data-nav="admin" id="navAdmin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>Admin<span class="badge" id="adminBadge" style="display:none;background:#b03426">★</span></a>
     <div class="rail-foot">
       <span id="acctLine" style="display:none">Signed in as <b id="acctEmail" style="color:#8fa0b8"></b> · <a id="signOutLink">Sign out</a><br></span>
       Single-file build · runs offline-capable<br>
@@ -895,7 +897,8 @@ function newGame(name,base){
     simbriefUser:'', wxWatch:[],
     pirepCode:genPirepCode(),      // pairing code for the MSFS toolbar PIREP panel
     demand:{}, lastEco:0,          // dynamic outbound-demand economy
-    used:[], lastUsed:0            // pre-owned aircraft market
+    used:[], lastUsed:0,           // pre-owned aircraft market
+    account:{realName:'',company:'',phone:'',addr1:'',city:'',region:'',postal:'',country:''}  // editable account profile
   };
   refreshUsed(); refreshBoard(true); save();
 }
@@ -1161,7 +1164,8 @@ const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:
   airport:['Airport Explorer','charters · aircraft · fees'],
   community:['Community','live network'],
   fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator',''],
-  ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network']};
+  ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network'],
+  settings:['Settings','account & preferences'],admin:['Admin Console','manage the network']};
 function nav(v){ view=v; renderAll(); }
 function renderAll(){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
@@ -1172,9 +1176,10 @@ function renderAll(){
   const liveEv=rwLive().length;
   $('#eventBadge').style.display=liveEv?'inline-block':'none'; $('#eventBadge').textContent=liveEv;
   updateOnlinePill();
+  const adminNav=$('#navAdmin'); if(adminNav)adminNav.style.display=isAdmin()?'flex':'none';
   renderTop();
   const p=$('#page');
-  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,ratings:rRatings,ledger:rLedger,map:rMap}[view])(p);
+  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
   if(view==='map') setTimeout(initMap,40);
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
   save();
@@ -2923,6 +2928,277 @@ function toggleTheme(){
 /* ---------- ZULU CLOCK ---------- */
 function tickClock(){const d=new Date();$('#zulu').innerHTML=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')} <b>Z</b>`;}
 
+/* =========================================================================
+   ACCOUNT SETTINGS + ADMIN CONSOLE
+   ========================================================================= */
+function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+/* ---- admin identity ---- */
+const ADMIN_EMAILS = [ /* add owner emails here in lowercase to auto-grant admin */ ];
+function isAdmin(){
+  if(localStorage.getItem('sky_admin_dev')==='1') return true;                  // local dev/admin on this device
+  const em=(AUTH.user&&AUTH.user.email||'').toLowerCase();
+  return !!(AUTH.user && (AUTH.isAdmin===true || ADMIN_EMAILS.includes(em)));
+}
+async function fetchAdminFlag(){
+  AUTH.isAdmin=false; const sb=getSB(); if(!sb||!AUTH.user)return;
+  try{ const {data}=await sb.from('profiles').select('is_admin').eq('id',AUTH.user.id).maybeSingle();
+       if(data&&data.is_admin)AUTH.isAdmin=true; }catch(e){}
+}
+
+/* ---- live catalog overrides (admin-edited prices, this device) ---- */
+function applyAdminCatalog(){
+  try{ const o=JSON.parse(localStorage.getItem('sky_admin_catalog')||'null'); if(!o)return;
+    Object.keys(o).forEach(id=>{ if(ACBY[id]){ if(o[id].price!=null)ACBY[id].price=o[id].price; if(o[id].lease!=null)ACBY[id].lease=o[id].lease; } });
+  }catch(e){}
+}
+applyAdminCatalog();
+
+/* ========================= SETTINGS PAGE ========================= */
+function rSettings(p){
+  const a=S.account||{}, cloud=cloudEnabled()&&AUTH.user;
+  p.innerHTML=`
+  <div class="split" style="grid-template-columns:1fr 1fr;align-items:start">
+   <div>
+    <div class="card card-pad">
+      <div class="sec-head"><div><div class="eyebrow">Account</div><div class="sec-title">Pilot &amp; contact</div></div></div>
+      <div class="form-row"><label>Pilot name / callsign</label><input class="field" id="setPilot" value="${esc(S.pilot)}" style="width:100%"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-row"><label>Full name</label><input class="field" id="setReal" value="${esc(a.realName)}" style="width:100%"></div>
+        <div class="form-row"><label>Company / flight dept</label><input class="field" id="setCo" value="${esc(a.company)}" style="width:100%"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-row"><label>Email</label><input class="field" id="setEmail" type="email" value="${esc(cloud?(AUTH.user.email||''):'')}" ${cloud?'':'disabled placeholder="offline — connect cloud"'} style="width:100%"></div>
+        <div class="form-row"><label>Phone</label><input class="field" id="setPhone" value="${esc(a.phone)}" style="width:100%"></div>
+      </div>
+      <div class="form-row"><label>Address</label><input class="field" id="setAddr" value="${esc(a.addr1)}" placeholder="Street address" style="width:100%"></div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+        <div class="form-row"><label>City</label><input class="field" id="setCity" value="${esc(a.city)}" style="width:100%"></div>
+        <div class="form-row"><label>State / region</label><input class="field" id="setRegion" value="${esc(a.region)}" style="width:100%"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px">
+        <div class="form-row"><label>Postal code</label><input class="field" id="setPostal" value="${esc(a.postal)}" style="width:100%"></div>
+        <div class="form-row"><label>Country</label><input class="field" id="setCountry" value="${esc(a.country)}" style="width:100%"></div>
+      </div>
+      <button class="btn brass" style="margin-top:14px" onclick="saveAccount()">Save account</button>
+    </div>
+    ${cloud?`<div class="card card-pad" style="margin-top:16px">
+      <div class="sec-head"><div><div class="eyebrow">Security</div><div class="sec-title">Password</div></div></div>
+      <div class="form-row"><label>New password</label><input class="field" id="setPw" type="password" placeholder="At least 6 characters" style="width:100%"></div>
+      <button class="btn ghost" style="margin-top:6px" onclick="changePassword()">Update password</button>
+    </div>`:''}
+   </div>
+   <div>
+    <div class="card card-pad">
+      <div class="sec-head"><div><div class="eyebrow">Operations</div><div class="sec-title">Game preferences</div></div></div>
+      <div class="form-row"><label>Home base (ICAO)</label><input class="field mono" id="setBase" value="${esc(S.base)}" maxlength="4" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
+      <div class="form-row"><label>SimBrief username / Pilot ID</label><input class="field" id="setSB" value="${esc(S.simbriefUser||'')}" style="width:100%"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><label style="margin:0;font-size:12px;color:var(--muted)">Appearance</label>
+        <button class="btn ghost sm" onclick="toggleTheme()">Toggle dark / light</button></div>
+      <button class="btn brass" style="margin-top:12px" onclick="savePrefs()">Save preferences</button>
+    </div>
+    <div class="card card-pad" style="margin-top:16px">
+      <div class="sec-head"><div><div class="eyebrow">Multiplayer</div><div class="sec-title">Cloud account</div></div></div>
+      ${cloud?`<div class="muted" style="font-size:12.5px;margin-bottom:10px">Signed in as <b>${esc(AUTH.user.email)}</b>${isAdmin()?' · <span class="pos">Admin</span>':''}. Your save syncs to the cloud automatically.</div>
+        <button class="btn ghost sm" onclick="signOut()">Sign out</button>`
+        :`<div class="muted" style="font-size:12.5px;margin-bottom:10px">Playing offline on this device. Connect a Supabase project to enable accounts, cloud save and the live community.</div>
+        <div class="form-row"><label>Supabase URL</label><input class="field" id="setSupaUrl" value="${esc(SUPA.url)}" style="width:100%"></div>
+        <div class="form-row"><label>Anon / publishable key</label><input class="field" id="setSupaKey" value="${esc(SUPA.anon)}" style="width:100%"></div>
+        <button class="btn ghost sm" onclick="saveSupa()">Save &amp; reload</button>`}
+    </div>
+    <div class="card card-pad" style="margin-top:16px">
+      <div class="sec-head"><div><div class="eyebrow">Data</div><div class="sec-title">Save management</div></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn ghost sm" onclick="document.getElementById('exportSave').onclick()">Export save</button>
+        <button class="btn ghost sm" onclick="document.getElementById('importSave').onclick()">Import save</button>
+        <button class="btn ghost sm" style="color:var(--neg)" onclick="document.getElementById('resetSave').onclick()">Reset pilot</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+        <div><div style="font-weight:600;font-size:13px">Admin tools (this device)</div>
+          <div class="muted" style="font-size:11.5px">Unlock the Admin console locally for testing.</div></div>
+        <button class="btn ${localStorage.getItem('sky_admin_dev')==='1'?'brass':'ghost'} sm" onclick="toggleDevAdmin()">${localStorage.getItem('sky_admin_dev')==='1'?'On':'Off'}</button>
+      </div>
+    </div>
+   </div>
+  </div>`;
+}
+function saveAccount(){
+  S.pilot=($('#setPilot').value||'').trim()||S.pilot;
+  S.account={realName:$('#setReal').value.trim(),company:$('#setCo').value.trim(),phone:$('#setPhone').value.trim(),
+    addr1:$('#setAddr').value.trim(),city:$('#setCity').value.trim(),region:$('#setRegion').value.trim(),
+    postal:$('#setPostal').value.trim(),country:$('#setCountry').value.trim()};
+  save(); renderTop();
+  const cloud=cloudEnabled()&&AUTH.user, newEmail=($('#setEmail')&&$('#setEmail').value||'').trim();
+  if(cloud && newEmail && newEmail!==AUTH.user.email) updateEmail(newEmail);
+  else showToast('Account saved','good');
+  renderAll();
+}
+async function updateEmail(email){
+  const sb=getSB(); if(!sb)return;
+  try{ const {error}=await sb.auth.updateUser({email}); if(error)return showToast(error.message,'bad');
+    showToast('Saved · check your inbox to confirm the new email','good'); }catch(e){ showToast('Could not update email','bad'); }
+}
+async function changePassword(){
+  const pw=$('#setPw').value||''; if(pw.length<6)return showToast('Password must be 6+ characters','bad');
+  const sb=getSB(); if(!sb)return showToast('Offline','bad');
+  try{ const {error}=await sb.auth.updateUser({password:pw}); if(error)return showToast(error.message,'bad');
+    $('#setPw').value=''; showToast('Password updated','good'); }catch(e){ showToast('Could not update password','bad'); }
+}
+function savePrefs(){
+  const b=($('#setBase').value||'').trim().toUpperCase();
+  if(b && APTBY[b]) S.base=b; else if(b) showToast('Unknown ICAO — base unchanged','bad');
+  S.simbriefUser=($('#setSB').value||'').trim();
+  save(); showToast('Preferences saved','good'); renderAll();
+}
+function saveSupa(){ skyConfig(($('#setSupaUrl').value||'').trim(),($('#setSupaKey').value||'').trim()); }
+function toggleDevAdmin(){
+  const on=localStorage.getItem('sky_admin_dev')==='1';
+  if(on)localStorage.removeItem('sky_admin_dev'); else localStorage.setItem('sky_admin_dev','1');
+  showToast(on?'Admin tools off':'Admin tools unlocked','good'); renderAll();
+}
+
+/* ========================= ADMIN CONSOLE ========================= */
+let adminTab='users', ADMIN_USERS=[], adminUserQ='';
+function rAdmin(p){
+  if(!isAdmin()){ p.innerHTML=emptyState('Admins only','You don\'t have access to the admin console. Enable Admin tools in Settings, or ask an admin to grant your account.'); return; }
+  const tabs={users:'Users',charters:'Charters',aircraft:'Aircraft',economy:'Economy'};
+  p.innerHTML=`
+    <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/></svg>
+      <span><b>Admin console.</b> Users are managed in the cloud (Supabase); charters, aircraft and economy tools act on this pilot's local game for testing and tuning.</span></div>
+    <div class="bar" style="margin-top:12px"><div class="chiprow">
+      ${Object.keys(tabs).map(t=>`<button class="chip ${adminTab===t?'on':''}" onclick="setAdminTab('${t}')">${tabs[t]}</button>`).join('')}
+    </div></div>
+    <div id="adminBody" style="margin-top:6px"></div>`;
+  renderAdminBody();
+}
+function setAdminTab(t){adminTab=t;renderAdminBody();}
+function renderAdminBody(){ const el=$('#adminBody'); if(!el)return;
+  ({users:adminUsers,charters:adminCharters,aircraft:adminAircraft,economy:adminEconomy}[adminTab]||adminUsers)(el); }
+
+function adminUsers(el){
+  const cloud=cloudEnabled()&&AUTH.user;
+  if(!cloud){ el.innerHTML=`<div class="card card-pad" style="margin-top:12px"><div class="muted">Connect multiplayer (Settings → Cloud account) to manage real users. Offline play has only this pilot.</div></div>`; return; }
+  el.innerHTML=`<div id="usersTable" class="muted" style="margin-top:12px">Loading users…</div>`;
+  getSB().from('profiles').select('*').order('rep',{ascending:false}).limit(300)
+    .then(({data,error})=>{ if(error){ $('#usersTable').innerHTML=`<span class="neg">Could not load users: ${esc(error.message)}</span>`; return; }
+      ADMIN_USERS=data||[]; drawUsers(); });
+}
+function drawUsers(){
+  const el=$('#usersTable'); if(!el)return; const q=adminUserQ.toLowerCase();
+  const rows=ADMIN_USERS.filter(u=>!q||((u.pilot||'').toLowerCase().includes(q)||(u.base||'').toLowerCase().includes(q)));
+  const cols='grid-template-columns:1.5fr .7fr .6fr .9fr .6fr 1.1fr';
+  el.innerHTML=`
+   <div class="bar"><input class="field" placeholder="Search pilots or base…" value="${esc(adminUserQ)}" oninput="adminUserQ=this.value;drawUsers()" style="max-width:260px">
+     <div class="sec-spacer" style="flex:1"></div><span class="muted" style="font-size:12px">${rows.length} of ${ADMIN_USERS.length} users</span></div>
+   <div class="mkt-table" style="margin-top:10px">
+     <div class="mkt-head" style="${cols}"><div>Pilot</div><div>Base</div><div>Rep</div><div>Cash</div><div>Flights</div><div>Role</div></div>
+     ${rows.map(u=>`<div class="mkt-row" style="${cols}">
+        <div class="mname">${esc(u.pilot||'—')}${u.id===(AUTH.user&&AUTH.user.id)?' <span class="tag muted-t">you</span>':''}</div>
+        <div class="mono">${esc(u.base||'—')}</div><div class="mono">${u.rep||0}</div>
+        <div class="mono">${money1k(u.cash||0)}</div><div class="mono">${u.flights||0}</div>
+        <div class="macts">${u.is_admin?'<span class="tag ok">Admin</span>':''}
+          <button class="btn ghost sm" onclick="setUserAdmin('${u.id}',${u.is_admin?'false':'true'})">${u.is_admin?'Revoke':'Make admin'}</button></div>
+     </div>`).join('')||'<div class="mkt-row"><div class="mname muted">No users match</div></div>'}
+   </div>
+   <div class="muted" style="font-size:11.5px;margin-top:10px">Promotions write <span class="mono">profiles.is_admin</span>. This needs an <span class="mono">is_admin</span> boolean column and an RLS policy allowing admins to update other rows — otherwise the change is rejected by the database.</div>`;
+}
+async function setUserAdmin(id,make){
+  const sb=getSB(); if(!sb)return;
+  try{ const {error}=await sb.from('profiles').update({is_admin:make}).eq('id',id);
+    if(error)return showToast('Update failed: '+error.message,'bad');
+    const u=ADMIN_USERS.find(x=>x.id===id); if(u)u.is_admin=make; drawUsers();
+    showToast(make?'Promoted to admin':'Admin revoked','good');
+  }catch(e){ showToast('Update failed','bad'); }
+}
+
+function adminCharters(el){
+  const live=S.board.filter(c=>c.expires>Date.now());
+  el.innerHTML=`
+   <div class="bar" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+     <button class="btn ghost sm" onclick="refreshBoard(true);showToast('Board regenerated','good');renderAll();renderAdminBody()">Regenerate board</button>
+     <button class="btn ghost sm" onclick="S.board=[];save();showToast('Board cleared','good');renderAll();renderAdminBody()">Clear board</button>
+     <button class="btn ghost sm" onclick="S.board=S.board.filter(c=>c.expires>Date.now());save();renderAll();renderAdminBody()">Purge expired</button>
+     <div class="sec-spacer" style="flex:1"></div><span class="muted" style="font-size:12px">${live.length} live charters</span></div>
+   <div class="card card-pad" style="margin-top:12px">
+     <div class="sec-title" style="margin-bottom:10px">Spawn a charter</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr 1fr auto;gap:8px;align-items:end">
+       <div class="form-row" style="margin:0"><label>From</label><input class="field mono" id="spDep" value="${esc(S.base)}" maxlength="4" oninput="this.value=this.value.toUpperCase()"></div>
+       <div class="form-row" style="margin:0"><label>To</label><input class="field mono" id="spArr" placeholder="KXXX" maxlength="4" oninput="this.value=this.value.toUpperCase()"></div>
+       <div class="form-row" style="margin:0"><label>Class</label><select class="field" id="spCls">${Object.keys(CLASSES).map(k=>`<option value="${k}">${CLASSES[k].label}</option>`).join('')}</select></div>
+       <div class="form-row" style="margin:0"><label>Payout (0=auto)</label><input class="field mono" id="spPay" value="0"></div>
+       <button class="btn brass sm" onclick="adminSpawnCharter()">Spawn</button></div>
+   </div>
+   <div class="rows" style="margin-top:12px">${live.slice(0,40).map(c=>`<div class="charter"><div class="ch-l"><div class="ch-top">
+       <div class="route"><span class="icao">${c.dep}</span><span class="arr">✈</span><span class="icao">${c.arr}</span></div>
+       <span class="tag cls">${CLASSES[c.cls].label}</span><span class="tag ${c.cat}">${CAT[c.cat].label}</span></div>
+       <div class="ch-meta"><span><b>${c.dist}</b> nm</span><span><b>${c.pax}</b> pax</span><span>${money(c.payout)}</span><span>exp ${timeLeft(c.expires)}</span></div></div>
+       <div class="ch-r"><button class="btn ghost sm" onclick="S.board=S.board.filter(x=>x.id!=='${c.id}');save();renderAll();renderAdminBody()">Remove</button></div></div>`).join('')||emptyState('Board empty','Regenerate or spawn a charter.')}</div>`;
+}
+function adminSpawnCharter(){
+  const dep=($('#spDep').value||'').toUpperCase(), arr=($('#spArr').value||'').toUpperCase();
+  if(!APTBY[dep]||!APTBY[arr])return showToast('Unknown ICAO','bad');
+  if(dep===arr)return showToast('Pick two different airports','bad');
+  const cls=$('#spCls').value, pay=Math.round(+($('#spPay').value||0));
+  const c=genCharter(dep,{arrTo:arr}); c.cls=cls; c.tier=CLASSES[cls].tier;
+  if(pay>0)c.payout=pay; c.expires=Date.now()+24*3600e3;
+  S.board.unshift(c); save(); showToast('Charter spawned','good'); renderAll(); renderAdminBody();
+}
+
+function adminAircraft(el){
+  const cols='grid-template-columns:1.7fr .8fr .9fr .8fr 1fr';
+  el.innerHTML=`
+   <div class="muted" style="font-size:11.5px;margin:12px 0 6px">Edit catalog pricing (saved on this device), grant aircraft to your fleet, or manage owned airframes.</div>
+   <div class="mkt-table">
+     <div class="mkt-head" style="${cols}"><div>Aircraft</div><div>Class</div><div>Price</div><div>Lease/day</div><div></div></div>
+     ${AIRCRAFT.map(a=>`<div class="mkt-row" style="${cols}">
+        <div class="mname">${a.name}</div><div><span class="tag cls">${CLASSES[a.cls].label}</span></div>
+        <div><input class="field mono" value="${a.price}" onchange="adminSetAc('${a.id}','price',this.value)" style="width:100px;padding:6px 8px"></div>
+        <div><input class="field mono" value="${a.lease}" onchange="adminSetAc('${a.id}','lease',this.value)" style="width:80px;padding:6px 8px"></div>
+        <div class="macts"><button class="btn ghost sm" onclick="adminGrant('${a.id}')">Grant to fleet</button></div>
+     </div>`).join('')}
+   </div>
+   <div class="sec-title" style="margin:18px 0 8px">Your fleet (${S.fleet.length})</div>
+   <div class="rows">${S.fleet.map(f=>`<div class="charter"><div class="ch-l"><div class="ch-top"><span class="tail">${esc(f.tail)}</span><span style="font-weight:600">${ACBY[f.type].name}</span><span class="tag ${f.owned?'ok':'muted-t'}">${f.owned?'Owned':'Leased'}</span>${f.busy?'<span class="tag warnt">Busy</span>':''}</div><div class="ch-meta"><span>at <b>${f.loc}</b></span><span>${Math.round(f.cond)}% cond</span></div></div><div class="ch-r"><button class="btn ghost sm" ${f.busy?'disabled':''} onclick="adminRemoveAc('${f.id}')">Remove</button></div></div>`).join('')||'<div class="muted" style="font-size:12.5px">No aircraft.</div>'}</div>`;
+}
+function adminSetAc(id,field,val){ const a=ACBY[id]; if(!a)return; a[field]=Math.max(0,Math.round(+val||0));
+  const o={}; AIRCRAFT.forEach(x=>o[x.id]={price:x.price,lease:x.lease}); try{localStorage.setItem('sky_admin_catalog',JSON.stringify(o));}catch(e){}
+  showToast(`${a.name} ${field} = ${money(a[field])}`,'good'); }
+function adminGrant(id){ const a=ACBY[id]; if(!a)return;
+  S.fleet.push({id:uid(),type:id,tail:genTail(),loc:S.base,owned:true,cond:100,hours:0});
+  save(); showToast(`${a.name} granted`,'good'); renderAll(); renderAdminBody(); }
+function adminRemoveAc(fid){ const f=S.fleet.find(x=>x.id===fid); if(!f||f.busy)return;
+  if(!confirm('Remove '+f.tail+' from the fleet?'))return;
+  S.fleet=S.fleet.filter(x=>x.id!==fid); save(); renderAll(); renderAdminBody(); }
+
+function adminEconomy(el){
+  el.innerHTML=`
+   <div class="card card-pad" style="margin-top:12px">
+     <div class="sec-title" style="margin-bottom:10px">Set values (this pilot)</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+       <div class="form-row" style="margin:0"><label>Cash</label><input class="field mono" id="ecCash" value="${Math.round(S.cash)}"></div>
+       <div class="form-row" style="margin:0"><label>Reputation</label><input class="field mono" id="ecRep" value="${Math.round(S.rep)}"></div>
+       <div class="form-row" style="margin:0"><label>Max type rating</label><select class="field" id="ecTier">${TIERS.map((t,i)=>`<option value="${i}" ${i===S.maxTier?'selected':''}>${CLASSES[t].label}</option>`).join('')}</select></div>
+       <div class="form-row" style="margin:0"><label>Flights</label><input class="field mono" id="ecFl" value="${S.flights||0}"></div>
+     </div>
+     <button class="btn brass" style="margin-top:14px" onclick="adminApplyEcon()">Apply</button>
+   </div>
+   <div class="card card-pad" style="margin-top:12px"><div class="sec-title" style="margin-bottom:8px">Quick actions</div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <button class="btn ghost sm" onclick="S.cash+=1000000;save();showToast('+$1M','good');renderAll();renderAdminBody()">+$1M</button>
+       <button class="btn ghost sm" onclick="S.rep+=500;save();showToast('+500 rep','good');renderAll();renderAdminBody()">+500 rep</button>
+       <button class="btn ghost sm" onclick="if(S.maxTier<5){S.maxTier++;save();showToast('Rating unlocked','good');renderAll();renderAdminBody()}else showToast('Max rating','bad')">Unlock next rating</button>
+       <button class="btn ghost sm" onclick="refreshUsed();save();showToast('Used market refreshed','good');renderAdminBody()">Refresh used market</button>
+       ${S.active?`<button class="btn ghost sm" style="color:var(--neg)" onclick="if(confirm('Force-settle the active trip?')){settleTrip();renderAdminBody()}">Force-settle trip</button>`:''}
+     </div></div>`;
+}
+function adminApplyEcon(){
+  S.cash=Math.max(0,Math.round(+$('#ecCash').value||0));
+  S.rep=Math.max(0,Math.round(+$('#ecRep').value||0));
+  S.maxTier=Math.max(0,Math.min(5,+$('#ecTier').value||0));
+  S.flights=Math.max(0,Math.round(+$('#ecFl').value||0));
+  save(); showToast('Applied','good'); renderAll(); renderAdminBody();
+}
+
 /* ---------- SAVE / LOAD CONTROLS ---------- */
 $('#exportSave').onclick=()=>{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
   const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='skyledger-save.json';a.click();URL.revokeObjectURL(u);};
@@ -3028,6 +3304,7 @@ function migrateSave(){
   if(!S.demand)S.demand={}; if(S.lastEco===undefined)S.lastEco=0;
   if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
   if(!S.pirepCode)S.pirepCode=genPirepCode();
+  if(!S.account)S.account={realName:'',company:'',phone:'',addr1:'',city:'',region:'',postal:'',country:''};
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
 }
@@ -3110,7 +3387,7 @@ async function initCloud(){
   }catch(e){ showAuthGate('signin'); }
 }
 async function onSignedIn(){
-  hideAuthGate(); updateAcctLine();
+  hideAuthGate(); updateAcctLine(); await fetchAdminFlag();
   let cloud=null; try{ cloud=await cloudLoad(); }catch(e){}
   if(cloud){ S=cloud; resumeGame(); }
   else {
