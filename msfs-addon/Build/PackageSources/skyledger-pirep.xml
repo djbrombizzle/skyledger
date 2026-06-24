@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="Windows-1252"?>
+<!-- Source for the toolbar registration. Compiling this with the MSFS SDK
+     (fspackagetool) produces the .spb that places the panel on the toolbar.
+     The IDs/paths below match the maximus toolbar template, so its prebuilt
+     .spb also works if you prefer the no-SDK path. -->
+<SimBase.Document Type="InGamePanels" version="1,0">
+  <Filename>InGamePanel_CustomPanel.spb</Filename>
+  <InGamePanels.InGamePanelDefinition id="PANEL_CUSTOM_PANEL" Name="CustomPanel" url="html_UI/ingamePanels/CustomPanel/CustomPanel.html" resizeDirections="Both" minWidth="240" minHeight="300" defaultWidth="36" defaultHeight="44" defaultTop="33" defaultRight="2" icon="ICON_TOOLBAR_MAXIMUS_CUSTOM_PANEL" buttonVisible="true">
+  </InGamePanels.InGamePanelDefinition>
+</SimBase.Document>

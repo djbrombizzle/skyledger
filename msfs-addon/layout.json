@@ -1,0 +1,29 @@
+{
+  "content": [
+    {
+      "path": "html_ui/InGamePanels/CustomPanel/CustomPanel.css",
+      "size": 2267,
+      "date": 133000000000000000
+    },
+    {
+      "path": "html_ui/InGamePanels/CustomPanel/CustomPanel.html",
+      "size": 2848,
+      "date": 133000000000000000
+    },
+    {
+      "path": "html_ui/InGamePanels/CustomPanel/CustomPanel.js",
+      "size": 7226,
+      "date": 133000000000000000
+    },
+    {
+      "path": "html_ui/Textures/Menu/toolbar/ICON_TOOLBAR_MAXIMUS_CUSTOM_PANEL.svg",
+      "size": 172,
+      "date": 133000000000000000
+    },
+    {
+      "path": "InGamePanels/maximus-ingamepanels-custom.spb",
+      "size": 806,
+      "date": 133000000000000000
+    }
+  ]
+}
