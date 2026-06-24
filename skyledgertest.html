@@ -1,0 +1,2608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKYLEDGER — Business Aviation Economy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ============ DESIGN TOKENS — "Private Terminal" ============ */
+:root{
+  --canvas:#F4F2EC;        /* warm paper */
+  --surface:#FFFFFF;
+  --surface-2:#FAF8F3;
+  --ink:#16202E;           /* deep navy-black text */
+  --navy:#1B2A41;          /* brand structure */
+  --navy-2:#243650;
+  --brass:#B0863B;         /* signature premium accent */
+  --brass-soft:#E9DDC4;
+  --sky:#2D6AE3;           /* interactive / action */
+  --sky-soft:#E4ECFB;
+  --pos:#1F7A52;           /* money in */
+  --pos-soft:#E1F1E9;
+  --neg:#BE3A2B;           /* money out */
+  --neg-soft:#F7E4E0;
+  --warn:#B5821E;
+  --line:#E3DFD4;
+  --line-2:#D8D3C6;
+  --muted:#737C8A;
+  --muted-2:#9AA1AC;
+  --radius:14px;
+  --radius-sm:9px;
+  --shadow:0 1px 2px rgba(22,32,46,.04), 0 8px 24px rgba(22,32,46,.06);
+  --shadow-lg:0 12px 40px rgba(22,32,46,.16);
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --disp:'Bricolage Grotesque',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+}
+/* ============ DARK THEME ============ */
+html[data-theme="dark"]{
+  --canvas:#0E141C; --surface:#161E29; --surface-2:#1B2531;
+  --ink:#E8EDF3; --navy:#0B1118; --navy-2:#1A2533;
+  --brass:#CDA456; --brass-soft:#3A2E16;
+  --sky:#5B8CF0; --sky-soft:#1A2740;
+  --pos:#4FD08A; --pos-soft:#15311F; --neg:#F0786A; --neg-soft:#341915;
+  --warn:#E0B24A; --line:#27313F; --line-2:#37434F;
+  --muted:#8B99A9; --muted-2:#697787;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.32);
+  --shadow-lg:0 14px 44px rgba(0,0,0,.5);
+}
+html[data-theme="dark"] .tag.exec{background:#1c2a3f;color:#9db8e0}
+html[data-theme="dark"] .tag.sports{background:#16301f;color:#6fd9a0}
+html[data-theme="dark"] .tag.medevac{background:#3a1a14;color:#f0978a}
+html[data-theme="dark"] .tag.gov{background:#251f3a;color:#b6a6e8}
+html[data-theme="dark"] .tag.vvip{background:linear-gradient(90deg,#3a2e14,#4a3a18);color:#e6c878}
+html[data-theme="dark"] .tag.leisure{background:#26241c;color:#bdb591}
+html[data-theme="dark"] .tag.empty_leg{background:#222a30;color:#9fb0bd}
+html[data-theme="dark"] .tag.cargo{background:#2a2418;color:#c9b483}
+html[data-theme="dark"] .tag.family{background:#142a30;color:#7fcdd9} html[data-theme="dark"] .tag.attendee{background:#2e2113;color:#e0a85a}
+html[data-theme="dark"] .tag.group{background:#221a35;color:#b39ae6}
+html[data-theme="dark"] .leaflet-container{background:#0d141c}
+.theme-btn{width:36px;height:36px;border-radius:9px;background:var(--surface-2);border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--ink);transition:.15s;flex:none}
+.theme-btn:hover{border-color:var(--muted-2)} .theme-btn svg{width:17px;height:17px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--body);background:var(--canvas);color:var(--ink);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;font-size:14px}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+.mono{font-family:var(--mono)}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.muted{color:var(--muted)}
+
+/* ============ APP SHELL ============ */
+#app{display:grid;grid-template-columns:236px 1fr;grid-template-rows:auto 1fr;
+  grid-template-areas:"rail top" "rail main";height:100vh}
+
+/* RAIL */
+.rail{grid-area:rail;background:var(--navy);color:#EAF0F8;display:flex;flex-direction:column;
+  padding:20px 14px;gap:2px;border-right:1px solid #0f1825}
+.brand{display:flex;align-items:center;gap:11px;padding:4px 8px 22px}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--brass),#946d27);
+  display:grid;place-items:center;flex:none;box-shadow:0 2px 8px rgba(176,134,59,.4)}
+.brand-mark svg{width:20px;height:20px}
+.brand-name{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:.02em;line-height:1}
+.brand-sub{font-size:9.5px;letter-spacing:.22em;color:#7d8ba0;font-weight:600;margin-top:3px;font-family:var(--mono)}
+.nav-label{font-size:9.5px;letter-spacing:.18em;color:#5e6e87;font-weight:700;padding:14px 10px 6px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;color:#b9c4d4;
+  font-weight:500;font-size:13.5px;transition:.12s;position:relative}
+.nav-item svg{width:17px;height:17px;flex:none;opacity:.85}
+.nav-item:hover{background:#243650;color:#fff}
+.nav-item.active{background:linear-gradient(90deg,#2a3d59,#243650);color:#fff}
+.nav-item.active::before{content:"";position:absolute;left:-14px;top:8px;bottom:8px;width:3px;
+  background:var(--brass);border-radius:0 3px 3px 0}
+.nav-item .badge{margin-left:auto;background:var(--brass);color:#1b1407;font-size:10px;font-weight:700;
+  padding:1px 7px;border-radius:20px;font-family:var(--mono)}
+.rail-foot{margin-top:auto;padding:12px 10px 2px;font-size:10.5px;color:#5e6e87;line-height:1.6}
+.rail-foot a{color:#8fa0b8;cursor:pointer}
+
+/* TOPBAR */
+.top{grid-area:top;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:18px;padding:0 22px;height:60px}
+.crumb{font-family:var(--disp);font-weight:600;font-size:17px}
+.crumb-sub{color:var(--muted);font-size:12px;margin-left:2px}
+.top-spacer{flex:1}
+.zulu{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--line);padding:6px 11px;border-radius:8px;letter-spacing:.02em;white-space:nowrap}
+.zulu b{color:var(--brass)}
+.vat-pill{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:6px 12px;
+  border-radius:20px;background:var(--surface-2);border:1px solid var(--line);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted-2);flex:none}
+.dot.live{background:var(--pos);box-shadow:0 0 0 3px var(--pos-soft);animation:pulse 2s infinite}
+.dot.off{background:var(--neg)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.cash{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+.cash b{font-family:var(--mono);font-weight:700;font-size:16px;color:var(--ink)}
+.cash span{font-size:9.5px;letter-spacing:.14em;color:var(--muted);font-weight:600}
+.pilot-chip{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 12px;border-radius:24px;
+  background:var(--navy);color:#fff}
+.pilot-chip .pname{font-size:12.5px;font-weight:600;line-height:1.1}
+.pilot-chip .prank{font-size:9.5px;color:#9db0cb;font-family:var(--mono)}
+.pilot-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--brass),#7d5c1f);
+  display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;font-family:var(--disp)}
+
+/* MAIN */
+.main{grid-area:main;overflow-y:auto;padding:24px 26px 60px}
+.page{max-width:1180px;margin:0 auto;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ============ COMPONENTS ============ */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-pad{padding:18px 20px}
+.sec-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.sec-title{font-family:var(--disp);font-weight:600;font-size:16px}
+.sec-spacer{flex:1}
+.eyebrow{font-size:10px;letter-spacing:.16em;color:var(--brass);font-weight:700;
+  text-transform:uppercase;font-family:var(--mono)}
+
+.btn{display:inline-flex;align-items:center;gap:7px;background:var(--navy);color:#fff;font-weight:600;
+  font-size:13px;padding:9px 16px;border-radius:9px;transition:.13s;white-space:nowrap;border:1px solid transparent}
+.btn:hover{background:var(--navy-2);transform:translateY(-1px)}
+.btn:active{transform:none}
+.btn svg{width:15px;height:15px}
+.btn.brass{background:linear-gradient(135deg,var(--brass),#946d27);box-shadow:0 2px 10px rgba(176,134,59,.3)}
+.btn.brass:hover{filter:brightness(1.06)}
+.btn.sky{background:var(--sky)} .btn.sky:hover{background:#2459c4}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-2)}
+.btn.ghost:hover{background:var(--surface-2);border-color:var(--muted-2)}
+.btn.sm{padding:6px 11px;font-size:12px}
+.btn.danger{background:transparent;color:var(--neg);border:1px solid var(--neg-soft)}
+.btn.danger:hover{background:var(--neg-soft)}
+.btn:disabled{opacity:.4;pointer-events:none}
+
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:3px 9px;
+  border-radius:20px;font-family:var(--mono);letter-spacing:.02em;white-space:nowrap}
+.tag.exec{background:#EAF0FA;color:#345} .tag.sports{background:#EAF6EE;color:#1d6b46}
+.tag.medevac{background:#FBE7E3;color:#b03426} .tag.gov{background:#EFEAF7;color:#5b4396}
+.tag.vvip{background:linear-gradient(90deg,#F5E9CF,#EFD9A8);color:#7a5a16}
+.tag.leisure{background:#F2EFE7;color:#6a6452} .tag.empty_leg{background:#EDEFF1;color:#566}
+.tag.cargo{background:#F0EBE2;color:#74633f}
+.tag.family{background:#EAF3F6;color:#2a6b78} .tag.attendee{background:#FBF0E4;color:#9a6a1e}
+.tag.group{background:#F0ECF8;color:#624a98} .tag.sports{background:#E4F6EA;color:#0f6b3c;font-weight:700}
+.tag.demand{background:#E6F4EC;color:#1d7a4d;border:1px solid #bfe6cf}
+html[data-theme="dark"] .tag.demand{background:#15301f;color:#5fd99a;border-color:#1f4a30}
+.tag.evt-tag{background:linear-gradient(90deg,#F3E4C4,#E9D097);color:#6f5214;border:1px solid #d9bd7d}
+.charter.evt{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass-soft),var(--shadow)}
+.charter.evt::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--brass),#946d27);border-radius:14px 0 0 14px}
+.charter.repo{border-style:dashed}
+.charter.repo::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line);border-radius:14px 0 0 14px}
+.charter{position:relative}
+html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4a3a18);color:#e6c878;border-color:#5a4720}
+.tag.cls{background:var(--navy);color:#dbe6f5}
+.tag.ok{background:var(--pos-soft);color:var(--pos)}
+.tag.warnt{background:#FBF1DA;color:var(--warn)}
+.tag.muted-t{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+
+/* STAT STRIP */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 17px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden}
+.stat .k{font-size:10px;letter-spacing:.13em;color:var(--muted);font-weight:600;text-transform:uppercase}
+.stat .v{font-family:var(--mono);font-weight:700;font-size:24px;margin-top:5px;letter-spacing:-.01em}
+.stat .d{font-size:11px;margin-top:3px;color:var(--muted)}
+.stat .ic{position:absolute;top:14px;right:14px;width:18px;height:18px;color:var(--line-2)}
+
+/* TABLE / ROWS */
+.rows{display:flex;flex-direction:column}
+.charter{display:grid;grid-template-columns:1fr auto;gap:14px;padding:15px 18px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);transition:.13s;margin-bottom:11px}
+.charter:hover{border-color:var(--line-2);box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+.charter.dim{opacity:.55}
+.ch-l{min-width:0}
+.ch-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.route{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-weight:700;font-size:18px;letter-spacing:.01em}
+.route .arr{color:var(--brass);font-size:15px}
+.route .icao{position:relative}
+.ch-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:3px}
+.ch-meta b{color:var(--ink);font-family:var(--mono);font-weight:600}
+.ch-client{font-size:12.5px;color:var(--ink);margin-top:7px}
+.ch-client .who{font-weight:600}
+.ch-r{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:8px;text-align:right}
+.payout{font-family:var(--mono);font-weight:700;font-size:21px}
+.payout small{font-size:11px;color:var(--muted);font-weight:500;display:block;text-align:right;margin-top:1px}
+.net-line{font-size:11.5px;font-family:var(--mono);font-weight:600}
+.ready-line{font-size:11px;color:var(--muted);text-align:right;max-width:190px}
+
+/* SUBTABS / FILTERS */
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.chiprow{display:flex;gap:7px;flex-wrap:wrap}
+.chip{font-size:12px;font-weight:600;padding:6px 13px;border-radius:20px;background:var(--surface);
+  border:1px solid var(--line);color:var(--muted);transition:.12s}
+.chip:hover{border-color:var(--muted-2);color:var(--ink)}
+.chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.field{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 12px;
+  color:var(--ink);min-width:0;transition:.12s}
+.field:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px var(--sky-soft)}
+
+/* MARKETPLACE */
+.grid-ac{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.ac-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+.ac-head{padding:16px 17px 13px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.ac-name{font-family:var(--disp);font-weight:600;font-size:15.5px;line-height:1.2}
+.ac-spec{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;padding:14px 17px}
+.spec{display:flex;flex-direction:column}
+.spec .sk{font-size:9.5px;letter-spacing:.1em;color:var(--muted);font-weight:600;text-transform:uppercase}
+.spec .sv{font-family:var(--mono);font-weight:600;font-size:13.5px;margin-top:2px}
+.ac-foot{margin-top:auto;padding:13px 17px;border-top:1px solid var(--line);display:flex;gap:9px;align-items:center}
+.price-tag{font-family:var(--mono);font-weight:700;font-size:15px}
+.price-tag small{font-size:10px;color:var(--muted);font-weight:500;display:block}
+
+/* MARKETPLACE TABLE (compact list) */
+.mkt-table{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.mkt-head,.mkt-row{display:grid;grid-template-columns:1.7fr .7fr .7fr .5fr .7fr .9fr 1.5fr;gap:10px;align-items:center;padding:10px 14px}
+.mkt-head{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.mkt-row{border-top:1px solid var(--line);font-size:13px}
+.mkt-row:first-child{border-top:none}
+.mkt-row:hover{background:var(--surface-2)}
+.mkt-row.locked{opacity:.58}
+.mkt-row .mname{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mkt-row .mono{font-family:var(--mono)}
+.mkt-row .macts{display:flex;gap:7px;justify-content:flex-end}
+.mkt-sub{font-size:11px;color:var(--muted)}
+@media(max-width:880px){
+  .mkt-head{display:none}
+  .mkt-row{grid-template-columns:1fr;gap:6px;padding:13px 14px}
+  .mkt-row .macts{justify-content:flex-start;margin-top:4px}
+  .mkt-cell::before{content:attr(data-l);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-right:7px}
+}
+
+/* FLEET */
+.fleet-row{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:15px 18px;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);margin-bottom:11px}
+.tail{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:.04em}
+.cond-bar{height:6px;background:var(--line);border-radius:6px;overflow:hidden;width:120px;margin-top:5px}
+.cond-fill{height:100%;border-radius:6px;background:var(--pos)}
+
+/* LEDGER */
+.led{width:100%;border-collapse:collapse}
+.led th{text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;padding:9px 14px;border-bottom:1px solid var(--line)}
+.led td{padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.led tr:last-child td{border-bottom:none}
+.led .amt{font-family:var(--mono);font-weight:600;text-align:right}
+.led .when{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+
+/* ============ THE JET CARD (signature) ============ */
+.jetcard{background:linear-gradient(135deg,#1f2f47 0%,#16202e 60%,#101822 100%);color:#eaf0f8;
+  border-radius:18px;padding:0;box-shadow:0 18px 50px rgba(16,24,34,.4);overflow:hidden;position:relative;
+  border:1px solid #2a3b54}
+.jetcard::after{content:"";position:absolute;inset:0;background:
+  radial-gradient(120% 90% at 85% -10%,rgba(176,134,59,.18),transparent 55%);pointer-events:none}
+.jc-strip{display:flex;align-items:center;gap:10px;padding:14px 22px;border-bottom:1px dashed #3a4c66;
+  background:rgba(255,255,255,.02);position:relative}
+.jc-strip .eb{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--brass);font-weight:700}
+.jc-tail{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.06em}
+.jc-body{padding:20px 22px;position:relative;z-index:1}
+.jc-route{display:flex;align-items:center;gap:18px;margin-bottom:6px}
+.jc-ap{display:flex;flex-direction:column}
+.jc-ap .ic{font-family:var(--mono);font-weight:700;font-size:30px;letter-spacing:.02em;line-height:1}
+.jc-ap .nm{font-size:11px;color:#9db0cb;margin-top:3px;max-width:160px}
+.jc-mid{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:#7d8ba0}
+.jc-mid .ln{width:100%;height:1px;background:linear-gradient(90deg,transparent,#5e6e87,transparent);position:relative}
+.jc-mid .ln svg{position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:16px;height:16px;color:var(--brass)}
+.jc-mid .dst{font-family:var(--mono);font-size:11px}
+.jc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px;padding-top:16px;
+  border-top:1px solid #2a3b54}
+.jc-cell .k{font-size:9px;letter-spacing:.12em;color:#7d8ba0;font-weight:600;text-transform:uppercase}
+.jc-cell .v{font-family:var(--mono);font-weight:600;font-size:14px;margin-top:3px}
+.jc-foot{display:flex;align-items:center;gap:12px;padding:14px 22px;border-top:1px dashed #3a4c66;
+  background:rgba(0,0,0,.18)}
+.stamp{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.14em;
+  border:2px solid #5e6e87;color:#7d8ba0;padding:5px 12px;border-radius:7px;transform:rotate(-3deg)}
+.stamp.ok{border-color:var(--pos);color:#5fd99a;box-shadow:0 0 0 3px rgba(31,122,82,.15)}
+
+/* LEG list */
+.leg{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--surface);margin-bottom:10px}
+.leg-num{width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;
+  font-family:var(--mono);font-weight:700;font-size:12px;flex:none}
+.leg.done .leg-num{background:var(--pos)}
+.leg.active{border-color:var(--brass);box-shadow:0 0 0 3px var(--brass-soft)}
+.leg-rt{font-family:var(--mono);font-weight:700;font-size:15px}
+.leg-tag{font-size:10.5px;font-weight:600;color:var(--muted)}
+
+/* MAP */
+#map{height:540px;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow);z-index:0}
+.leaflet-container{font-family:var(--body);background:#e9e6df}
+.mk{font-family:var(--mono);font-weight:700;font-size:10px;color:#fff;background:var(--navy);
+  padding:2px 6px;border-radius:5px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap}
+.mk.fbo{background:var(--brass)} .mk.ac{background:var(--pos)} .mk.dep{background:var(--sky)}
+
+/* MODAL */
+.scrim{position:fixed;inset:0;background:rgba(16,24,34,.55);backdrop-filter:blur(3px);z-index:200;
+  display:grid;place-items:center;padding:20px;animation:fade .2s}
+.modal{background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);max-width:560px;width:100%;
+  max-height:90vh;overflow-y:auto;animation:pop .25s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}
+.modal-head{padding:22px 24px 0}
+.modal-body{padding:18px 24px 24px}
+.modal h2{font-family:var(--disp);font-weight:700;font-size:22px}
+.modal .lead{color:var(--muted);font-size:13.5px;margin-top:4px}
+.form-row{margin-top:16px}
+.form-row label{font-size:11px;letter-spacing:.08em;font-weight:600;color:var(--ink);text-transform:uppercase;display:block;margin-bottom:6px}
+.form-row .field{width:100%}
+.pnl{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:4px 16px;margin-top:8px}
+.pnl-row{display:flex;justify-content:space-between;padding:8px 0;font-size:13px;border-bottom:1px solid var(--line)}
+.pnl-row:last-child{border-bottom:none}
+.pnl-row.tot{font-weight:700;font-size:15px}
+.pnl-row .num{font-family:var(--mono);font-weight:600}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:54px 24px;color:var(--muted)}
+.empty svg{width:42px;height:42px;color:var(--line-2);margin-bottom:12px}
+.empty h3{font-family:var(--disp);font-weight:600;font-size:17px;color:var(--ink);margin-bottom:6px}
+
+/* TOAST */
+#toasts{position:fixed;bottom:22px;right:22px;z-index:300;display:flex;flex-direction:column;gap:9px}
+.toast{background:var(--navy);color:#fff;padding:13px 17px;border-radius:11px;box-shadow:var(--shadow-lg);
+  font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:slideIn .3s;max-width:330px}
+.toast.good{border-left:3px solid var(--pos)} .toast.bad{border-left:3px solid var(--neg)}
+.toast b{font-family:var(--mono)}
+@keyframes slideIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+
+/* DASHBOARD next-step banner */
+.hero{background:linear-gradient(120deg,var(--navy),#243a58);color:#fff;border-radius:var(--radius);
+  padding:22px 24px;margin-bottom:20px;display:flex;align-items:center;gap:22px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-30px;top:-40px;width:220px;height:220px;
+  background:radial-gradient(circle,rgba(176,134,59,.22),transparent 70%)}
+.hero-l{flex:1;position:relative;z-index:1}
+.hero .eb{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--brass);font-weight:700}
+.hero h2{font-family:var(--disp);font-weight:700;font-size:21px;margin:6px 0 5px}
+.hero p{color:#bcccdf;font-size:13.5px;max-width:520px}
+.hero-r{position:relative;z-index:1}
+
+.split{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start}
+@media(max-width:1080px){.split{grid-template-columns:1fr}.stat-row{grid-template-columns:repeat(2,1fr)}}
+.mini{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)}
+.mini:last-child{border-bottom:none}
+.mini-ic{width:34px;height:34px;border-radius:9px;background:var(--surface-2);display:grid;place-items:center;flex:none;color:var(--navy)}
+.mini-ic svg{width:17px;height:17px}
+.mini .t{font-weight:600;font-size:13px} .mini .s{font-size:11.5px;color:var(--muted)}
+.mini .amt{margin-left:auto;font-family:var(--mono);font-weight:600;font-size:13px}
+
+.toggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+.toggle button{padding:6px 13px;border-radius:7px;font-size:12px;font-weight:600;color:var(--muted)}
+.toggle button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+.help{font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line-2);
+  border-radius:10px;padding:11px 14px;display:flex;gap:9px;align-items:flex-start}
+.help svg{width:15px;height:15px;flex:none;color:var(--brass);margin-top:1px}
+
+/* RATING LADDER */
+.ladder{display:flex;flex-direction:column;gap:0}
+.rung{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);margin-bottom:10px;position:relative;transition:.15s}
+.rung.held{border-color:var(--pos-soft);background:linear-gradient(90deg,var(--pos-soft),var(--surface) 60%)}
+.rung.next{border-color:var(--brass);box-shadow:0 0 0 3px var(--brass-soft)}
+.rung.locked{opacity:.6}
+.rung-badge{width:42px;height:42px;border-radius:11px;flex:none;display:grid;place-items:center;font-family:var(--disp);
+  font-weight:800;font-size:17px;color:#fff;background:var(--muted-2)}
+.rung.held .rung-badge{background:var(--pos)} .rung.next .rung-badge{background:linear-gradient(135deg,var(--brass),#946d27)}
+.rung-name{font-family:var(--disp);font-weight:600;font-size:16px}
+.rung-sub{font-size:12px;color:var(--muted)}
+.req-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.req{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.req .rk{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.req .rv{font-family:var(--mono);font-weight:700;font-size:16px;margin:4px 0 8px}
+.pbar{height:8px;background:var(--line);border-radius:8px;overflow:hidden}
+.pfill{height:100%;border-radius:8px;background:var(--brass);transition:width .4s}
+.pfill.ok{background:var(--pos)}
+.grade-pill{font-family:var(--mono);font-weight:700;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff;font-size:13px}
+.gA{background:var(--pos)}.gB{background:#5aa86e}.gC{background:var(--warn)}.gD{background:#cf7a3a}.gF{background:var(--neg)}.gNA{background:var(--muted-2)}
+
+/* SIM TELEMETRY */
+.tel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+.tel{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tel .tk{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tel .tv{font-family:var(--mono);font-weight:700;font-size:16px;margin-top:2px}
+.phase{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px;
+  background:var(--sky-soft);color:var(--sky)}
+.phase.air{background:var(--pos-soft);color:var(--pos)}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- RAIL -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M2 13.5L21 3l-4 10.5L21 21l-7-3-7 3 1.5-7.5L2 13.5z" fill="#fff"/></svg></div>
+      <div><div class="brand-name">SKYLEDGER</div><div class="brand-sub">BIZAV ECONOMY</div></div>
+    </div>
+    <div class="nav-label">Operations</div>
+    <a class="nav-item" data-nav="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
+    <a class="nav-item" data-nav="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h12"/></svg>Charter Board<span class="badge" id="boardBadge">0</span></a>
+    <a class="nav-item" data-nav="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9L2 12z"/></svg>Active Trip<span class="badge" id="activeBadge" style="display:none">1</span></a>
+    <a class="nav-item" data-nav="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>VATSIM Events<span class="badge" id="eventBadge" style="display:none">0</span></a>
+    <a class="nav-item" data-nav="weather"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 18a4 4 0 000-8 6 6 0 00-11.6 1.5A3.5 3.5 0 006 18h11z"/></svg>Weather</a>
+    <div class="nav-label">Assets</div>
+    <a class="nav-item" data-nav="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16l9-12 9 12M5 16h14l-2 4H7l-2-4z"/></svg>My Fleet</a>
+    <a class="nav-item" data-nav="market"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-4h16l1 4M4 9v10a1 1 0 001 1h14a1 1 0 001-1V9M3 9h18M9 13h6"/></svg>Marketplace</a>
+    <a class="nav-item" data-nav="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M9 21v-6h2v6M14 11h1M14 15h1M7 11h1M7 15h1"/><path d="M3 21h18"/></svg>Operator</a>
+    <div class="nav-label">Career</div>
+    <a class="nav-item" data-nav="ratings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>Type Ratings<span class="badge" id="ratingBadge" style="display:none">!</span></a>
+    <div class="nav-label">Records</div>
+    <a class="nav-item" data-nav="ledger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>Ledger</a>
+    <a class="nav-item" data-nav="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15"/></svg>Live Map</a>
+    <div class="rail-foot">
+      Single-file build · runs offline-capable<br>
+      <a id="exportSave">Export save</a> · <a id="importSave">Import</a> · <a id="resetSave">Reset</a>
+    </div>
+  </aside>
+
+  <!-- TOPBAR -->
+  <header class="top">
+    <div><span class="crumb" id="crumb">Dashboard</span> <span class="crumb-sub" id="crumbSub"></span></div>
+    <div class="top-spacer"></div>
+    <div class="vat-pill" id="simPill" title="SimConnect flight tracking" style="cursor:pointer" onclick="openSimLink()"><span class="dot off" id="simDot"></span><span id="simTxt">Sim Link</span></div>
+    <div class="vat-pill" id="vatPill" title="Live VATSIM network status"><span class="dot off" id="vatDot"></span><span id="vatTxt">VATSIM —</span></div>
+    <button class="theme-btn" id="themeBtn" title="Toggle dark / light" onclick="toggleTheme()"></button>
+    <div class="zulu" id="zulu">--:--:-- <b>Z</b></div>
+    <div class="cash"><b id="cashTop">$0</b><span>CASH ON HAND</span></div>
+    <div class="pilot-chip">
+      <div><div class="pname" id="pilotName">Pilot</div><div class="prank" id="pilotRank">—</div></div>
+      <div class="pilot-av" id="pilotAv">?</div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main"><div class="page" id="page"></div></main>
+</div>
+
+<div id="toasts"></div>
+<div id="modalRoot"></div>
+<input type="file" id="fileIn" accept="application/json" style="display:none">
+
+<script>
+/* =========================================================================
+   SKYLEDGER — FSEconomy-style business aviation economy for MSFS + VATSIM
+   Single-file. Persistence via localStorage. Live data via VATSIM v3 feed.
+   ========================================================================= */
+
+/* ---------- CONFIG / ECONOMY CONSTANTS (tune freely) ---------- */
+const CFG = {
+  fuelPrice: 6.50,          // $/gal Jet-A retail
+  onlineBonus: 0.15,        // +15% payout when flight verified on VATSIM
+  atcCoverageBonus: 0.05,   // +5% if ATC online at dep or arr
+  startCash: 38000,
+  taxiPad: 0.30,            // block-hour pad for taxi/climb/descent
+  vatPoll: 60000,           // VATSIM refresh ms
+  boardSize: 38,
+  minFlyable: 12,           // always keep at least this many charters the current fleet can fly
+  startTier: 1,             // new pilots rated for turboprop (0) + light (1)
+  manualGrade: 78,          // grade given to legs logged without Sim Link
+  simUrlDefault: 'ws://127.0.0.1:2992',
+  // ----- dynamic economy (outbound demand per airport) -----
+  arriveBump: 0.18,         // a charter arriving here raises this field's outbound demand
+  departDraw: 0.24,         // a charter departing here consumes outbound demand
+  demandMin: 0.55,          // demand index floor
+  demandMax: 2.30,          // demand index ceiling
+  ecoDecay: 0.90,           // per-tick relaxation toward 1.0 baseline
+  ecoMinGap: 75000,         // min ms between world economy ticks
+};
+/* TIER ORDER (class key per tier index) */
+const TIERS = ['turboprop','light','midsize','supermid','heavy','ulr'];
+/* Requirements to earn the NEXT type rating (keyed by target tier).
+   qual = clean charters flown in your current top-tier aircraft since last rating.
+   score = minimum rolling Pilot Safety Score. Tuned to be a fair challenge, not a grind. */
+const UPGRADE = {
+  2:{from:'Light Jet',   to:'Midsize',          qual:4, score:72, fee:18000},
+  3:{from:'Midsize',     to:'Super-Midsize',    qual:5, score:75, fee:34000},
+  4:{from:'Super-Mid',   to:'Heavy Jet',        qual:6, score:78, fee:58000},
+  5:{from:'Heavy Jet',   to:'Ultra-Long-Range', qual:7, score:81, fee:90000},
+};
+/* Flight grading thresholds (Sim Link telemetry) */
+function gradeFlight(cap){
+  if(!cap) return {score:CFG.manualGrade,letter:'—',notes:['Logged without Sim Link (unverified)']};
+  if(cap.crashed) return {score:25,letter:'F',notes:['Aircraft destroyed / abandoned']};
+  let s=100; const notes=[]; const lr=Math.abs(cap.landingFpm||0);
+  if(lr<=180){notes.push(`Greaser landing · ${Math.round(lr)} fpm`);}
+  else if(lr<=360){s-=3;notes.push(`Smooth landing · ${Math.round(lr)} fpm`);}
+  else if(lr<=600){s-=10;notes.push(`Firm landing · ${Math.round(lr)} fpm`);}
+  else if(lr<=1000){s-=22;notes.push(`Hard landing · ${Math.round(lr)} fpm`);}
+  else {s-=40;notes.push(`Heavy landing · ${Math.round(lr)} fpm`);}
+  if(cap.overspeed){s-=15;notes.push('Overspeed exceedance');}
+  if(cap.stall){s-=12;notes.push('Stall warning in flight');}
+  if(cap.overstress){s-=10;notes.push('Airframe overstress');}
+  const letter = s>=92?'A':s>=83?'B':s>=72?'C':s>=60?'D':'F';
+  return {score:Math.max(0,Math.round(s)),letter,notes};
+}
+function safetyScore(){ if(!S.grades||!S.grades.length)return null;
+  const g=S.grades.slice(-10); return Math.round(g.reduce((a,b)=>a+b.score,0)/g.length); }
+
+/* ============ LIVE DATA LAYER (events · weather · radar) ============ */
+let VATEVENTS=[];              // fetched VATSIM events
+let WX={};                     // icao -> parsed METAR
+let RADAR={host:null,frames:[],idx:0};
+/* CORS-tolerant fetch: direct, then public proxies (matches the rest of the app's pattern) */
+async function proxiedFetch(url,type='json'){
+  const wrap=[u=>u,
+    u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),
+    u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u)];
+  for(const w of wrap){
+    try{ const r=await fetch(w(url),{cache:'no-store'}); if(!r.ok)continue;
+      return type==='text'?await r.text():await r.json(); }catch(e){}
+  }
+  throw new Error('fetch failed: '+url);
+}
+function isEventLive(e){const n=Date.now();return e._start<=n&&e._end>=n;}
+function isEventSoon(e){const n=Date.now();return e._start>n&&e._start-n<36*3600e3;}
+async function fetchEvents(){
+  try{
+    const d=await proxiedFetch('https://my.vatsim.net/api/v2/events/latest');
+    const list=(d.data||d||[]).map(e=>({
+      id:e.id,name:e.name,link:e.link,start:e.start_time,end:e.end_time,
+      _start:Date.parse(e.start_time),_end:Date.parse(e.end_time),
+      desc:(e.short_description||'').slice(0,240),
+      airports:(e.airports||[]).map(a=>(a.icao||'').toUpperCase()).filter(Boolean),
+      type:e.type,banner:e.banner
+    })).filter(e=>e._end>Date.now()).sort((a,b)=>a._start-b._start);
+    VATEVENTS=list.slice(0,40);
+  }catch(e){ /* leave existing */ }
+}
+/* event airports that exist in our network and are live/soon -> used to seed charters */
+function eventTargets(){
+  const out=[];
+  VATEVENTS.filter(e=>isEventLive(e)||isEventSoon(e)).forEach(e=>{
+    e.airports.forEach(ic=>{ if(APTBY[ic]) out.push({icao:ic,ev:e}); });
+  });
+  return out;
+}
+function eventForAirport(ic){
+  for(const e of VATEVENTS){ if((isEventLive(e)||isEventSoon(e))&&e.airports.includes(ic)) return e; }
+  return null;
+}
+/* ---- WEATHER ---- */
+function fltCat(visSm,ceilFt){
+  if(ceilFt<500||visSm<1) return 'LIFR';
+  if(ceilFt<1000||visSm<3) return 'IFR';
+  if(ceilFt<=3000||visSm<=5) return 'MVFR';
+  return 'VFR';
+}
+const CAT_COLOR={VFR:'#1F9D55',MVFR:'#2D6AE3',IFR:'#C0392B',LIFR:'#8e44ad','—':'#737C8A'};
+function parseMetar(m){
+  // m: aviationweather.gov json record
+  const visSm = m.visib==null?10:(typeof m.visib==='string'?parseFloat(m.visib)||10:m.visib);
+  let ceil=99999;
+  (m.clouds||[]).forEach(c=>{ if((c.cover==='BKN'||c.cover==='OVC'||c.cover==='OVX')&&c.base!=null) ceil=Math.min(ceil,c.base); });
+  return {icao:m.icaoId,raw:m.rawOb||'',temp:m.temp,dewp:m.dewp,wdir:m.wdir,wspd:m.wspd,wgst:m.wgst,
+    altim:m.altim,vis:visSm,ceil:ceil===99999?null:ceil,cat:fltCat(visSm,ceil),time:m.reportTime};
+}
+async function fetchWx(icaos){
+  const ids=[...new Set(icaos.filter(Boolean))];
+  if(!ids.length)return;
+  try{
+    const d=await proxiedFetch('https://aviationweather.gov/api/data/metar?format=json&ids='+ids.join(','));
+    (Array.isArray(d)?d:[]).forEach(m=>{ if(m.icaoId) WX[m.icaoId.toUpperCase()]=parseMetar(m); });
+  }catch(e){}
+}
+function wxAround(){ // airports we care about
+  const s=new Set([S.base]);
+  S.fleet.forEach(f=>s.add(f.loc));
+  if(S.active){s.add(S.active.charter.dep);s.add(S.active.charter.arr);}
+  S.board.slice(0,14).forEach(c=>{s.add(c.dep);s.add(c.arr);});
+  eventTargets().forEach(t=>s.add(t.icao));
+  (S.wxWatch||[]).forEach(ic=>s.add(ic));
+  return [...s];
+}
+/* ---- RADAR (RainViewer) ---- */
+async function fetchRadar(){
+  try{
+    const d=await proxiedFetch('https://api.rainviewer.com/public/weather-maps.json');
+    RADAR.host=d.host; RADAR.frames=(d.radar&&d.radar.past||[]).concat(d.radar&&d.radar.nowcast||[]);
+    RADAR.idx=Math.max(0,(d.radar&&d.radar.past?d.radar.past.length-1:0));
+  }catch(e){}
+}
+
+const CLASSES = {
+  turboprop:{label:'Turboprop',  hourly:1800,  tier:0},
+  light:    {label:'Light Jet',  hourly:3500,  tier:1},
+  midsize:  {label:'Midsize Jet',hourly:4700,  tier:2},
+  supermid: {label:'Super-Mid',  hourly:6000,  tier:3},
+  heavy:    {label:'Heavy Jet',  hourly:10000, tier:4},
+  ulr:      {label:'Ultra-Long', hourly:13000, tier:5},
+};
+const CAT = {
+  exec:     {label:'Executive',      mult:1.00},
+  family:   {label:'Family Trip',    mult:0.98},
+  attendee: {label:'Event Traveler', mult:1.06},
+  group:    {label:'Private Group',  mult:1.08},
+  sports:   {label:'Team Charter',   mult:1.30},   // 50+ pax — BBJ-class or bigger only
+  medevac:  {label:'Medevac',        mult:1.45},
+  gov:      {label:'Government',      mult:1.30},
+  vvip:     {label:'VVIP',           mult:1.62},
+  leisure:  {label:'Leisure',        mult:0.96},
+  empty_leg:{label:'Empty Leg',      mult:0.62},
+  cargo:    {label:'Time Cargo',     mult:1.06},
+};
+/* representative cabin capacity per class (for sizing normal charters) */
+const CLASS_SEATS={turboprop:9,light:9,midsize:9,supermid:10,heavy:15,ulr:19};
+const RANKS = [
+  {min:0,    name:'Freelance Pilot'},
+  {min:300,  name:'Charter Pilot'},
+  {min:900,  name:'Senior Captain'},
+  {min:2000, name:'Chief Pilot'},
+  {min:4000, name:'Operator'},
+];
+
+/* ---------- AIRCRAFT CATALOG ---------- */
+const AIRCRAFT = [
+  {id:'c208',name:'Cessna Grand Caravan EX',cls:'turboprop',pax:9,range:950,cruise:185,burn:55,maint:250,price:2700000,lease:1200},
+  {id:'tbm850',name:'Daher TBM 850',cls:'turboprop',pax:5,range:1550,cruise:320,burn:57,maint:300,price:2800000,lease:1400},
+  {id:'tbm930',name:'Daher TBM 930',cls:'turboprop',pax:5,range:1730,cruise:330,burn:60,maint:330,price:4200000,lease:1800},
+  {id:'pc12',name:'Pilatus PC-12 NGX',cls:'turboprop',pax:8,range:1800,cruise:290,burn:66,maint:380,price:5400000,lease:2100},
+  {id:'be250',name:'Beechcraft King Air 250',cls:'turboprop',pax:8,range:1720,cruise:310,burn:95,maint:410,price:6500000,lease:2400},
+  {id:'be350',name:'Beechcraft King Air 350i',cls:'turboprop',pax:9,range:1800,cruise:312,burn:100,maint:430,price:8200000,lease:2600},
+  {id:'cj4',name:'Citation CJ4 Gen2',cls:'light',pax:9,range:2165,cruise:451,burn:200,maint:600,price:10700000,lease:3400},
+  {id:'e55p',name:'Phenom 300E',cls:'light',pax:9,range:2010,cruise:453,burn:210,maint:620,price:11200000,lease:3600},
+  {id:'lr75',name:'Learjet 75 Liberty',cls:'light',pax:8,range:2080,cruise:465,burn:250,maint:680,price:9900000,lease:3300},
+  {id:'cl350lat',name:'Citation Latitude',cls:'midsize',pax:9,range:2700,cruise:483,burn:290,maint:780,price:18500000,lease:5200},
+  {id:'h900',name:'Hawker 900XP',cls:'midsize',pax:8,range:2930,cruise:447,burn:300,maint:760,price:9500000,lease:4200},
+  {id:'sov',name:'Citation Sovereign+',cls:'midsize',pax:12,range:3200,cruise:460,burn:280,maint:790,price:18000000,lease:5000},
+  {id:'prae600',name:'Praetor 600',cls:'supermid',pax:9,range:4018,cruise:466,burn:320,maint:920,price:21000000,lease:6400},
+  {id:'cl350',name:'Challenger 350',cls:'supermid',pax:10,range:3200,cruise:470,burn:340,maint:980,price:27000000,lease:6800},
+  {id:'long',name:'Citation Longitude',cls:'supermid',pax:9,range:3500,cruise:483,burn:330,maint:940,price:28000000,lease:7000},
+  {id:'citx',name:'Citation X+',cls:'supermid',pax:9,range:3460,cruise:525,burn:360,maint:1050,price:23000000,lease:6600},
+  {id:'f8x',name:'Falcon 8X',cls:'heavy',pax:14,range:6450,cruise:488,burn:420,maint:1700,price:60000000,lease:13200},
+  {id:'glex',name:'Global 6500',cls:'heavy',pax:15,range:6600,cruise:513,burn:490,maint:1820,price:62000000,lease:13800},
+  {id:'g650',name:'Gulfstream G650ER',cls:'heavy',pax:14,range:7500,cruise:516,burn:500,maint:1850,price:70000000,lease:14500},
+  {id:'glob7500',name:'Global 7500',cls:'ulr',pax:19,range:7700,cruise:516,burn:510,maint:2050,price:75000000,lease:16000},
+  {id:'g700',name:'Gulfstream G700',cls:'ulr',pax:19,range:7750,cruise:516,burn:520,maint:2100,price:78000000,lease:16500},
+  {id:'bbj',name:'Boeing BBJ MAX 8',cls:'ulr',pax:90,range:6640,cruise:470,burn:800,maint:2600,price:90000000,lease:21000},
+];
+const ACBY = Object.fromEntries(AIRCRAFT.map(a=>[a.id,a]));
+
+/* ---------- AIRPORT DATABASE (curated bizav network) ---------- */
+/* [icao, name, lat, lon, class s|m|i, region] */
+const APT = [
+  ['KSDF','Louisville',38.174,-85.736,'m','NA'],['KTEB','Teterboro',40.850,-74.061,'m','NA'],
+  ['KHPN','Westchester',41.067,-73.708,'m','NA'],['KBOS','Boston Logan',42.366,-71.010,'i','NA'],
+  ['KBED','Bedford',42.470,-71.289,'s','NA'],['KMMU','Morristown',40.799,-74.415,'s','NA'],
+  ['KFRG','Farmingdale',40.728,-73.413,'s','NA'],['KDCA','Washington Natl',38.852,-77.038,'m','NA'],
+  ['KIAD','Dulles',38.953,-77.456,'i','NA'],['KPDK','Atlanta DeKalb',33.876,-84.302,'m','NA'],
+  ['KATL','Atlanta',33.640,-84.427,'i','NA'],['KMIA','Miami',25.793,-80.291,'i','NA'],
+  ['KOPF','Opa-Locka',25.907,-80.278,'m','NA'],['KFLL','Ft Lauderdale',26.072,-80.153,'i','NA'],
+  ['KPBI','West Palm Beach',26.683,-80.096,'m','NA'],['KTPA','Tampa',27.975,-82.533,'m','NA'],
+  ['KORL','Orlando Exec',28.545,-81.333,'s','NA'],['KLAS','Las Vegas',36.080,-115.152,'i','NA'],
+  ['KVNY','Van Nuys',34.209,-118.490,'m','NA'],['KLAX','Los Angeles',33.942,-118.408,'i','NA'],
+  ['KSNA','John Wayne',33.676,-117.868,'m','NA'],['KBUR','Burbank',34.201,-118.358,'m','NA'],
+  ['KSFO','San Francisco',37.619,-122.375,'i','NA'],['KSJC','San Jose',37.363,-121.929,'m','NA'],
+  ['KOAK','Oakland',37.721,-122.221,'m','NA'],['KASE','Aspen',39.223,-106.869,'s','NA'],
+  ['KEGE','Eagle / Vail',39.643,-106.918,'s','NA'],['KJAC','Jackson Hole',43.607,-110.738,'s','NA'],
+  ['KAPA','Denver Centennial',39.570,-104.849,'m','NA'],['KDEN','Denver',39.862,-104.673,'i','NA'],
+  ['KSLC','Salt Lake City',40.788,-111.978,'i','NA'],['KSCF','Scottsdale',33.623,-111.911,'s','NA'],
+  ['KPHX','Phoenix',33.434,-112.012,'i','NA'],['KDAL','Dallas Love',32.847,-96.852,'m','NA'],
+  ['KADS','Addison',32.969,-96.836,'s','NA'],['KDFW','Dallas Ft Worth',32.897,-97.038,'i','NA'],
+  ['KHOU','Houston Hobby',29.645,-95.279,'m','NA'],['KIAH','Houston Intl',29.984,-95.341,'i','NA'],
+  ['KAUS','Austin',30.197,-97.666,'m','NA'],['KMDW','Chicago Midway',41.786,-87.752,'m','NA'],
+  ['KORD',"Chicago O'Hare",41.978,-87.905,'i','NA'],['KPWK','Chicago Exec',42.114,-87.901,'s','NA'],
+  ['KSEA','Seattle',47.450,-122.309,'i','NA'],['KBFI','Boeing Field',47.530,-122.302,'m','NA'],
+  ['KPDX','Portland',45.589,-122.597,'i','NA'],['KISP','Long Island MacArthur',40.795,-73.100,'s','NA'],
+  ['CYYZ','Toronto Pearson',43.677,-79.625,'i','NA'],['CYUL','Montreal',45.470,-73.741,'i','NA'],
+  ['CYVR','Vancouver',49.195,-123.182,'i','NA'],['CYYC','Calgary',51.114,-114.020,'i','NA'],
+  ['EGLL','London Heathrow',51.470,-0.461,'i','EU'],['EGGW','London Luton',51.875,-0.368,'m','EU'],
+  ['EGLF','Farnborough',51.276,-0.776,'m','EU'],['EGKB','Biggin Hill',51.331,0.033,'s','EU'],
+  ['EGTK','Oxford',51.837,-1.320,'s','EU'],['LFPB','Paris Le Bourget',48.969,2.441,'m','EU'],
+  ['LFPG','Paris CDG',49.010,2.548,'i','EU'],['LFMN','Nice',43.658,7.216,'i','EU'],
+  ['LSGG','Geneva',46.238,6.109,'i','EU'],['LSZH','Zurich',47.458,8.555,'i','EU'],
+  ['EDDM','Munich',48.354,11.786,'i','EU'],['EDDF','Frankfurt',50.037,8.562,'i','EU'],
+  ['LEMD','Madrid',40.472,-3.561,'i','EU'],['LEBL','Barcelona',41.297,2.078,'i','EU'],
+  ['LEPA','Palma',39.551,2.739,'m','EU'],['LIML','Milan Linate',45.445,9.277,'m','EU'],
+  ['LIRA','Rome Ciampino',41.799,12.595,'m','EU'],['EHAM','Amsterdam',52.309,4.764,'i','EU'],
+  ['LOWW','Vienna',48.110,16.570,'i','EU'],['LGAV','Athens',37.937,23.945,'i','EU'],
+  ['LTFM','Istanbul',41.262,28.742,'i','EU'],['OMDB','Dubai',25.253,55.364,'i','ME'],
+  ['OMDW','Dubai World Ctrl',24.896,55.161,'m','ME'],['OTHH','Doha',25.273,51.608,'i','ME'],
+  ['OERK','Riyadh',24.958,46.699,'i','ME'],['VHHH','Hong Kong',22.308,113.918,'i','AS'],
+  ['RJTT','Tokyo Haneda',35.552,139.780,'i','AS'],['RJAA','Tokyo Narita',35.765,140.386,'i','AS'],
+  ['WSSS','Singapore',1.357,103.989,'i','AS'],['VTBS','Bangkok',13.681,100.747,'i','AS'],
+  ['YSSY','Sydney',-33.946,151.177,'i','OC'],['YMML','Melbourne',-37.673,144.843,'i','OC'],
+  ['FAOR','Johannesburg',-26.139,28.246,'i','AF'],['MMMX','Mexico City',19.436,-99.072,'i','NA'],
+  ['MMTO','Toluca',19.337,-99.566,'m','NA'],['SBGR','São Paulo GRU',-23.432,-46.469,'i','SA'],
+  ['SBSP','São Paulo Congonhas',-23.626,-46.656,'m','SA'],['SBJR','Rio Jacarepaguá',-22.987,-43.370,'s','SA'],
+  ['SCEL','Santiago',-33.393,-70.785,'i','SA'],['SAEZ','Buenos Aires',-34.822,-58.536,'i','SA'],
+  ['KDAB','Daytona Beach',29.180,-81.058,'m','NA'],['KOSH','Oshkosh Wittman',43.984,-88.557,'s','NA'],
+  ['KLAL','Lakeland Linder',27.989,-82.019,'s','NA'],['KAGS','Augusta',33.370,-81.964,'m','NA'],
+  ['KIND','Indianapolis',39.717,-86.294,'i','NA'],['KRNO','Reno-Tahoe',39.499,-119.768,'m','NA'],
+  ['KFXE','Ft Lauderdale Exec',26.197,-80.171,'s','NA'],['KPSP','Palm Springs',33.829,-116.507,'m','NA'],
+  ['KMRY','Monterey',36.587,-121.843,'s','NA'],['LSZS','Samedan / St Moritz',46.534,9.884,'s','EU'],
+];
+const APTBY = Object.fromEntries(APT.map(a=>[a[0],{icao:a[0],name:a[1],lat:a[2],lon:a[3],cls:a[4],region:a[5]}]));
+const HUBS = ['KTEB','KVNY','KPDK','KOPF','LFPB','EGLF','LSGG','OMDB','KAPA','KDAL','KSDF','KHPN','KSCF','KBED','EGKB'];
+
+/* =========================================================================
+   REAL-WORLD EVENTS — these drive the charter market (demand spikes + themed
+   charters) rather than VATSIM events. {name,icon,type,apts,m,d,w[,biennialOdd]}
+   m/d = approx peak date; w = window in days before & after (arrival/departure
+   traffic spans the run-up and tail of an event). Demand-driven, no flat bonus.
+   ('C3' read as CES — the big Las Vegas expo; tell me if you meant another.)
+   ========================================================================= */
+const RW_EVENTS = [
+  {name:'CES',                     icon:'💡', type:'expo',    apts:['KLAS'],                              m:1,  d:8,  w:4},
+  {name:'WEF Davos',               icon:'🏔️', type:'summit',  apts:['LSZS','LSZH'],                       m:1,  d:19, w:4},
+  {name:'Super Bowl',              icon:'🏈', type:'sports',  apts:['KVNY','KSNA','KLAX'],                m:2,  d:8,  w:4},
+  {name:'Daytona 500',             icon:'🏁', type:'sports',  apts:['KDAB','KORL'],                       m:2,  d:16, w:3},
+  {name:'Sun ’n Fun',              icon:'✈️', type:'airshow', apts:['KLAL'],                              m:4,  d:2,  w:5},
+  {name:'The Masters',             icon:'⛳', type:'sports',  apts:['KAGS'],                              m:4,  d:10, w:4},
+  {name:'Coachella',               icon:'🎵', type:'culture', apts:['KPSP'],                              m:4,  d:14, w:8},
+  {name:'Fort Lauderdale Air Show',icon:'✈️', type:'airshow', apts:['KFXE','KFLL'],                       m:5,  d:3,  w:3},
+  {name:'Kentucky Derby',          icon:'🐎', type:'sports',  apts:['KSDF'],                              m:5,  d:3,  w:3},
+  {name:'Cannes Film Festival',    icon:'🎬', type:'vvip',    apts:['LFMN'],                              m:5,  d:16, w:8},
+  {name:'Monaco Grand Prix',       icon:'🏎️', type:'vvip',    apts:['LFMN'],                              m:5,  d:24, w:4},
+  {name:'Indianapolis 500',        icon:'🏁', type:'sports',  apts:['KIND'],                              m:5,  d:25, w:3},
+  {name:'G7 Summit',               icon:'🌐', type:'summit',  apts:['EGLF','LFPB','CYYC'],                m:6,  d:13, w:3},
+  {name:'FIFA World Cup',          icon:'⚽', type:'sports',  apts:['KMIA','KATL','KDFW','KSFO','MMMX','CYYZ'], m:6, d:18, w:32},
+  {name:'Paris Air Show',          icon:'✈️', type:'expo',    apts:['LFPB'],                              m:6,  d:16, w:5, biennialOdd:true},
+  {name:'British GP & Wimbledon',  icon:'🎾', type:'sports',  apts:['EGLF','EGKB','EGTK'],                m:7,  d:6,  w:9},
+  {name:'EAA AirVenture Oshkosh',  icon:'✈️', type:'airshow', apts:['KOSH'],                              m:7,  d:21, w:7},
+  {name:'Pebble Beach Concours',   icon:'🚗', type:'vvip',    apts:['KMRY'],                              m:8,  d:15, w:4},
+  {name:'US Open Tennis',          icon:'🎾', type:'sports',  apts:['KTEB','KHPN','KFRG'],                m:8,  d:28, w:13},
+  {name:'Burning Man',             icon:'🔥', type:'culture', apts:['KRNO'],                              m:8,  d:28, w:6},
+  {name:'NBAA-BACE',               icon:'🛩️', type:'expo',    apts:['KLAS'],                              m:10, d:14, w:3},
+  {name:'Art Basel Miami',         icon:'🎨', type:'vvip',    apts:['KOPF','KMIA'],                       m:12, d:4,  w:5},
+];
+/* nearest occurrence window (this year or next) for an event */
+function rwWindow(e){
+  const now=Date.now(), Y=new Date().getUTCFullYear();
+  const mk=y=>{const d=Date.UTC(y,e.m-1,e.d); return {date:d, start:d-e.w*864e5, end:d+e.w*864e5, year:y};};
+  let occ=mk(Y);
+  if(occ.end<now) occ=mk(Y+1);                          // already over this year -> next year
+  if(e.biennialOdd && occ.year%2===0) occ=mk(occ.year+1); // odd-year only events
+  return occ;
+}
+function rwLive(){ const n=Date.now(); return RW_EVENTS.map(e=>({e,o:rwWindow(e)})).filter(x=>x.o.start<=n&&x.o.end>=n); }
+function rwUpcoming(days){ const n=Date.now(); return RW_EVENTS.map(e=>({e,o:rwWindow(e)})).filter(x=>x.o.start>n&&x.o.start-n<(days||40)*864e5).sort((a,b)=>a.o.start-b.o.start); }
+function rwAt(ic){ for(const {e,o} of rwLive()){ if(e.apts.includes(ic)) return {name:e.name,icon:e.icon,type:e.type,end:o.end}; } return null; }
+function rwTargets(){ const out=[]; rwLive().forEach(({e,o})=>e.apts.forEach(ic=>{ if(APTBY[ic]) out.push({ic,e,o}); })); return out; }
+
+/* ---------- HELPERS ---------- */
+const $ = s=>document.querySelector(s);
+function haversine(a,b){
+  const A=APTBY[a],B=APTBY[b],R=3440.065,r=Math.PI/180;
+  const dLa=(B.lat-A.lat)*r,dLo=(B.lon-A.lon)*r;
+  const x=Math.sin(dLa/2)**2+Math.cos(A.lat*r)*Math.cos(B.lat*r)*Math.sin(dLo/2)**2;
+  return Math.round(R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+}
+const money = n=>(n<0?'-$':'$')+Math.abs(Math.round(n)).toLocaleString('en-US');
+const money1k = n=>{const a=Math.abs(n);return (n<0?'-$':'$')+(a>=1e6?(a/1e6).toFixed(a>=1e7?0:1)+'M':a>=1e3?(a/1e3).toFixed(0)+'k':Math.round(a))};
+const rnd = (a,b)=>a+Math.random()*(b-a);
+const pick = a=>a[Math.floor(Math.random()*a.length)];
+const uid = ()=>Math.random().toString(36).slice(2,9);
+function rankFor(rep){let r=RANKS[0];for(const x of RANKS)if(rep>=x.min)r=x;return r.name;}
+function nextRank(rep){for(const x of RANKS)if(rep<x.min)return x;return null;}
+
+/* =========================================================================
+   FBOs · REAL-WORLD FUEL PRICES & RAMP FEES
+   Modeled on public ranges from AirNav, GlobalAir, ForeFlight JetFuelX,
+   Avfuel/World Fuel and FBO chain feeds (Signature, Atlantic, Jet Aviation…).
+   Live retail feeds are subscription/auth-gated, so prices are generated
+   deterministically per airport within realistic regional bands.
+   National Jet-A avg ≈ $7.94/gal; cheap regions ≈ $6.7; premium fields $11–14+.
+   ========================================================================= */
+const FUEL_REGION = {NA:7.6, EU:9.7, ME:6.6, AS:8.7, OC:8.9, SA:8.1, AF:8.5};   // $/gal base
+const PREMIUM_FIELDS = new Set(['KTEB','KASE','KVNY','KEGE','KJAC','KHPN','KBED','KSCF','KSMO','KPBI',
+  'LFPB','LFMN','EGLF','EGKB','EGTK','LSGG','LSZH','LIRA','OMDW','OERK']);
+/* brand: [name, fuelFactor, rampFactor] */
+const FBO_BRANDS = [
+  ['Signature',1.16,1.20],['Atlantic Aviation',1.10,1.10],['Jet Aviation',1.20,1.25],
+  ['Million Air',1.08,1.05],['Sheltair',1.00,0.95],['Ross Aviation',1.05,1.00],
+  ['Clay Lacy',1.18,1.18],['Avflight',0.97,0.92],['TAC Air',1.00,0.98],
+  ['Modern Aviation',1.06,1.02],['Contract Fuel (Avfuel)',0.90,0.85]
+];
+const RAMP_BASE={s:90,m:240,i:430};                       // ramp/handling base by airport class
+const SIZE_F={turboprop:0.6,light:1.0,midsize:1.45,supermid:1.9,heavy:2.7,ulr:3.3};
+const LANDING_BASE={s:35,m:120,i:240};                    // movement/landing fee (port authority)
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+const _fboCache={};
+function fbosFor(ic){
+  if(_fboCache[ic])return _fboCache[ic];
+  const a=APTBY[ic]; if(!a){_fboCache[ic]=[];return [];}
+  const h=hashStr(ic), premium=PREMIUM_FIELDS.has(ic);
+  const n = a.cls==='s'?(premium?2:1) : a.cls==='i'?3 : 2;
+  const pool = premium ? FBO_BRANDS.filter(b=>b[2]>=1.04) : FBO_BRANDS;
+  const regBase=FUEL_REGION[a.region]||7.8;
+  const clsF=a.cls==='s'?0.96:a.cls==='m'?1.06:1.16;
+  const premF=premium?1.34:1.0;
+  const out=[],seen=new Set();
+  for(let i=0;i<pool.length && out.length<n;i++){
+    const b=pool[(h>>>(i*5))%pool.length]; if(seen.has(b[0]))continue; seen.add(b[0]);
+    const jitter=0.95+(((h>>>(i*7))%18)/100);             // 0.95–1.12 deterministic
+    out.push({name:b[0], rampF:b[2], premium, fuel:+(regBase*clsF*premF*b[1]*jitter).toFixed(2)});
+  }
+  if(!out.length) out.push({name:'Airport FBO',rampF:1,premium,fuel:+(regBase*clsF*premF).toFixed(2)});
+  _fboCache[ic]=out; return out;
+}
+function rampFeeFor(ic,fbo,acCls){
+  const a=APTBY[ic]; const base=RAMP_BASE[a.cls]*(PREMIUM_FIELDS.has(ic)?2.1:1);
+  return Math.round(base*SIZE_F[acCls]*fbo.rampF/5)*5;
+}
+function landingFeeFor(ic,acCls){ return Math.round(LANDING_BASE[APTBY[ic].cls]*Math.max(0.7,SIZE_F[acCls])); }
+function medFuel(ic){const f=fbosFor(ic).map(x=>x.fuel).sort((a,b)=>a-b);return f[Math.floor(f.length/2)]||7.8;}
+function cheapestFuelFbo(ic){return fbosFor(ic).slice().sort((a,b)=>a.fuel-b.fuel)[0];}
+function medRamp(ic,cls){const r=fbosFor(ic).map(x=>rampFeeFor(ic,x,cls)).sort((a,b)=>a-b);return r[Math.floor(r.length/2)]||200;}
+function cheapestRampFbo(ic,cls){return fbosFor(ic).slice().sort((a,b)=>rampFeeFor(ic,a,cls)-rampFeeFor(ic,b,cls))[0];}
+
+/* block hours + full cost model for a leg.  Optional fuelPrice ($/gal at the
+   departure FBO where you uplift) and arrRamp ($ handling at the arrival FBO). */
+function legEcon(dep,arr,ac,fuelPrice,arrRamp){
+  const dist=haversine(dep,arr);
+  const block=dist/ac.cruise+CFG.taxiPad;
+  const fp = fuelPrice!=null?fuelPrice:medFuel(dep);
+  const fuel=ac.burn*block*fp;
+  const maint=ac.maint*block;
+  const ramp = arrRamp!=null?arrRamp:medRamp(arr,ac.cls);
+  const landing = landingFeeFor(arr,ac.cls);
+  const handling = ramp+landing;
+  const intlNav=(APTBY[dep].region!==APTBY[arr].region)?900:0;
+  return {dist,block,fuel,fuelPrice:fp,maint,ramp,landing,handling,intlNav,opcost:fuel+maint+handling+intlNav};
+}
+
+/* ---------- CLIENT NAME GENERATOR ---------- */
+const ORGS=['Meridian Capital','Halcyon Group','Vantage Partners','Atlas Holdings','Crestline Equity','Onyx Ventures',
+'Sable & Roe','Kessler Industries','Brightwater LLC','Pinnacle Sports Mgmt','Aldridge Estate','Vermillion Media',
+'Cardinal Health Trust','Summit Diplomatic Office','Larkspur Foundation','Drayton Family Office','Northstar Logistics'];
+const NAMES=['the Whitlock family','a touring artist','an exec board','a medical team','a film crew','the head of delegation',
+'a championship roster','a private collector','two principals','a venture syndicate'];
+const cat2blurb={
+  exec:'Executive transfer',family:'Family heading out on vacation',attendee:'Travellers heading to the event',
+  group:'Private group booking',sports:'Full team — high-capacity charter',medevac:'Time-critical medical transfer',
+  gov:'Official delegation movement',vvip:'VVIP principal — full service',leisure:'Leisure itinerary',
+  empty_leg:'Repositioning — discounted seat',cargo:'Sensitive cargo, hard deadline'
+};
+/* varied private clients so the board isn't all execs and teams */
+const FAMILY_CLIENTS=['The Harrington family','A family of four','Weekend ski family','The Delgado party','Grandparents + grandkids','Anniversary getaway','The Okafor family','Honeymoon couple'];
+const ATTENDEE_CLIENTS=['Group of fans','Season-ticket holders','Friends road-tripping by air','Hospitality guests','A bachelor party','Corporate hospitality group','Two couples travelling together','Alumni group'];
+const GROUP_CLIENTS=['Wedding party','Golf foursome + caddies','Incentive-trip winners','Film crew','Music tour crew','Startup offsite','Reunion group','Charity gala party'];
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+let S=null;
+const KEY='skyledger_save_v1';
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
+function load(){ try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch(e){return null;} }
+
+function newGame(name,base){
+  S={
+    pilot:name, base, created:Date.now(),
+    cash:CFG.startCash, rep:0, flights:0, hours:0, nm:0,
+    fleet:[],                       // pilot picks their first aircraft
+    board:[], active:null, ledger:[],
+    operator:null, fbo:null,
+    lastBoard:0, vatCallsign:'',
+    maxTier:CFG.startTier,          // type rating cap (1 = light + turboprop)
+    grades:[],                      // per-flight performance grades
+    tierQual:0,                     // clean charters flown at current top tier
+    simUrl:CFG.simUrlDefault, simbriefUser:'', wxWatch:[],
+    demand:{}, lastEco:0,          // dynamic outbound-demand economy
+    used:[], lastUsed:0            // pre-owned aircraft market
+  };
+  refreshUsed(); refreshBoard(true); save();
+}
+/* ---- USED (pre-owned) AIRCRAFT MARKET ---- */
+const NPC_RENTERS=['Skyhaul Charter','Coastline Jet','Meridian Air','BlueRidge Aviation','Cardinal Flight Dept',
+  'Summit Air Charter','Tailwind Ops','Crosswind Leasing','Lone Star Jets','Harbor Air Group'];
+function usedPrice(a,cond,hours){
+  // depreciation off list: condition + airframe time, with a little market noise
+  const condF=0.50+0.40*(cond/100);                 // 50–90% of list by condition
+  const ageF=Math.max(0.62, 1-(hours/9000)*0.30);   // high-time airframes worth less
+  return Math.round(a.price*condF*ageF*rnd(0.95,1.06)/1000)*1000;
+}
+function genUsed(){
+  // bias toward types the player can actually consider, but include a few aspirational
+  const a=pick(AIRCRAFT.filter(x=>CLASSES[x.cls].tier<=Math.min(5,S.maxTier+1)));
+  const cond=Math.round(rnd(58,95)), hours=Math.round(rnd(200,7200));
+  return {lid:uid(),type:a.id,loc:pick(APT.map(x=>x[0])),cond,hours,price:usedPrice(a,cond,hours),listed:Date.now()};
+}
+function refreshUsed(){
+  if(!S.used)S.used=[];
+  const now=Date.now();
+  S.used=S.used.filter(u=>now-u.listed < 1000*60*60*36);   // listings age out after ~36h
+  while(S.used.length<9) S.used.push(genUsed());
+  S.lastUsed=now;
+}
+function genTail(){
+  const styles=[()=>'N'+Math.floor(rnd(100,999))+pick(['SL','JC','BA','XR','PV','TC']),
+    ()=>'N'+Math.floor(rnd(10,99))+pick(['LX','VG','SK','MD']),
+    ()=>'G-'+pick(['SKYL','JETX','BRAV','LDGR']),()=>'M-'+pick(['VATS','SLDG','PRIV'])];
+  return pick(styles)();
+}
+
+/* =========================================================================
+   CHARTER BOARD GENERATION  +  DYNAMIC OUTBOUND-DEMAND ECONOMY
+   Flying a charter INTO an airport raises that field's outbound demand
+   (the pax/cargo you delivered now need to leave). Flying OUT consumes it.
+   Demand decays toward 1.0, and an ambient world-sim keeps hubs alive.
+   High demand -> more charters depart that field AND they pay more.
+   ========================================================================= */
+function demandAt(ic){ return (S.demand&&S.demand[ic])||1.0; }
+function bumpDemand(ic,delta){
+  if(!APTBY[ic])return; if(!S.demand)S.demand={};
+  const v=Math.max(CFG.demandMin,Math.min(CFG.demandMax,demandAt(ic)+delta));
+  if(Math.abs(v-1)<0.02) delete S.demand[ic]; else S.demand[ic]=+v.toFixed(3);
+}
+function demandLevel(d){ return d>=1.7?'Very high':d>=1.35?'High':d>=1.12?'Elevated':d<=0.8?'Soft':'Normal'; }
+function topMarkets(n){
+  return Object.entries(S.demand||{}).filter(([ic,d])=>APTBY[ic]&&d>1.08)
+    .sort((a,b)=>b[1]-a[1]).slice(0,n||6).map(([ic,d])=>({ic,d}));
+}
+function economyTick(){
+  if(!S.demand)S.demand={};
+  const now=Date.now();
+  if(now-(S.lastEco||0)<CFG.ecoMinGap) return;
+  // relax all markets toward baseline
+  for(const ic in S.demand){ S.demand[ic]=1.0+(S.demand[ic]-1.0)*CFG.ecoDecay;
+    if(Math.abs(S.demand[ic]-1)<0.02) delete S.demand[ic]; }
+  // ambient world traffic: other operators fly in, building outbound backlog
+  const n=4+Math.floor(Math.random()*4);
+  for(let i=0;i<n;i++){ const ic=Math.random()<0.6?pick(HUBS):pick(APT)[0]; bumpDemand(ic, rnd(0.04,0.13)); }
+  // REAL-WORLD EVENTS spike demand at their airports (the market reacts, naturally
+  // raising fares & charter volume there — no artificial flat bonus)
+  rwTargets().forEach(t=>bumpDemand(t.ic, rnd(0.16,0.32)));
+  S.lastEco=now;
+}
+/* pick a charter origin weighted by current outbound demand (hot fields spawn more) */
+function weightedOrigin(){
+  let total=0; const w=APT.map(a=>{ const base=HUBS.includes(a[0])?1.0:0.42;
+    const wt=base*Math.pow(demandAt(a[0]),2.3); total+=wt; return wt; });
+  let r=Math.random()*total;
+  for(let i=0;i<APT.length;i++){ r-=w[i]; if(r<=0) return APT[i][0]; }
+  return pick(HUBS);
+}
+function classForDistance(d){
+  if(d<350) return pick(['turboprop','turboprop','light']);
+  if(d<900) return pick(['turboprop','light','light','midsize']);   // turboprops do real regional work
+  if(d<1500) return pick(['light','light','midsize']);
+  if(d<2600) return pick(['midsize','supermid']);
+  if(d<4200) return pick(['supermid','heavy']);
+  return pick(['heavy','ulr']);
+}
+/* business aviation is mostly short/medium hops — long-haul is deliberately rare */
+function arrWeight(d){
+  if(d<300) return 0.5;
+  if(d<800) return 1.0;
+  if(d<1500) return 0.78;
+  if(d<2500) return 0.40;
+  if(d<3500) return 0.15;
+  if(d<4500) return 0.055;
+  return 0.018;                            // transoceanic: very rare
+}
+function weightedArr(from){
+  let total=0; const w=APT.map(a=>{ if(a[0]===from)return 0; const d=haversine(from,a[0]);
+    if(d<90)return 0; const wt=arrWeight(d); total+=wt; return wt; });
+  let r=Math.random()*total;
+  for(let i=0;i<APT.length;i++){ r-=w[i]; if(r<=0) return APT[i][0]; }
+  return pick(HUBS.filter(h=>h!==from));
+}
+function genCharter(forceDep,opts){
+  opts=opts||{};
+  let dep = forceDep || weightedOrigin();
+  let arr;
+  if(opts.arrTo){ arr=opts.arrTo; dep=forceDep||weightedArr(arr); }
+  else { arr = weightedArr(dep); }
+  const dist=haversine(dep,arr);
+  let cls=classForDistance(dist);
+  // real-world event touching either end (sets theme + note; demand handles pricing)
+  const rw = rwAt(dep)||rwAt(arr);
+  // ---- category: a varied mix of who's actually flying ----
+  let cat;
+  const canTeam = dist<=ACBY.bbj.range;   // a 50+ team needs a BBJ, which has finite range
+  if(rw){
+    // events are mostly ordinary people travelling TO/FROM them — not the team itself
+    const w = rw.type==='summit' ? {gov:10,vvip:10,exec:14,attendee:18,group:14,family:8}
+            : rw.type==='vvip'   ? {vvip:16,exec:16,group:14,attendee:16,family:10}
+            : rw.type==='airshow'? {attendee:26,family:18,group:14,exec:14,vvip:5}
+            : rw.type==='expo'   ? {exec:24,attendee:22,group:16,gov:6,family:8}
+            : rw.type==='culture'? {attendee:28,family:20,group:18,exec:10,vvip:6}
+            : /* sports */         {attendee:30,family:18,group:18,exec:12,vvip:8,sports:canTeam?7:0};
+    cat = pickCat(w);
+  } else {
+    let w = {exec:22,family:18,leisure:13,attendee:9,group:11,cargo:8,gov:5,medevac:6,vvip:dist>3800?9:4,
+             empty_leg:HUBS.includes(arr)?7:0, sports:canTeam?2:0};
+    cat = pickCat(w);
+  }
+  // a Team Charter is a full squad/large group — BBJ-class capacity required
+  if(cat==='sports'){ cls='ulr'; }
+  else if(cat==='vvip'&&CLASSES[cls].tier<3) cls=pick(['supermid','heavy']);
+  else if(cat==='group'){ /* big groups need a bigger cabin */ if(CLASSES[cls].tier<2&&Math.random()<0.5)cls=pick(['midsize','supermid']); }
+  // optional caps so the board can guarantee charters a given aircraft can actually fly
+  if(opts.capTier!=null && CLASSES[cls].tier>opts.capTier){ cls=TIERS[opts.capTier]; if(cat==='sports')cat=pick(['attendee','group','exec','family']); }
+  const tier=CLASSES[cls].tier;
+  // ---- passenger count, sized to the category & cabin ----
+  let pax;
+  if(cat==='cargo') pax=0;
+  else if(cat==='sports') pax=Math.round(rnd(50,84));                       // the team + staff (BBJ only)
+  else{
+    const cap=CLASS_SEATS[cls]||9;
+    const r={exec:[2,6],vvip:[2,8],gov:[2,7],medevac:[1,3],family:[2,6],
+             attendee:[1,7],group:[6,16],leisure:[2,7],empty_leg:[1,4]}[cat]||[2,6];
+    pax=Math.min(cap, Math.max(r[0], Math.round(rnd(r[0],r[1]))));
+  }
+  if(opts.capPax!=null && pax>opts.capPax) pax=opts.capPax;
+  // ---- hourly charter pricing (realistic) × demand × category, with a 1.0h minimum ----
+  const acmRef=AIRCRAFT.find(a=>a.cls===cls)||AIRCRAFT[0];
+  const block=dist/acmRef.cruise+CFG.taxiPad;
+  const mktD=demandAt(dep);
+  const spike=Math.random()<0.08;
+  const demand=mktD*rnd(0.93,1.12)*(spike?rnd(1.3,1.5):1);
+  const payout=Math.round(CLASSES[cls].hourly*Math.max(block,1.0)*CAT[cat].mult*demand/50)*50;
+  // expiry
+  let hrs={medevac:rnd(3,5),cargo:rnd(7,14),exec:rnd(10,30),gov:rnd(12,28),attendee:rnd(14,40),
+    group:rnd(18,48),family:rnd(40,120),sports:rnd(20,44),vvip:rnd(28,60),leisure:rnd(48,110),empty_leg:rnd(24,46)}[cat]||rnd(12,36);
+  const who = rw?rwClient(rw,cat):catClient(cat);
+  const c={id:uid(),dep,arr,dist,cls,tier,cat,pax,payout,demand,mktD:+mktD.toFixed(2),
+    client:who, expires:Date.now()+hrs*3600e3, surge:spike||mktD>=1.5, hot:mktD>=1.2};
+  if(rw){ c.rwEvent={name:rw.name,icon:rw.icon,type:rw.type}; if(rw.end)c.expires=Math.min(c.expires,rw.end+2*864e5); }
+  const vn=vatEventAt(dep)||vatEventAt(arr); if(vn) c.vatNote=vn;   // informational note only
+  return c;
+}
+function pickCat(w){ let t=0;for(const k in w)t+=w[k]; let r=Math.random()*t; for(const k in w){ r-=w[k]; if(r<=0)return k; } return 'exec'; }
+function catClient(cat){
+  if(cat==='family')   return pick(FAMILY_CLIENTS);
+  if(cat==='attendee') return pick(ATTENDEE_CLIENTS);
+  if(cat==='group')    return pick(GROUP_CLIENTS);
+  if(cat==='sports')   return pick(['Pro sports team','College athletics squad','Touring roster + staff','National team travel']);
+  if(cat==='vvip'||cat==='gov') return pick(ORGS);
+  if(cat==='leisure')  return Math.random()<0.5?pick(NAMES):pick(['Golf trip','Wine-country weekend','Yacht-week party']);
+  return Math.random()<0.6?pick(ORGS):pick(NAMES);
+}
+function rwClient(rw,cat){
+  const n=rw.name;
+  if(cat==='sports')   return pick(['Full team — '+n,n+' roster + staff','Touring squad — '+n]);
+  if(cat==='family')   return pick(['Family for '+n,'Family heading to '+n,pick(FAMILY_CLIENTS)+' · '+n]);
+  if(cat==='attendee') return pick([n+' attendees',n+' fans','Travellers for '+n,'Hospitality guests — '+n]);
+  if(cat==='group')    return pick(['Group heading to '+n,n+' party',pick(GROUP_CLIENTS)+' · '+n]);
+  if(cat==='vvip')     return pick(['Principal — '+n,'VVIP party — '+n]);
+  if(cat==='gov')      return pick(['Official delegation — '+n,n+' delegation']);
+  return pick(['Exhibitor — '+n,'Guests — '+n,'Travellers for '+n]);  // exec / expo / airshow
+}
+function vatEventAt(ic){ for(const e of VATEVENTS){ if(isEventLive(e)&&e.airports.includes(ic)) return e.name; } return null; }
+/* a cheap discounted reposition (empty leg) from `from` to a nearby hub */
+function makeReposition(from,to){
+  const dist=haversine(from,to), cls=classForDistance(dist), acmRef=AIRCRAFT.find(a=>a.cls===cls)||AIRCRAFT[0];
+  const block=dist/acmRef.cruise+CFG.taxiPad;
+  return {id:uid(),dep:from,arr:to,dist,cls,tier:CLASSES[cls].tier,cat:'empty_leg',pax:0,
+    payout:Math.round(CLASSES[cls].hourly*Math.max(block,1.0)*CAT.empty_leg.mult*0.95/50)*50,
+    demand:0.62,mktD:1,client:'Reposition / empty leg',expires:Date.now()+rnd(30,54)*3600e3,
+    surge:false,hot:false,repo:true};
+}
+function nearestHub(ic){ let best=null,bd=1e9; HUBS.concat(['KAPA','KSLC','KMDW','KPHX','EGLL','EDDM','LSGG','OMDB','KSEA','KDFW','KATL','KMIA','KLAS']).forEach(h=>{ if(h===ic||!APTBY[h])return; const d=haversine(ic,h); if(d<bd){bd=d;best=h;} }); return best; }
+/* GUARANTEE a way out of an airport: outbound charters + a close reposition option */
+function ensureExit(ic){
+  if(!APTBY[ic])return;
+  const now=Date.now();
+  const out=S.board.filter(c=>c.dep===ic&&c.expires>now);
+  for(let i=out.length;i<2;i++) S.board.push(genCharter(ic));        // at least 2 outbound charters
+  if(!S.board.some(c=>c.dep===ic&&c.repo&&c.expires>now)){           // at least one close reposition
+    const hub=nearestHub(ic); if(hub) S.board.push(makeReposition(ic,hub));
+  }
+}
+/* can any idle aircraft currently fly this charter? (range + rating tier + seats) */
+function fleetCanFly(c){
+  return S.fleet.some(f=>!f.busy && ACBY[f.type].range>=c.dist && CLASSES[ACBY[f.type].cls].tier>=c.tier && ACBY[f.type].pax>=(c.pax||0));
+}
+/* generate a charter guaranteed flyable by a specific idle aircraft (right tier, range, seats) */
+function genFlyableFor(f){
+  const a=ACBY[f.type], capTier=CLASSES[a.cls].tier;
+  let arr=null;
+  for(let t=0;t<40 && !arr;t++){ const cand=weightedArr(f.loc); const d=haversine(f.loc,cand); if(d>=90&&d<=a.range*0.95) arr=cand; }
+  if(!arr){ const inrange=APT.map(x=>x[0]).filter(ic=>ic!==f.loc).map(ic=>[ic,haversine(f.loc,ic)]).filter(x=>x[1]>=90&&x[1]<=a.range*0.95).sort((p,q)=>p[1]-q[1]); arr=inrange.length?inrange[Math.floor(Math.random()*Math.min(8,inrange.length))][0]:null; }
+  if(!arr) return null;
+  return genCharter(f.loc,{arrTo:arr, capTier, capPax:a.pax});
+}
+function refreshBoard(full){
+  const now=Date.now();
+  economyTick();                          // age + stir the market before generating
+  S.board=(S.board||[]).filter(c=>c.expires>now && !full);
+  const idle=S.fleet.filter(f=>!f.busy);
+  // 1) seed flyable work out of each idle aircraft's current field (right tier/range/seats)
+  idle.forEach(f=>{ for(let i=0;i<3;i++){ const c=genFlyableFor(f); if(c)S.board.push(c); } });
+  // 2) real-world events seed themed inbound + outbound charters (priced by demand, no bonus)
+  rwTargets().slice(0,10).forEach(t=>{
+    if(S.board.filter(c=>c.rwEvent&&c.rwEvent.name===t.e.name).length>=5) return;
+    S.board.push(genCharter(t.ic));                  // out of the event field
+    S.board.push(genCharter(null,{arrTo:t.ic}));     // into the event field
+  });
+  // 3) general market (any tier — includes aspirational charters above your rating)
+  while(S.board.length<CFG.boardSize) S.board.push(genCharter());
+  // 4) GUARANTEE a minimum number your current fleet can actually fly
+  if(idle.length){
+    let guard=0;
+    while(S.board.filter(fleetCanFly).length<CFG.minFlyable && guard++<60){
+      const c=genFlyableFor(pick(idle)); if(c)S.board.push(c); else break;
+    }
+  }
+  // 5) trim to a bound — but NEVER cull charters your fleet can fly; drop lowest-value others first
+  if(S.board.length>72){
+    const fly=S.board.filter(fleetCanFly), other=S.board.filter(c=>!fleetCanFly(c)).sort((a,b)=>b.payout-a.payout);
+    S.board=fly.concat(other).slice(0,72);
+  }
+  S.board.sort((a,b)=>b.payout-a.payout);            // display order: highest value first
+  S.lastBoard=now;
+}
+
+/* find best idle aircraft to serve a charter (suitable class+range, prefer at dep) */
+function bestAircraftFor(c){
+  const cand=S.fleet.filter(f=>!f.busy && ACBY[f.type].range>=c.dist && CLASSES[ACBY[f.type].cls].tier>=c.tier && ACBY[f.type].pax>=(c.pax||0));
+  if(!cand.length) return null;
+  cand.sort((a,b)=>{
+    const da=a.loc===c.dep?0:haversine(a.loc,c.dep), db=b.loc===c.dep?0:haversine(b.loc,c.dep);
+    return da-db;
+  });
+  return cand[0];
+}
+
+/* =========================================================================
+   ROUTER / RENDER
+   ========================================================================= */
+let view='dash';
+const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:['Active Trip',''],
+  events:['VATSIM Events','live network'],weather:['Weather','live METAR + radar'],
+  fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator',''],
+  ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network']};
+function nav(v){ view=v; renderAll(); }
+function renderAll(){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
+  $('#crumb').textContent=CRUMB[view][0]; $('#crumbSub').textContent=CRUMB[view][1];
+  $('#boardBadge').textContent=S.board.filter(c=>c.expires>Date.now()).length;
+  $('#activeBadge').style.display=S.active?'inline-block':'none';
+  $('#ratingBadge').style.display=upgradeReady()?'inline-block':'none';
+  const liveEv=rwLive().length;
+  $('#eventBadge').style.display=liveEv?'inline-block':'none'; $('#eventBadge').textContent=liveEv;
+  renderTop();
+  const p=$('#page');
+  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,fleet:rFleet,market:rMarket,operator:rOperator,ratings:rRatings,ledger:rLedger,map:rMap}[view])(p);
+  if(view==='map') setTimeout(initMap,40);
+  if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
+  save();
+}
+/* is the pilot eligible to claim the next type rating? */
+function upgradeReady(){
+  const nt=S.maxTier+1; const req=UPGRADE[nt]; if(!req)return false;
+  const ss=safetyScore();
+  return S.tierQual>=req.qual && ss!==null && ss>=req.score;
+}
+function renderTop(){
+  $('#cashTop').textContent=money(S.cash);
+  $('#pilotName').textContent=S.pilot;
+  $('#pilotRank').textContent=rankFor(S.rep).toUpperCase();
+  $('#pilotAv').textContent=S.pilot.trim()[0]?.toUpperCase()||'P';
+}
+
+/* ---------- DASHBOARD ---------- */
+function rDash(p){
+  const nr=nextRank(S.rep);
+  const flyable=S.board.filter(c=>c.expires>Date.now()&&bestAircraftFor(c)).length;
+  const next = !S.fleet.length
+    ? {eb:'GET STARTED',h:'Acquire your first aircraft',
+       p:`You hold a ${CLASSES[TIERS[S.maxTier]].label} type rating. Lease a light jet to start earning with minimal capital, or buy one outright. Then fly clean charters to rate up toward heavier metal.`,
+       btn:'Open marketplace',go:'market'}
+    : S.active
+    ? {eb:'TRIP IN PROGRESS',h:'You have an active trip',
+       p:'Fly the open leg in your sim. With Sim Link connected, legs auto-complete and get graded for your type-rating progress; you can also verify against the live VATSIM feed for the bonus.',
+       btn:'Open active trip',go:'active'}
+    : {eb:'NEXT STEP',h:'Pick up a charter and fly',
+       p:`There are ${flyable} charter${flyable===1?'':'s'} you can dispatch right now from where your aircraft are sitting. Bigger metal and longer legs pay more — and the full P&L is shown before you accept.`,
+       btn:'Browse the charter board',go:'board'};
+  p.innerHTML=`
+   <div class="hero">
+     <div class="hero-l"><div class="eb">${next.eb}</div><h2>${next.h}</h2><p>${next.p}</p></div>
+     <div class="hero-r"><button class="btn brass" onclick="nav('${next.go}')">${next.btn}
+       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+   </div>
+   <div class="stat-row">
+     <div class="stat"><div class="k">Cash on hand</div><div class="v">${money1k(S.cash)}</div><div class="d">${S.fleet.length} aircraft in fleet</div>
+       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18v10H3zM3 11h18"/></svg></div>
+     <div class="stat"><div class="k">Reputation</div><div class="v">${S.rep.toLocaleString()}</div>
+       <div class="d">${nr?`${(nr.min-S.rep).toLocaleString()} to ${nr.name}`:'Top rank reached'}</div>
+       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg></div>
+     <div class="stat"><div class="k">Flights flown</div><div class="v">${S.flights}</div><div class="d">${Math.round(S.hours)} block hrs · ${S.nm.toLocaleString()} nm</div>
+       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div>
+     <div class="stat" style="cursor:pointer" onclick="nav('ratings')"><div class="k">Type rating</div>
+       <div class="v" style="font-family:var(--disp);font-size:18px">${CLASSES[TIERS[S.maxTier]].label}</div>
+       <div class="d">Safety score ${safetyScore()??'—'}${upgradeReady()?' · <span style="color:var(--brass)">upgrade ready</span>':''}</div>
+       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg></div>
+   </div>
+   <div class="split">
+     <div class="card card-pad">
+       <div class="sec-head"><div><div class="eyebrow">Live Market</div><div class="sec-title">Top charters waiting</div></div>
+         <div class="sec-spacer"></div><button class="btn ghost sm" onclick="nav('board')">View all</button></div>
+       ${S.board.slice(0,4).map(c=>dashCharterRow(c)).join('')||'<div class="empty"><h3>Board is refreshing…</h3></div>'}
+     </div>
+     <div style="display:flex;flex-direction:column;gap:18px">
+       <div class="card card-pad">
+         <div class="eyebrow">VATSIM</div><div class="sec-title" style="margin:2px 0 12px">Network right now</div>
+         <div id="vatNet" class="muted" style="font-size:13px">Connecting to live feed…</div>
+       </div>
+       <div class="card card-pad">
+         <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Economy</div><div class="sec-spacer" style="flex:1"></div>
+           <span class="muted" style="font-size:11px">outbound demand</span></div>
+         <div class="sec-title" style="margin:2px 0 10px">Hot departure markets</div>
+         ${(()=>{const m=topMarkets(5);return m.length?m.map(x=>`<div class="mini" style="cursor:pointer" onclick="boardFilter.q='${x.ic}';nav('board')">
+            <div class="mini-ic" style="color:var(--pos)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8M21 7v5M21 7h-5"/></svg></div>
+            <div><div class="t mono" style="font-size:13px">${x.ic} ${wxDot(x.ic)}</div><div class="s">${APTBY[x.ic].name} · ${demandLevel(x.d)}</div></div>
+            <div class="amt"><div class="cond-bar" style="width:64px;margin:0"><div class="cond-fill" style="width:${Math.min(100,Math.round((x.d-1)/1.3*100))}%;background:var(--pos)"></div></div></div></div>`).join('')
+            :'<div class="muted" style="font-size:12.5px">Markets are calm. Fly charters into an airport to build outbound demand there — then fly the backlog out for premium fares.</div>';})()}
+       </div>
+       <div class="card card-pad">
+         <div class="eyebrow">Recent</div><div class="sec-title" style="margin:2px 0 8px">Ledger</div>
+         ${S.ledger.slice(-4).reverse().map(l=>`<div class="mini">
+            <div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg></div>
+            <div><div class="t">${l.k}</div><div class="s">${new Date(l.t).toLocaleDateString()}</div></div>
+            <div class="amt ${l.a>0?'pos':l.a<0?'neg':''}">${l.a?money(l.a):'—'}</div></div>`).join('')||'<div class="muted" style="font-size:13px">No transactions yet.</div>'}
+       </div>
+     </div>
+   </div>`;
+  renderVatNet();
+}
+function dashCharterRow(c){
+  const ac=bestAircraftFor(c); const ready=ac&&ac.loc===c.dep;
+  return `<div class="mini">
+    <div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div>
+    <div><div class="t mono">${c.dep} → ${c.arr} <span class="tag ${c.cat}" style="margin-left:4px">${CAT[c.cat].label}</span></div>
+      <div class="s">${c.dist.toLocaleString()} nm · ${CLASSES[c.cls].label} · ${ready?'<span style="color:var(--pos)">ready to dispatch</span>':ac?'reposition needed':'no suitable aircraft'}</div></div>
+    <div class="amt">${money1k(c.payout)}</div></div>`;
+}
+
+/* ---------- CHARTER BOARD ---------- */
+let boardFilter={cat:'all',ready:false,q:'',aircraft:'all'};
+function selectedFleetAc(){
+  if(boardFilter.aircraft&&boardFilter.aircraft!=='all'){
+    const f=S.fleet.find(x=>x.id===boardFilter.aircraft&&!x.busy);
+    if(f)return f; boardFilter.aircraft='all';
+  }
+  return null;
+}
+/* aircraft used to evaluate a charter: the board-selected one (if it can fly it), else best idle */
+function acForCharter(c){
+  const sel=selectedFleetAc();
+  if(sel) return (ACBY[sel.type].range>=c.dist && CLASSES[ACBY[sel.type].cls].tier>=c.tier && ACBY[sel.type].pax>=(c.pax||0))?sel:null;
+  return bestAircraftFor(c);
+}
+function rBoard(p){
+  const now=Date.now();
+  const sel=selectedFleetAc();
+  let list=S.board.filter(c=>c.expires>now);
+  if(sel) list=list.filter(c=>acForCharter(c));                 // only charters this aircraft can fly
+  if(boardFilter.cat!=='all') list=list.filter(c=>c.cat===boardFilter.cat);
+  if(boardFilter.ready) list=list.filter(c=>{const pl=planFor(c);return pl&&pl.ready;});
+  if(boardFilter.event) list=list.filter(c=>c.rwEvent);
+  if(boardFilter.q){const q=boardFilter.q.toUpperCase();list=list.filter(c=>c.dep.includes(q)||c.arr.includes(q)||APTBY[c.dep].name.toUpperCase().includes(q)||APTBY[c.arr].name.toUpperCase().includes(q));}
+  const evCount=S.board.filter(c=>c.rwEvent&&c.expires>now).length;
+  const idle=S.fleet.filter(f=>!f.busy);
+  p.innerHTML=`
+    <div class="bar">
+      ${S.fleet.length?`<select class="field" id="acSel" onchange="setBF('aircraft',this.value)" style="min-width:210px;font-weight:600">
+        <option value="all" ${boardFilter.aircraft==='all'?'selected':''}>All available aircraft (${idle.length})</option>
+        ${S.fleet.map(f=>`<option value="${f.id}" ${boardFilter.aircraft===f.id?'selected':''} ${f.busy?'disabled':''}>${f.tail} · ${ACBY[f.type].name} · @${f.loc}${f.rentedUntil&&f.rentedUntil>Date.now()?' (rented out)':f.busy?' (on trip)':''}</option>`).join('')}
+      </select>`:''}
+      <div class="sec-spacer" style="flex:1"></div>
+      <input class="field" id="bq" placeholder="ICAO or city…" value="${boardFilter.q}" oninput="setBF('q',this.value)" style="width:140px">
+      ${evCount?`<button class="chip ${boardFilter.event?'on':''}" onclick="setBF('event',${!boardFilter.event})">${boardFilter.event?'':''}Events (${evCount})</button>`:''}
+      <button class="chip ${boardFilter.ready?'on':''}" onclick="setBF('ready',${!boardFilter.ready})">✓ Ready now</button>
+      <button class="btn ghost sm" onclick="doRefresh()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7M21 4v5h-5"/></svg>Refresh</button>
+    </div>
+    <div class="bar" style="margin-top:-6px">
+      <div class="chiprow">
+        <button class="chip ${boardFilter.cat==='all'?'on':''}" onclick="setBF('cat','all')">All types</button>
+        ${Object.keys(CAT).map(k=>`<button class="chip ${boardFilter.cat===k?'on':''}" onclick="setBF('cat','${k}')">${CAT[k].label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>${sel?`Showing only charters <b>${sel.tail}</b> can fly — <b>ready</b> means it's parked at the departure field, otherwise a positioning leg from <b class="mono">${sel.loc}</b> is added.`:'Any charter you\'re <b>type-rated</b> for is open to you — if you don\'t own a suitable jet, you can <b>🔑 rent one on-site</b> at an auto market rate (no positioning needed). Own one to skip the rental and to list yours for rent.'} Coloured dots are live METAR flight category.</span></div>
+    <div class="rows" style="margin-top:14px">${list.map(charterCard).join('')||emptyState('No charters match',sel?'This aircraft can\'t reach these, or none fit the filters. Pick another aircraft or refresh.':'Try clearing filters or refresh the board.')}</div>`;
+}
+function setBF(k,v){boardFilter[k]=v;rBoard($('#page'));}
+function wxDot(ic){const w=WX[ic];if(!w)return'';return `<span title="${w.cat} · ${w.raw}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CAT_COLOR[w.cat]};margin-left:5px;vertical-align:middle"></span>`;}
+function wxStrip(ic){
+  const w=WX[ic];
+  if(!w) return `<div style="flex:1;min-width:150px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12px"><b class="mono">${ic}</b> <span class="muted">— fetching weather…</span></div>`;
+  const wind=w.wdir==null?'calm':`${String(w.wdir).padStart(3,'0')}°/${w.wspd||0}${w.wgst?'G'+w.wgst:''}kt`;
+  return `<div style="flex:1;min-width:150px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px">
+    <div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-size:13px">${ic}</b>
+      <span class="tag" style="background:${CAT_COLOR[w.cat]};color:#fff">${w.cat}</span></div>
+    <div class="muted mono" style="font-size:11px;margin-top:4px">${wind} · ${w.vis>=10?'10+':w.vis}sm${w.ceil?' · '+w.ceil+'ft':' · SKC'}${w.temp!=null?' · '+Math.round(w.temp)+'°C':''}</div>
+  </div>`;
+}
+function doRefresh(){refreshBoard(false);showToast('Charter board refreshed','good');renderAll();}
+function timeLeft(ms){const d=ms-Date.now();if(d<0)return'expired';const h=Math.floor(d/3600e3),m=Math.floor(d%3600e3/60e3);return h>=24?Math.floor(h/24)+'d '+(h%24)+'h':h>0?h+'h '+m+'m':m+'m';}
+/* ---- RENTAL-TO-FLY: take any charter you're rated for, renting an aircraft on-site if you don't own one ---- */
+const RENTAL_MARKUP=1.3;              // on-demand rental costs a bit more than a standing lease
+function ratedFor(c){ return S.maxTier>=c.tier; }
+function rentalTypeFor(c){
+  const cand=AIRCRAFT.filter(a=>CLASSES[a.cls].tier>=c.tier && CLASSES[a.cls].tier<=S.maxTier && a.range>=c.dist && a.pax>=(c.pax||0))
+    .sort((x,y)=>x.lease-y.lease);    // cheapest suitable type you're rated for
+  return cand[0]||null;
+}
+/* auto market rental rate for a type — used until a real owner lists one at their own price */
+function rentalRateFor(a){ return Math.round(a.lease*RENTAL_MARKUP); }
+function rentalCost(rate,totBlock){ return Math.round(rate*Math.max(0.2,totBlock/8)); }
+/* how a charter would be flown: an available owned/leased jet, else an on-site rental */
+function planFor(c){
+  const owned=acForCharter(c);
+  if(owned) return {ac:owned, rental:false, ready:owned.loc===c.dep};
+  if(!selectedFleetAc() && ratedFor(c)){
+    const t=rentalTypeFor(c);
+    if(t) return {ac:null, rental:true, type:t.id, rate:rentalRateFor(t), ready:true};
+  }
+  return null;
+}
+function charterCard(c){
+  const plan=planFor(c);
+  const evIc = c.rwEvent ? (rwAt(c.dep)?c.dep:c.arr) : null;
+  let right;
+  if(plan){
+    const acm = ACBY[plan.rental?plan.type:plan.ac.type];
+    const reposNm = plan.rental?0:(plan.ac.loc===c.dep?0:haversine(plan.ac.loc,c.dep));
+    const rev=legEcon(c.dep,c.arr,acm), repE=reposNm?legEcon(plan.ac.loc,c.dep,acm):null;
+    const totBlock=rev.block+(repE?repE.block:0);
+    const hire = plan.rental?rentalCost(plan.rate,totBlock):(!plan.ac.owned?Math.round(acm.lease*(totBlock/8)):0);
+    const net=c.payout-rev.opcost-(repE?repE.opcost:0)-hire;
+    const netLine=`<span class="net-line ${net>=0?'pos':'neg'}">net ${money(net)}</span>`;
+    right = plan.rental
+      ? `<div class="ready-line">rent a ${CLASSES[acm.cls].label} @ ${c.dep} · ${money(plan.rate)}/day<br>${netLine}</div>
+         <button class="btn brass" onclick="openAccept('${c.id}')">Rent &amp; fly</button>`
+      : plan.ready
+        ? `${netLine}<button class="btn brass" onclick="openAccept('${c.id}')">Dispatch</button>`
+        : `<div class="ready-line">reposition <b class="mono">${reposNm}nm</b> from ${plan.ac.loc}<br>${netLine}</div>
+           <button class="btn brass" onclick="openAccept('${c.id}')">Reposition &amp; fly</button>`;
+  } else {
+    const why = selectedFleetAc()?selectedFleetAc().tail+' can\'t fly this'
+      : !ratedFor(c)?`Need a ${CLASSES[c.cls].label} type rating`
+      : (c.pax>=20?`Need a high-capacity jet — ${c.pax} seats`:'No suitable aircraft');
+    right = `<div class="ready-line">${why}</div><button class="btn ghost" disabled>Unavailable</button>`;
+  }
+  return `<div class="charter ${c.rwEvent?'evt':''} ${c.repo?'repo':''}">
+    <div class="ch-l">
+      <div class="ch-top">
+        <div class="route"><span class="icao">${c.dep}${wxDot(c.dep)}</span><span class="arr">✈</span><span class="icao">${c.arr}${wxDot(c.arr)}</span></div>
+        ${c.rwEvent?`<span class="tag evt-tag" title="${c.rwEvent.name} at ${evIc}">${c.rwEvent.icon} ${c.rwEvent.name.length>24?c.rwEvent.name.slice(0,22)+'…':c.rwEvent.name}</span>`:''}
+        ${c.repo?'<span class="tag muted-t">↩ Reposition</span>':`<span class="tag ${c.cat}">${CAT[c.cat].label}</span>`}
+        <span class="tag cls">${CLASSES[c.cls].label}</span>
+        ${plan&&plan.rental?'<span class="tag muted-t">🔑 rental available</span>':''}
+        ${(()=>{const d=demandAt(c.dep);return d>=1.12?`<span class="tag demand" title="${c.dep} outbound demand ${d.toFixed(2)}×">📈 ${demandLevel(d)} demand</span>`:'';})()}
+        ${c.surge?'<span class="tag warnt">⚡ Surge fare</span>':''}
+        ${c.vatNote?`<span class="tag muted-t" title="Live VATSIM event near this route">📍 VATSIM: ${c.vatNote.length>20?c.vatNote.slice(0,18)+'…':c.vatNote}</span>`:''}
+      </div>
+      <div class="ch-meta">
+        <span>${APTBY[c.dep].name} → ${APTBY[c.arr].name}</span>
+        <span><b>${c.dist.toLocaleString()}</b> nm</span>
+        ${c.pax?`<span><b>${c.pax}</b> pax</span>`:'<span>cargo</span>'}
+        <span>expires <b>${timeLeft(c.expires)}</b></span>
+      </div>
+      <div class="ch-client"><span class="who">${c.client}</span>${c.rwEvent?` · ${c.rwEvent.icon} ${c.rwEvent.name} demand`:c.repo?' · discounted ferry to reposition your jet':' — '+cat2blurb[c.cat]}</div>
+    </div>
+    <div class="ch-r">
+      <div><div class="payout">${money(c.payout)}</div><small>${c.repo?'ferry value':'charter value'}</small></div>
+      ${right}
+    </div>
+  </div>`;
+}
+
+/* ---------- ACCEPT MODAL (FBO selection + transparent P&L) ---------- */
+let _acc=null;
+function openAccept(cid){
+  const c=S.board.find(x=>x.id===cid); if(!c)return;
+  const plan=planFor(c); if(!plan){showToast('You can’t take this charter yet','bad');return;}
+  // owned/leased jet, or a virtual on-site rental
+  const ac = plan.rental
+    ? {id:null, type:plan.type, tail:'(rental)', loc:c.dep, owned:false, rental:true, rentalRate:plan.rate}
+    : plan.ac;
+  const acm=ACBY[ac.type];
+  ensureExit(c.arr);                       // GUARANTEE a way out of the arrival field exists
+  const depF=fbosFor(c.dep), arrF=fbosFor(c.arr);
+  let depIdx=0; depF.forEach((f,i)=>{if(f.fuel<depF[depIdx].fuel)depIdx=i;});           // cheapest fuel
+  let arrIdx=0; arrF.forEach((f,i)=>{if(rampFeeFor(c.arr,f,acm.cls)<rampFeeFor(c.arr,arrF[arrIdx],acm.cls))arrIdx=i;}); // cheapest ramp
+  _acc={c,ac,acm,depF,arrF,depIdx,arrIdx,ready:ac.loc===c.dep,rental:!!ac.rental};
+  const reposNm=ac.loc===c.dep?0:haversine(ac.loc,c.dep);
+  const onlineEst=Math.round(c.payout*CFG.onlineBonus);
+  // onward options out of the arrival field
+  const outs=S.board.filter(x=>x.dep===c.arr&&x.id!==c.id&&x.expires>Date.now());
+  const nearHub=nearestHub(c.arr), ferryNm=nearHub?haversine(c.arr,nearHub):0;
+  fetchWx([c.dep,c.arr]).then(()=>{const el=$('#accWx');if(el)el.innerHTML=wxStrip(c.dep)+wxStrip(c.arr);});
+  modal(`
+    <div class="modal-head">
+      <div class="eyebrow">${c.rwEvent?c.rwEvent.icon+' '+c.rwEvent.name.toUpperCase()+' · ':''}${c.repo?'REPOSITION · ':CAT[c.cat].label+' · '}${CLASSES[c.cls].label}</div>
+      <h2>${c.dep} → ${c.arr}</h2>
+      <div class="lead">${c.client} · ${c.dist.toLocaleString()} nm · ${c.pax?c.pax+' pax':'cargo'} · ${APTBY[c.dep].name} to ${APTBY[c.arr].name}</div>
+    </div>
+    <div class="modal-body">
+      <div id="accWx" style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">${wxStrip(c.dep)+wxStrip(c.arr)}</div>
+      <div class="form-row" style="margin-top:14px"><label>${ac.rental?'Rental aircraft':'Assigned aircraft'}</label>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px">
+          <span class="tail">${ac.rental?'🔑':ac.tail}</span><span style="font-weight:600">${acm.name}</span>
+          <span class="tag ${ac.rental?'muted-t':ac.owned?'ok':'muted-t'}">${ac.rental?'Rented on-site':ac.owned?'Owned':'Leased'}</span>
+          <span class="sec-spacer" style="flex:1"></span><span class="muted mono" style="font-size:12px">at ${c.dep}</span>
+        </div></div>
+      ${ac.rental?`<div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+        <span>You don't own a suitable aircraft, so you'll <b>rent a ${acm.name}</b> at ${c.dep} for <b>${money(ac.rentalRate)}/day</b> (auto market rate). No positioning leg — it's waiting at the field. Buy this type to stop renting and set your own rate when you list it.</span></div>`:''}
+      ${reposNm?`<div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
+        <span>This jet is at <b>${ac.loc}</b>. You'll fly a <b>${reposNm}nm positioning leg</b> to ${c.dep} first (counts toward hours &amp; rep), then the revenue leg.</span></div>`:''}
+      <div class="help" style="margin-top:12px;border-style:solid;border-color:var(--pos-soft);background:var(--pos-soft)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <span><b>Way out of ${c.arr}:</b> ${outs.length} onward charter${outs.length===1?'':'s'} currently departing${nearHub?` · closest reposition ${nearHub} <b class="mono">${ferryNm}nm</b>`:''}. You won't be stranded.</span></div>
+      ${c.rwEvent?`<div class="help" style="margin-top:12px;border-color:var(--brass);border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
+        <span><b>${c.rwEvent.icon} ${c.rwEvent.name}</b> is driving heavy traffic at ${c.rwEvent.type==='sports'||c.rwEvent.type==='vvip'?'this field':'these fields'} — fares here are elevated by real demand.</span></div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div class="form-row" style="margin-top:0"><label>⛽ Departure FBO — fuel @ ${c.dep}</label>
+          <select class="field" id="depFboSel" onchange="setAccFbo('dep',this.value)" style="width:100%">
+            ${depF.map((f,i)=>`<option value="${i}" ${i===depIdx?'selected':''}>${f.name} · $${f.fuel.toFixed(2)}/gal${f.premium?' (premium)':''}</option>`).join('')}</select></div>
+        <div class="form-row" style="margin-top:0"><label>🛬 Arrival FBO — handling @ ${c.arr}</label>
+          <select class="field" id="arrFboSel" onchange="setAccFbo('arr',this.value)" style="width:100%">
+            ${arrF.map((f,i)=>`<option value="${i}" ${i===arrIdx?'selected':''}>${f.name} · ramp $${rampFeeFor(c.arr,f,acm.cls).toLocaleString()}</option>`).join('')}</select></div>
+      </div>
+      <div id="accPnl"></div>
+      <div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+        <span>Pick a cheaper-fuel departure FBO and a lower-handling arrival FBO to protect your margin. Fuel &amp; ramp figures are modelled on real-world ranges (AirNav, GlobalAir, ForeFlight JetFuelX, Avfuel/World Fuel, FBO chains). Fly online on VATSIM for an estimated <b class="pos">+${money(onlineEst)}</b> bonus.</span></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" onclick="_acc=null;closeModal()" style="flex:1">Cancel</button>
+        <button class="btn brass" onclick="acceptCharter()" style="flex:2">Accept &amp; build trip
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>`);
+  renderAccPnl();
+}
+function setAccFbo(which,idx){ if(_acc){_acc[which+'Idx']=+idx; renderAccPnl();} }
+function accEcon(){
+  const {c,acm,depF,arrF,depIdx,arrIdx,ac,ready}=_acc;
+  const depFuel=depF[depIdx].fuel, arrRamp=rampFeeFor(c.arr,arrF[arrIdx],acm.cls);
+  const rev=legEcon(c.dep,c.arr,acm,depFuel,arrRamp);
+  const repos = ready?null:legEcon(ac.loc,c.dep,acm);   // positioning uses median FBO defaults
+  const totBlock=rev.block+(repos?repos.block:0);
+  const leaseCost = ac.owned?0 : (ac.rental?rentalCost(ac.rentalRate,totBlock):Math.round(acm.lease*(totBlock/8)));
+  const opcost=rev.opcost+(repos?repos.opcost:0);
+  return {depFuel,arrRamp,rev,repos,totBlock,leaseCost,opcost,net:c.payout-opcost-leaseCost};
+}
+function renderAccPnl(){
+  const el=$('#accPnl'); if(!el||!_acc)return;
+  const {c,acm,ac}=_acc; const e=accEcon();
+  el.innerHTML=`<div class="pnl" style="margin-top:14px">
+      <div class="pnl-row"><span>${c.repo?'Ferry value':'Charter value'}${c.rwEvent?' · '+c.rwEvent.icon+' event demand':c.surge?' · ⚡ surge':''}</span><span class="num pos">${money(c.payout)}</span></div>
+      ${e.repos?`<div class="pnl-row"><span>Positioning ${ac.loc}→${c.dep} (${e.repos.dist}nm)</span><span class="num neg">-${money(e.repos.opcost)}</span></div>`:''}
+      <div class="pnl-row"><span>Fuel · ${Math.round(acm.burn*e.rev.block).toLocaleString()} gal @ $${e.depFuel.toFixed(2)}</span><span class="num neg">-${money(e.rev.fuel)}</span></div>
+      <div class="pnl-row"><span>Maintenance reserve (${e.totBlock.toFixed(1)} blk hrs)</span><span class="num neg">-${money(e.rev.maint+(e.repos?e.repos.maint:0))}</span></div>
+      <div class="pnl-row"><span>Ramp + landing @ ${c.arr}${e.rev.intlNav?' + intl/overflight':''}</span><span class="num neg">-${money(e.rev.handling+e.rev.intlNav+(e.repos?e.repos.handling+e.repos.intlNav:0))}</span></div>
+      ${e.leaseCost?`<div class="pnl-row"><span>${ac.rental?'Aircraft rental (auto rate)':'Lease &amp; insurance share'}</span><span class="num neg">-${money(e.leaseCost)}</span></div>`:''}
+      <div class="pnl-row tot"><span>Projected net</span><span class="num ${e.net>=0?'pos':'neg'}">${money(e.net)}</span></div>
+    </div>`;
+}
+function acceptCharter(){
+  if(!_acc)return; const {c,acm,depF,arrF,depIdx,arrIdx}=_acc; let ac=_acc.ac;
+  const live=S.board.find(x=>x.id===c.id); if(!live||(ac.id&&ac.busy)){_acc=null;closeModal();return;}
+  // materialise a rental airframe at the departure field
+  if(_acc.rental){
+    ac={id:uid(),type:ac.type,tail:genTail(),loc:c.dep,owned:false,rental:true,rentalRate:ac.rentalRate,
+        cond:Math.round(rnd(86,98)),hours:0,busy:true};
+    S.fleet.push(ac);
+  }
+  const legs=[];
+  if(ac.loc!==c.dep) legs.push({from:ac.loc,to:c.dep,kind:'position',done:false,verified:false});
+  legs.push({from:c.dep,to:c.arr,kind:'revenue',done:false,verified:false});
+  ac.busy=true;
+  S.active={cid:c.id,acId:ac.id,charter:c,legs,started:Date.now(),verifiedAny:false,rental:!!_acc.rental,
+    fbo:{dep:depF[depIdx].name,depFuel:depF[depIdx].fuel,arr:arrF[arrIdx].name,arrRamp:rampFeeFor(c.arr,arrF[arrIdx],acm.cls)}};
+  S.board=S.board.filter(x=>x.id!==c.id);
+  _acc=null; closeModal(); showToast(S.active.rental?'Rental booked — fly the leg in your sim':'Trip built — fly the open leg in your sim','good'); nav('active');
+}
+
+/* ---------- ACTIVE TRIP (the Jet Card) ---------- */
+function rActive(p){
+  if(!S.active){ p.innerHTML=emptyState('No active trip','Head to the charter board to pick up work.','board','Open charter board'); return; }
+  const t=S.active, c=t.charter, ac=S.fleet.find(f=>f.id===t.acId), acm=ACBY[ac.type];
+  const curLeg=t.legs.find(l=>!l.done);
+  const revLeg=t.legs.find(l=>l.kind==='revenue');
+  const econ=legEcon(revLeg.from,revLeg.to,acm,t.fbo?t.fbo.depFuel:null,t.fbo?t.fbo.arrRamp:null);
+  p.innerHTML=`
+    <div class="split" style="grid-template-columns:1.25fr 1fr">
+      <div>
+        <div class="jetcard">
+          <div class="jc-strip"><div class="eb">SKYLEDGER · CHARTER CREDENTIAL${ac.rental?' · 🔑 RENTED':''}</div><div class="jc-tail">${ac.tail}</div></div>
+          <div class="jc-body">
+            <div class="jc-route">
+              <div class="jc-ap"><div class="ic">${c.dep}</div><div class="nm">${APTBY[c.dep].name}</div></div>
+              <div class="jc-mid"><div class="ln"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div><div class="dst">${c.dist.toLocaleString()} nm</div></div>
+              <div class="jc-ap" style="text-align:right;align-items:flex-end"><div class="ic">${c.arr}</div><div class="nm" style="text-align:right">${APTBY[c.arr].name}</div></div>
+            </div>
+            <div class="jc-grid">
+              <div class="jc-cell"><div class="k">Aircraft</div><div class="v">${acm.name}</div></div>
+              <div class="jc-cell"><div class="k">${CAT[c.cat].label}</div><div class="v">${c.pax?c.pax+' pax':'Cargo'}</div></div>
+              <div class="jc-cell"><div class="k">Est. block</div><div class="v">${econ.block.toFixed(1)} hr</div></div>
+              <div class="jc-cell"><div class="k">Charter value</div><div class="v">${money(c.payout)}</div></div>
+            </div>
+          </div>
+          <div class="jc-foot">
+            <div style="font-family:var(--mono);font-size:11px;color:#9db0cb">CLIENT · ${c.client.toUpperCase()}</div>
+            <div class="stamp ${t.verifiedAny?'ok':''}" id="jcStamp">${t.verifiedAny?'✓ VATSIM VERIFIED':'PENDING VERIFY'}</div>
+          </div>
+        </div>
+
+        <div class="card card-pad" style="margin-top:18px">
+          <div class="sec-head"><div class="sec-title">Trip legs</div><div class="sec-spacer"></div>
+            <span class="muted" style="font-size:12px">${t.legs.filter(l=>l.done).length}/${t.legs.length} complete</span></div>
+          ${t.legs.map((l,i)=>legRow(l,i,acm)).join('')}
+          ${t.fbo?`<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+            <span class="tag muted-t">⛽ ${c.dep} ${t.fbo.dep} · $${t.fbo.depFuel.toFixed(2)}/gal</span>
+            <span class="tag muted-t">🛬 ${c.arr} ${t.fbo.arr} · ramp $${t.fbo.arrRamp.toLocaleString()}</span></div>`:''}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="card card-pad">
+          <div class="eyebrow">Verify on VATSIM</div>
+          <div class="sec-title" style="margin:2px 0 6px">${curLeg?'Confirm your flight':'All legs flown'}</div>
+          ${curLeg?`<p class="muted" style="font-size:12.5px;margin-bottom:12px">Fly <b class="mono" style="color:var(--ink)">${curLeg.from} → ${curLeg.to}</b> in MSFS. Connect to VATSIM with your callsign, then verify — we'll match it against the live feed and stamp the card. Online flights earn the bonus.</p>
+            <div class="form-row" style="margin-top:0"><label>Your VATSIM callsign</label>
+              <input class="field" id="csIn" placeholder="e.g. ${ac.tail.replace('-','')}" value="${S.vatCallsign||''}" style="width:100%"></div>
+            <div style="display:flex;gap:9px;margin-top:13px">
+              <button class="btn sky" style="flex:1" onclick="verifyLeg(${t.legs.indexOf(curLeg)})">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Verify online</button>
+              <button class="btn ghost" onclick="completeLeg(${t.legs.indexOf(curLeg)},false)">Mark flown</button>
+            </div>
+            <div id="verifyOut" style="margin-top:11px;font-size:12.5px"></div>`
+          :`<div class="help" style="border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg><span>Both legs are flown. Settle the trip to bank the payout and relocate ${ac.tail} to ${c.arr}.</span></div>
+            <button class="btn brass" style="width:100%;margin-top:14px;justify-content:center" onclick="settleTrip()">Settle trip &amp; collect ${money(c.payout)}</button>`}
+        </div>
+        <div class="card card-pad">
+          <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Sim Link</div><div class="sec-spacer" style="flex:1"></div>
+            <span class="dot ${simState.connected?'live':'off'}"></span><span class="muted" style="font-size:11px">${simState.connected?'tracking':'offline'}</span></div>
+          <div class="sec-title" style="margin:2px 0 10px">SimConnect tracking</div>
+          ${simState.connected
+            ? `<div id="simLiveBody"></div><p class="muted" style="font-size:11.5px;margin-top:10px">Fly the open leg — touchdown within 6&nbsp;nm of the destination auto-completes it and grades your landing.</p>`
+            : `<p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
+               <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
+        </div>
+        <div class="card card-pad" id="sbCard">${simbriefCard(c,acm)}</div>
+        <button class="btn danger" onclick="abandonTrip()">Abandon trip (forfeit)</button>
+      </div>
+    </div>`;
+  if(S.simbriefUser && !S.active.ofp) setTimeout(()=>pullOFP(true),50); // auto-pull silently
+}
+function simbriefCard(c,acm){
+  const o=S.active&&S.active.ofp;
+  const head=`<div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">SimBrief Dispatch</div><div class="sec-spacer" style="flex:1"></div>
+    ${o?'<span class="tag ok">OFP loaded ✓</span>':''}</div>
+    <div class="sec-title" style="margin:2px 0 10px">Operational flight plan</div>`;
+  if(o){
+    const match=o.origin===c.dep&&o.destination===c.arr;
+    return head+`
+      <div class="tel-grid" style="grid-template-columns:1fr 1fr">
+        <div class="tel"><div class="tk">Route</div><div class="tv" style="font-size:13px">${o.origin} → ${o.destination}</div></div>
+        <div class="tel"><div class="tk">OFP aircraft</div><div class="tv" style="font-size:13px">${o.aircraft||'—'}</div></div>
+        <div class="tel"><div class="tk">Block fuel</div><div class="tv" style="font-size:14px">${o.fuel?Math.round(o.fuel).toLocaleString()+' lb':'—'}</div></div>
+        <div class="tel"><div class="tk">Est. enroute</div><div class="tv" style="font-size:14px">${o.ete||'—'}</div></div>
+        <div class="tel"><div class="tk">Cruise</div><div class="tv" style="font-size:13px">${o.alt?'FL'+Math.round(o.alt/100):'—'}</div></div>
+        <div class="tel"><div class="tk">Cost index</div><div class="tv" style="font-size:13px">${o.ci||'—'}</div></div>
+      </div>
+      ${o.route?`<div style="margin-top:9px"><div class="muted" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase">Filed route</div>
+        <div class="mono" style="font-size:11px;margin-top:3px;word-break:break-word;line-height:1.5">${o.route}</div></div>`:''}
+      <div class="help" style="margin-top:11px;${match?'':'border-color:var(--neg)'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${match?'<path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/>':'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>'}</svg>
+        <span>${match?`OFP matches the charter — fuel and timings above reflect your real SimBrief plan.`:`Heads up: your latest SimBrief OFP is <b>${o.origin}→${o.destination}</b>, not this charter's <b>${c.dep}→${c.arr}</b>. Generate a new plan for this route.`}</span></div>
+      <div style="display:flex;gap:8px;margin-top:11px">
+        <a class="btn ghost sm" style="flex:1;justify-content:center" target="_blank" href="https://dispatch.simbrief.com/options/custom?orig=${c.dep}&dest=${c.arr}&type=${sbType(acm)}">New OFP</a>
+        <button class="btn ghost sm" style="flex:1;justify-content:center" onclick="pullOFP(false)">Re-pull</button>
+        <a class="btn ghost sm" style="flex:1;justify-content:center" target="_blank" href="https://my.vatsim.net/pilots/flightplan">Prefile</a>
+      </div>`;
+  }
+  // not loaded
+  return head+`
+    <p class="muted" style="font-size:12.5px;margin-bottom:11px">Link your SimBrief account to pull your real OFP — block fuel, route, cruise and timings load straight into the dispatch ticket.</p>
+    <div class="form-row" style="margin-top:0"><label>SimBrief Pilot ID or username</label>
+      <input class="field" id="sbUser" placeholder="e.g. 123456 or yourname" value="${S.simbriefUser||''}" style="width:100%"></div>
+    <div style="display:flex;gap:8px;margin-top:11px">
+      <a class="btn ghost sm" style="flex:1;justify-content:center" target="_blank" href="https://dispatch.simbrief.com/options/custom?orig=${c.dep}&dest=${c.arr}&type=${sbType(acm)}">Build OFP</a>
+      <button class="btn sky sm" style="flex:1;justify-content:center" onclick="pullOFP(false)">Pull OFP</button>
+    </div>
+    <div id="sbOut" style="margin-top:9px;font-size:12px"></div>`;
+}
+async function pullOFP(silent){
+  const inp=$('#sbUser'); if(inp&&inp.value.trim()) S.simbriefUser=inp.value.trim();
+  const user=S.simbriefUser; const out=$('#sbOut');
+  if(!user){ if(out)out.innerHTML='<span class="neg">Enter your SimBrief Pilot ID or username first.</span>'; return; }
+  if(out&&!silent) out.innerHTML='<span class="muted">Fetching your latest SimBrief OFP…</span>';
+  const idParam=/^\d+$/.test(user)?'userid='+user:'username='+encodeURIComponent(user);
+  try{
+    const d=await proxiedFetch('https://www.simbrief.com/api/xml.fetcher.php?'+idParam+'&json=1');
+    if(!d||!d.origin){ throw new Error('no plan'); }
+    const ete=d.times&&d.times.est_time_enroute?(()=>{const s=+d.times.est_time_enroute;return Math.floor(s/3600)+'h '+Math.round(s%3600/60)+'m';})():'';
+    S.active.ofp={
+      origin:(d.origin.icao_code||'').toUpperCase(), destination:(d.destination.icao_code||'').toUpperCase(),
+      fuel:d.fuel?+d.fuel.plan_ramp:null, ete, route:d.general?d.general.route:'',
+      alt:d.general?+d.general.initial_altitude:null, ci:d.general?d.general.costindex:null,
+      aircraft:d.aircraft?(d.aircraft.icaocode||d.aircraft.name):'', pulled:Date.now()
+    };
+    if(!silent) showToast('SimBrief OFP loaded','good');
+    save(); if(view==='active'){const el=$('#sbCard');if(el)el.innerHTML=simbriefCard(S.active.charter,ACBY[S.fleet.find(f=>f.id===S.active.acId).type]);}
+  }catch(e){
+    if(out) out.innerHTML=`<span class="neg">No OFP found for “${user}”. Generate one at simbrief.com first, and check the ID/username (your Pilot ID is on your SimBrief account page).</span>`;
+  }
+}
+function legRow(l,i,acm){
+  const e=legEcon(l.from,l.to,acm);
+  const active=!l.done && S.active.legs.slice(0,i).every(x=>x.done);
+  return `<div class="leg ${l.done?'done':''} ${active?'active':''}">
+    <div class="leg-num">${l.done?'✓':i+1}</div>
+    <div style="flex:1"><div class="leg-rt">${l.from} → ${l.to} ${l.verified?'<span class="tag ok" style="margin-left:6px">✓ VATSIM</span>':''}</div>
+      <div class="leg-tag">${l.kind==='position'?'Positioning leg (no revenue)':'Revenue leg'} · ${e.dist}nm · ${e.block.toFixed(1)}h · fuel ${money(e.fuel)}</div></div>
+    ${l.done?'<span class="muted" style="font-size:12px">flown</span>':active?'<span class="tag warnt">open</span>':'<span class="muted" style="font-size:12px">queued</span>'}
+  </div>`;
+}
+function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12',be250:'BE20',be350:'B350',cj4:'C25C',e55p:'E55P',lr75:'LJ75',
+  cl350lat:'C68A',h900:'H25B',sov:'C680',prae600:'E550',cl350:'CL35',long:'C700',citx:'C750',f8x:'FA8X',glex:'GL5T',g650:'GLF6',
+  glob7500:'GL7T',g700:'GLF7',bbj:'B38M'}[acm.id]||'C700';}
+
+async function verifyLeg(idx){
+  const cs=($('#csIn').value||'').trim().toUpperCase();
+  const out=$('#verifyOut');
+  if(!cs){out.innerHTML='<span class="neg">Enter your VATSIM callsign first.</span>';return;}
+  S.vatCallsign=cs; out.innerHTML='<span class="muted">Checking the live VATSIM feed…</span>';
+  try{
+    const d=await fetchVat();
+    const me=d.pilots.find(p=>p.callsign.toUpperCase()===cs);
+    const leg=S.active.legs[idx];
+    if(!me){out.innerHTML=`<span class="neg">Callsign <b>${cs}</b> isn't connected to VATSIM right now. Connect and try again, or use “Mark flown”.</span>`;return;}
+    const fp=me.flight_plan||{};
+    const depOk=!fp.departure||fp.departure.toUpperCase()===leg.from;
+    const arrOk=!fp.arrival||fp.arrival.toUpperCase()===leg.to;
+    leg.verified=true; S.active.verifiedAny=true;
+    const atc=atcCoverage(d,leg.from,leg.to);
+    out.innerHTML=`<span class="pos">✓ Found <b>${cs}</b> online${fp.departure?` · plan ${fp.departure}→${fp.arrival}`:''}.</span> ${(!depOk||!arrOk)?'<span class="muted">(route differs from leg — still credited)</span>':''} ${atc?`<br><span class="muted">ATC online near route: ${atc} → coverage bonus applies.</span>`:''}`;
+    completeLeg(idx,true,atc>0);
+  }catch(e){
+    out.innerHTML=`<span class="neg">Couldn't reach the VATSIM feed (CORS or offline). Use “Mark flown” to log it manually.</span>`;
+  }
+}
+function completeLeg(idx,verified,atc,capArg){
+  const t=S.active, leg=t.legs[idx], ac=S.fleet.find(f=>f.id===t.acId), acm=ACBY[ac.type];
+  if(leg.done)return;
+  const e=(leg.kind==='revenue'&&t.fbo)?legEcon(leg.from,leg.to,acm,t.fbo.depFuel,t.fbo.arrRamp):legEcon(leg.from,leg.to,acm);
+  // charge operating costs of the leg now
+  let cost=e.opcost;
+  if(!ac.owned) cost+=ac.rental?rentalCost(ac.rentalRate,e.block):Math.round(acm.lease*(e.block/8));
+  S.cash-=cost;
+  S.ledger.push({t:Date.now(),k:`${leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-cost,note:acm.name});
+  leg.done=true; leg.verified=leg.verified||!!verified;
+  ac.loc=leg.to; ac.hours+=e.block; ac.cond=Math.max(40,ac.cond-rnd(0.4,1.6));
+  S.hours+=e.block; S.nm+=e.dist;
+  // ---- flight grading (Sim Link telemetry, else manual) ----
+  const cap = leg.capture || capArg || null;
+  const grade = gradeFlight(cap);
+  leg.grade = grade;
+  S.grades.push({t:Date.now(),score:grade.score,letter:grade.letter,route:`${leg.from}→${leg.to}`,tier:CLASSES[acm.cls].tier,tracked:!!cap});
+  if(S.grades.length>40) S.grades=S.grades.slice(-40);
+  // qualifying flight toward next rating: a clean revenue leg flown in a top-tier aircraft
+  if(leg.kind==='revenue' && CLASSES[acm.cls].tier===S.maxTier && grade.score>=60) S.tierQual++;
+  // ---- dynamic economy: a revenue leg delivers demand to the arrival field and clears it at departure ----
+  let mktMsg='';
+  if(leg.kind==='revenue'){
+    bumpDemand(leg.to, +CFG.arriveBump);    // pax/cargo delivered -> they'll want to leave
+    bumpDemand(leg.from, -CFG.departDraw);               // served outbound demand here
+    const nd=demandAt(leg.to);
+    if(nd>1.12) mktMsg=` · ${leg.to} outbound demand ↑ ${demandLevel(nd)}`;
+  }
+  showToast(`${leg.from}→${leg.to} logged · ${cap?`landing graded ${grade.letter}`:'manual log'} · ${money(-cost)} costs${mktMsg}`,'good');
+  renderAll();
+}
+function settleTrip(){
+  const t=S.active, c=t.charter, ac=S.fleet.find(f=>f.id===t.acId);
+  let payout=c.payout, bonusNote=[];
+  if(t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
+  S.cash+=payout;
+  S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
+  // reputation
+  let rep=Math.round(c.dist/22)+12;
+  if(t.legs.find(l=>l.kind==='revenue').verified)rep=Math.round(rep*1.5);
+  if(c.cat==='medevac'||c.cat==='vvip')rep+=25;
+  if(c.rwEvent)rep+=15;                       // small prestige for working a real-world event
+  S.rep+=rep; S.flights++;
+  // FBO passive cut if charter originated at your FBO
+  if(S.fbo===c.dep){const cut=Math.round(c.payout*0.04);S.cash+=cut;S.ledger.push({t:Date.now(),k:`FBO origin fee ${c.dep}`,a:cut,note:'Your FBO'});}
+  ac.busy=false; const arrived=c.arr;
+  if(ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // rental returned to the market
+  S.active=null;
+  ensureExit(arrived);                        // guarantee a way out of where you just landed
+  const oldRank=rankFor(S.rep-rep), newRank=rankFor(S.rep);
+  showToast(`Trip settled · ${money(payout)} · +${rep} rep`,'good');
+  if(oldRank!==newRank) setTimeout(()=>showToast(`Promoted to ${newRank}! 🎖`,'good'),700);
+  if(upgradeReady()) setTimeout(()=>showToast(`Type rating upgrade available — visit Type Ratings ✈`,'good'),1100);
+  refreshBoard(false); nav('dash');
+}
+function abandonTrip(){
+  if(!confirm('Abandon this trip? The aircraft stays where it is and you forfeit the charter.'))return;
+  const ac=S.fleet.find(f=>f.id===S.active.acId); if(ac)ac.busy=false;
+  if(ac&&ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // return the rental
+  S.rep=Math.max(0,S.rep-30);
+  S.ledger.push({t:Date.now(),k:'Trip abandoned',a:0,note:'-30 reputation'});
+  S.active=null; showToast('Trip abandoned · -30 rep','bad'); nav('board');
+}
+
+/* ---------- FLEET ---------- */
+function rFleet(p){
+  p.innerHTML=`
+    <div class="bar"><div class="eyebrow">${S.fleet.length} aircraft</div><div class="sec-spacer" style="flex:1"></div>
+      <button class="btn ghost sm" onclick="nav('market')">Acquire aircraft</button></div>
+    <div class="rows">${S.fleet.map(fleetRow).join('')||emptyState('No aircraft','Lease or buy from the marketplace.','market','Open marketplace')}</div>`;
+}
+function fleetRow(f){
+  const a=ACBY[f.type];
+  const rented=f.rentedUntil&&f.rentedUntil>Date.now();
+  const statusTag = rented?`<span class="tag warnt">🔑 Rented · back ${minsLeft(f.rentedUntil)}</span>`
+    : f.busy?'<span class="tag warnt">On trip</span>'
+    : f.forRent?`<span class="tag ok">💰 For rent · ${money(f.rentRate)}/day</span>`
+    : '<span class="tag ok">Available</span>';
+  return `<div class="fleet-row">
+    <div>
+      <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">
+        <span class="tail" onclick="renameTail('${f.id}')" title="Edit tail number" style="cursor:pointer">${f.tail}</span>
+        <span style="font-weight:600;font-size:15px">${a.name}</span>
+        <span class="tag cls">${CLASSES[a.cls].label}</span>
+        <span class="tag ${f.owned?'ok':'muted-t'}">${f.owned?'Owned':'Leased'}</span>
+        ${statusTag}
+      </div>
+      <div class="ch-meta" style="margin-top:9px">
+        <span>Location <b>${f.loc}</b> · ${APTBY[f.loc].name}</span>
+        <span><b>${a.pax}</b> pax</span><span><b>${a.range.toLocaleString()}</b> nm</span>
+        <span><b>${Math.round(f.hours)}</b> hrs flown</span>
+        ${rented?`<span>Leased to <b>${f.renter}</b></span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:7px"><span class="muted" style="font-size:11px">Condition</span>
+        <div class="cond-bar"><div class="cond-fill" style="width:${f.cond}%;background:${f.cond>70?'var(--pos)':f.cond>50?'var(--warn)':'var(--neg)'}"></div></div>
+        <span class="mono" style="font-size:11px">${Math.round(f.cond)}%</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+      <button class="btn ghost sm" onclick="renameTail('${f.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>Edit tail</button>
+      ${f.owned&&!rented?(f.forRent
+        ? `<button class="btn ghost sm" onclick="unlistRent('${f.id}')">Stop renting</button>`
+        : `<button class="btn ghost sm" onclick="rentModal('${f.id}')">💰 Rent out</button>`):''}
+      ${!rented&&f.cond<88?`<button class="btn ghost sm" onclick="maintenance('${f.id}')">Service · ${money1k((100-f.cond)*ACBY[f.type].maint*0.9)}</button>`:''}
+      ${rented?'':(!f.owned?`<button class="btn ghost sm" onclick="returnLease('${f.id}')">Return lease</button>`:`<button class="btn ghost sm" onclick="sellAircraft('${f.id}')">Sell · ${money1k(a.price*0.78*(f.cond/100))}</button>`)}
+    </div>
+  </div>`;
+}
+function minsLeft(ts){const m=Math.max(0,Math.round((ts-Date.now())/60e3));return m>=1?m+'m':'<1m';}
+function rentModal(id){
+  const f=S.fleet.find(x=>x.id===id); if(!f||!f.owned)return;
+  const a=ACBY[f.type], suggest=f.rentRate||Math.round(a.lease*0.6);
+  modal(`
+    <div class="modal-head"><div class="eyebrow">Dry-lease your aircraft</div><h2>Rent out ${f.tail}</h2>
+      <div class="lead">${a.name} · set a daily rate and other operators can rent it when it's idle. You keep the income (less a 10% platform fee); the jet is unavailable to you while it's out.</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label>Daily rate ($/day)</label>
+        <input class="field" id="rentInput" type="number" min="0" step="100" value="${suggest}" style="width:100%;font-family:var(--mono);font-size:16px"></div>
+      <div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>Factory lease for this type runs <b>${money(a.lease)}/day</b> — price under that to attract renters, higher for a premium airframe. Demand is stronger at busy fields. You can stop renting anytime it's idle.</span></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" onclick="closeModal()" style="flex:1">Cancel</button>
+        <button class="btn brass" onclick="listForRent('${f.id}')" style="flex:2">List for rent</button>
+      </div>
+    </div>`);
+  setTimeout(()=>{const el=$('#rentInput');if(el){el.focus();el.select();}},40);
+}
+function listForRent(id){
+  const f=S.fleet.find(x=>x.id===id); if(!f)return;
+  const v=Math.max(0,Math.round(+(($('#rentInput')||{}).value||0)));
+  if(!v){showToast('Set a daily rate above 0','bad');return;}
+  f.forRent=true; f.rentRate=v; save(); closeModal();
+  showToast(`${f.tail} listed for rent at ${money(v)}/day`,'good'); renderAll();
+}
+function unlistRent(id){
+  const f=S.fleet.find(x=>x.id===id); if(!f)return;
+  if(f.rentedUntil&&f.rentedUntil>Date.now())return showToast('Aircraft is currently rented out','bad');
+  f.forRent=false; save(); showToast(`${f.tail} taken off the rental market`,'good'); renderAll();
+}
+function maintenance(id){
+  const f=S.fleet.find(x=>x.id===id);if(!f||f.busy)return showToast('Aircraft is on a trip','bad');
+  const cost=Math.round((100-f.cond)*ACBY[f.type].maint*0.9);
+  if(S.cash<cost)return showToast('Not enough cash for service','bad');
+  S.cash-=cost;f.cond=100;S.ledger.push({t:Date.now(),k:`Maintenance ${f.tail}`,a:-cost,note:ACBY[f.type].name});
+  showToast(`${f.tail} serviced to 100%`,'good');renderAll();
+}
+function returnLease(id){
+  const f=S.fleet.find(x=>x.id===id);if(f.busy)return showToast('On a trip','bad');
+  if(!confirm('Return this leased aircraft?'))return;
+  S.fleet=S.fleet.filter(x=>x.id!==id);showToast('Lease returned','good');renderAll();
+}
+function sellAircraft(id){
+  const f=S.fleet.find(x=>x.id===id);if(f.busy)return showToast('On a trip','bad');
+  const v=Math.round(ACBY[f.type].price*0.78*(f.cond/100));
+  if(!confirm(`Sell ${f.tail} for ${money(v)}?`))return;
+  S.cash+=v;S.fleet=S.fleet.filter(x=>x.id!==id);
+  S.ledger.push({t:Date.now(),k:`Sold ${f.tail}`,a:v,note:ACBY[f.type].name});
+  showToast(`Sold for ${money(v)}`,'good');renderAll();
+}
+function renameTail(id){
+  const f=S.fleet.find(x=>x.id===id); if(!f)return;
+  modal(`
+    <div class="modal-head"><div class="eyebrow">Registration</div><h2>Edit tail number</h2>
+      <div class="lead">${ACBY[f.type].name} · currently <span class="mono">${f.tail}</span></div></div>
+    <div class="modal-body">
+      <div class="form-row"><label>New tail / registration</label>
+        <input class="field" id="tailInput" maxlength="8" value="${f.tail}" onkeydown="if(event.key==='Enter')saveTail('${f.id}')" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'')" style="width:100%;font-family:var(--mono);letter-spacing:.05em;font-size:16px" placeholder="e.g. N700SL"></div>
+      <div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>1–8 characters — letters, numbers and hyphens. This registration is used on the jet card, charter board, live map and ledger.</span></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" onclick="closeModal()" style="flex:1">Cancel</button>
+        <button class="btn brass" onclick="saveTail('${f.id}')" style="flex:2">Save tail</button>
+      </div>
+    </div>`);
+  setTimeout(()=>{const el=$('#tailInput');if(el){el.focus();el.select();}},40);
+}
+function saveTail(id){
+  const f=S.fleet.find(x=>x.id===id); if(!f)return;
+  let v=(($('#tailInput')||{}).value||'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,8);
+  if(!v){showToast('Tail number can’t be empty','bad');return;}
+  if(S.fleet.some(x=>x.id!==id && x.tail===v)){showToast('Another aircraft already uses that tail','bad');return;}
+  const old=f.tail; f.tail=v; save();
+  closeModal(); showToast(`Tail updated · ${old} → ${v}`,'good'); renderAll();
+}
+
+/* ---------- MARKETPLACE ---------- */
+let mktCls='all', mktTab='new';
+function rMarket(p){
+  if(Date.now()-(S.lastUsed||0)>1000*60*30) refreshUsed();
+  const isUsed=mktTab==='used';
+  const head=`
+    <div class="bar"><div class="chiprow">
+      <button class="chip ${mktTab==='new'?'on':''}" onclick="setMktTab('new')">✈ Factory new</button>
+      <button class="chip ${mktTab==='used'?'on':''}" onclick="setMktTab('used')">🔑 Pre-owned (${S.used.length})</button>
+    </div></div>
+    <div class="bar" style="margin-top:-6px"><div class="chiprow">
+      <button class="chip ${mktCls==='all'?'on':''}" onclick="setMkt('all')">All classes</button>
+      ${Object.keys(CLASSES).map(k=>`<button class="chip ${mktCls===k?'on':''}" onclick="setMkt('${k}')">${CLASSES[k].label}</button>`).join('')}
+    </div></div>`;
+  if(isUsed){
+    let list=S.used.map(u=>({u,a:ACBY[u.type]})).filter(x=>mktCls==='all'||x.a.cls===mktCls)
+      .sort((x,y)=>x.a.price-y.a.price);
+    p.innerHTML=head+`
+      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>Pre-owned airframes from the open market — cheaper than new, but each comes with airframe <b>hours</b> and a <b>condition</b>, and sits at <b>wherever it currently is</b> (you take delivery there and ferry it home). Listings rotate. You still need the matching type rating.</span></div>
+      <div class="mkt-table" style="margin-top:14px">
+        <div class="mkt-head"><div>Aircraft</div><div>Location</div><div>Cond</div><div>Hours</div><div>Range</div><div>Price</div><div></div></div>
+        ${list.map(x=>usedRow(x.u,x.a)).join('')||'<div class="mkt-row"><div class="mname muted">No pre-owned aircraft in this class right now</div></div>'}
+      </div>`;
+  }else{
+    const list=AIRCRAFT.filter(a=>mktCls==='all'||a.cls===mktCls);
+    p.innerHTML=head+`
+      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>Acquire up to your <b>${CLASSES[TIERS[S.maxTier]].label}</b> rating — heavier types unlock in <a onclick="nav('ratings')" style="color:var(--sky);cursor:pointer">Type Ratings</a>. <b>Lease</b> for low capital (a per-flight share comes out of each trip) or <b>buy</b> outright. New aircraft deliver to <b class="mono">${S.base}</b>; once owned you can rename the tail and list it for rent.</span></div>
+      <div class="mkt-table" style="margin-top:14px">
+        <div class="mkt-head"><div>Aircraft</div><div>Pax</div><div>Cruise</div><div>Burn</div><div>Range</div><div>Price</div><div></div></div>
+        ${list.map(newRow).join('')}
+      </div>`;
+  }
+}
+function setMkt(c){mktCls=c;rMarket($('#page'));}
+function setMktTab(t){mktTab=t;rMarket($('#page'));}
+function ratingTag(a){
+  const locked=CLASSES[a.cls].tier>S.maxTier;
+  return locked?`<span class="tag warnt">🔒 ${CLASSES[TIERS[CLASSES[a.cls].tier]].label}</span>`:'';
+}
+function newRow(a){
+  const locked=CLASSES[a.cls].tier>S.maxTier;
+  return `<div class="mkt-row ${locked?'locked':''}">
+    <div class="mkt-cell mname" data-l="Aircraft">${a.name}
+      <span class="tag cls">${CLASSES[a.cls].label}</span>${a.pax>=50?'<span class="tag sports">👥 Team</span>':''}${ratingTag(a)}</div>
+    <div class="mkt-cell mono" data-l="Pax">${a.pax}</div>
+    <div class="mkt-cell mono" data-l="Cruise">${a.cruise} kt</div>
+    <div class="mkt-cell mono" data-l="Burn">${a.burn} gph</div>
+    <div class="mkt-cell mono" data-l="Range">${a.range.toLocaleString()} nm</div>
+    <div class="mkt-cell mono" data-l="Price"><b>${money1k(a.price)}</b><div class="mkt-sub">lease ${money(a.lease)}/day</div></div>
+    <div class="mkt-cell macts" data-l="">${locked
+      ? `<button class="btn ghost sm" onclick="nav('ratings')">Rating path</button>`
+      : `<button class="btn ghost sm" onclick="leaseAircraft('${a.id}')">Lease</button><button class="btn brass sm" onclick="buyAircraft('${a.id}')">Buy</button>`}</div>
+  </div>`;
+}
+function usedRow(u,a){
+  const locked=CLASSES[a.cls].tier>S.maxTier;
+  const condCol=u.cond>78?'var(--pos)':u.cond>60?'var(--warn)':'var(--neg)';
+  const save=Math.round((1-u.price/a.price)*100);
+  return `<div class="mkt-row ${locked?'locked':''}">
+    <div class="mkt-cell mname" data-l="Aircraft">${a.name}
+      <span class="tag cls">${CLASSES[a.cls].label}</span>${ratingTag(a)}<span class="tag ok">−${save}% vs new</span></div>
+    <div class="mkt-cell mono" data-l="Location" title="${APTBY[u.loc].name}">${u.loc}</div>
+    <div class="mkt-cell" data-l="Cond"><span class="mono" style="color:${condCol};font-weight:700">${u.cond}%</span></div>
+    <div class="mkt-cell mono" data-l="Hours">${u.hours.toLocaleString()}</div>
+    <div class="mkt-cell mono" data-l="Range">${a.range.toLocaleString()} nm</div>
+    <div class="mkt-cell mono" data-l="Price"><b>${money1k(u.price)}</b><div class="mkt-sub">new ${money1k(a.price)}</div></div>
+    <div class="mkt-cell macts" data-l="">${locked
+      ? `<button class="btn ghost sm" onclick="nav('ratings')">Rating path</button>`
+      : `<button class="btn brass sm" onclick="buyUsed('${u.lid}')">Buy at ${u.loc}</button>`}</div>
+  </div>`;
+}
+function leaseAircraft(id){
+  const a=ACBY[id], dep=a.lease*3; // 3-day deposit
+  if(CLASSES[a.cls].tier>S.maxTier)return showToast(`Requires a ${CLASSES[a.cls].label} type rating`,'bad');
+  if(S.cash<dep)return showToast(`Need ${money(dep)} deposit to lease`,'bad');
+  S.cash-=dep;
+  S.fleet.push({id:uid(),type:id,tail:genTail(),loc:S.base,owned:false,cond:rnd(82,97),hours:0});
+  S.ledger.push({t:Date.now(),k:`Lease deposit ${a.name}`,a:-dep,note:'3-day deposit'});
+  showToast(`${a.name} leased — delivered to ${S.base}`,'good');renderAll();
+}
+function buyAircraft(id,skipRename){
+  const a=ACBY[id];
+  if(CLASSES[a.cls].tier>S.maxTier)return showToast(`Requires a ${CLASSES[a.cls].label} type rating`,'bad');
+  if(S.cash<a.price)return showToast(`Need ${money(a.price)} — try leasing first`,'bad');
+  S.cash-=a.price;
+  const f={id:uid(),type:id,tail:genTail(),loc:S.base,owned:true,cond:100,hours:0};
+  S.fleet.push(f);
+  S.ledger.push({t:Date.now(),k:`Purchased ${a.name}`,a:-a.price,note:'New delivery'});
+  showToast(`${a.name} purchased ✈`,'good'); save(); renderAll(); if(!skipRename) renameTail(f.id);
+}
+function buyUsed(lid){
+  const u=S.used.find(x=>x.lid===lid); if(!u)return;
+  const a=ACBY[u.type];
+  if(CLASSES[a.cls].tier>S.maxTier)return showToast(`Requires a ${CLASSES[a.cls].label} type rating`,'bad');
+  if(S.cash<u.price)return showToast(`Need ${money(u.price)} for this airframe`,'bad');
+  S.cash-=u.price;
+  const f={id:uid(),type:u.type,tail:genTail(),loc:u.loc,owned:true,cond:u.cond,hours:u.hours};
+  S.fleet.push(f);
+  S.used=S.used.filter(x=>x.lid!==lid);
+  S.ledger.push({t:Date.now(),k:`Bought used ${a.name}`,a:-u.price,note:`${u.cond}% · ${u.hours.toLocaleString()}h · at ${u.loc}`});
+  showToast(`${a.name} acquired at ${u.loc} — ferry it home when ready`,'good'); save(); renderAll(); renameTail(f.id);
+}
+
+/* ---------- OPERATOR ---------- */
+function rOperator(p){
+  const canFound=RANKS.findIndex(r=>r.name===rankFor(S.rep))>=2; // Senior Captain+
+  if(!S.operator){
+    p.innerHTML=`
+      <div class="card card-pad" style="max-width:640px;margin:0 auto;text-align:center;padding:40px 32px">
+        <div class="brand-mark" style="margin:0 auto 16px;width:48px;height:48px"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M3 21h18"/></svg></div>
+        <div class="eyebrow">Build your company</div>
+        <h2 style="font-family:var(--disp);font-weight:700;font-size:24px;margin:6px 0 8px">Found a charter operator</h2>
+        <p class="muted" style="max-width:440px;margin:0 auto 20px">Go from freelancer to operator. Found a company to brand your fleet, unlock FBO ownership for passive income and home-field discounts, and build a name that clients recognize.</p>
+        <div class="pnl" style="text-align:left;max-width:380px;margin:0 auto 20px">
+          <div class="pnl-row"><span>Requirement</span><span class="num ${canFound?'pos':'neg'}">Senior Captain rank</span></div>
+          <div class="pnl-row"><span>Formation cost</span><span class="num">${money(250000)}</span></div>
+        </div>
+        <button class="btn brass" ${canFound&&S.cash>=250000?'':'disabled'} onclick="openFound()" style="margin:0 auto">
+          ${canFound?(S.cash>=250000?'Found operator':'Need $250,000'):'Reach Senior Captain first'}</button>
+      </div>`;
+    return;
+  }
+  const o=S.operator;
+  p.innerHTML=`
+    <div class="card card-pad" style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="brand-mark" style="width:54px;height:54px;background:${o.color}"><span style="font-family:var(--disp);font-weight:800;color:#fff;font-size:22px">${o.name[0]}</span></div>
+        <div><div class="eyebrow">Operator · founded ${new Date(o.founded).toLocaleDateString()}</div>
+          <div style="font-family:var(--disp);font-weight:700;font-size:22px">${o.name}</div>
+          <div class="muted" style="font-size:13px">${o.callsign} · ${S.fleet.length} aircraft · ${rankFor(S.rep)}</div></div>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card card-pad">
+        <div class="sec-head"><div><div class="eyebrow">Base of operations</div><div class="sec-title">Fixed Base Operator (FBO)</div></div></div>
+        ${S.fbo?`<div class="help" style="border-style:solid;background:var(--pos-soft);border-color:var(--pos-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
+            <span>You own the FBO at <b class="mono">${S.fbo}</b> — ${APTBY[S.fbo].name}. You earn a <b>4% origin fee</b> on every charter that departs here and pay reduced handling.</span></div>`
+          :`<p class="muted" style="font-size:13px;margin-bottom:14px">Acquire an FBO at a hub to earn a 4% origin fee on charters departing there, plus discounted handling for your own fleet.</p>
+            <div class="form-row" style="margin-top:0"><label>Choose a hub airport</label>
+              <select class="field" id="fboSel" style="width:100%">${HUBS.map(h=>`<option value="${h}">${h} — ${APTBY[h].name}</option>`).join('')}</select></div>
+            <button class="btn brass" style="margin-top:14px;width:100%;justify-content:center" ${S.cash>=1500000?'':'disabled'} onclick="buyFBO()">${S.cash>=1500000?'Acquire FBO · '+money(1500000):'Need $1,500,000'}</button>`}
+      </div>
+      <div class="card card-pad">
+        <div class="eyebrow">Company stats</div><div class="sec-title" style="margin:2px 0 12px">Performance</div>
+        <div class="mini"><div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div><div><div class="t">Charters flown</div></div><div class="amt">${S.flights}</div></div>
+        <div class="mini"><div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div><div class="t">Block hours</div></div><div class="amt">${Math.round(S.hours)}</div></div>
+        <div class="mini"><div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17z"/></svg></div><div><div class="t">Reputation</div></div><div class="amt">${S.rep.toLocaleString()}</div></div>
+      </div>
+    </div>`;
+}
+function openFound(){
+  modal(`<div class="modal-head"><div class="eyebrow">New operator</div><h2>Name your company</h2>
+    <div class="lead">This brands your fleet and unlocks FBO ownership.</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label>Company name</label><input class="field" id="opName" placeholder="e.g. Skyledger Aviation" style="width:100%"></div>
+      <div class="form-row"><label>Radio callsign</label><input class="field" id="opCs" placeholder="e.g. LEDGER" style="width:100%"></div>
+      <div class="form-row"><label>Brand colour</label>
+        <div style="display:flex;gap:8px" id="opColors">${['#1B2A41','#B0863B','#1F7A52','#2D6AE3','#8e3b6b','#b03426'].map((c,i)=>`<button onclick="pickColor('${c}')" data-c="${c}" class="opc" style="width:38px;height:38px;border-radius:9px;background:${c};border:3px solid ${i===0?'var(--ink)':'transparent'}"></button>`).join('')}</div></div>
+      <div style="display:flex;gap:10px;margin-top:20px"><button class="btn ghost" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn brass" style="flex:2" onclick="foundOperator()">Found operator · ${money(250000)}</button></div>
+    </div>`);
+  window._opColor='#1B2A41';
+}
+function pickColor(c){window._opColor=c;document.querySelectorAll('.opc').forEach(b=>b.style.border='3px solid '+(b.dataset.c===c?'var(--ink)':'transparent'));}
+function foundOperator(){
+  const name=($('#opName').value||'').trim()||'Skyledger Aviation';
+  const cs=($('#opCs').value||'').trim().toUpperCase()||'LEDGER';
+  if(S.cash<250000)return showToast('Not enough cash','bad');
+  S.cash-=250000;
+  S.operator={name,callsign:cs,color:window._opColor||'#1B2A41',founded:Date.now()};
+  S.ledger.push({t:Date.now(),k:`Founded ${name}`,a:-250000,note:'Operator formation'});
+  closeModal();showToast(`${name} is open for business 🎉`,'good');nav('operator');
+}
+function buyFBO(){
+  const ic=$('#fboSel').value;
+  if(S.cash<1500000)return showToast('Not enough cash','bad');
+  S.cash-=1500000;S.fbo=ic;
+  S.ledger.push({t:Date.now(),k:`Acquired FBO ${ic}`,a:-1500000,note:APTBY[ic].name});
+  showToast(`FBO acquired at ${ic}`,'good');renderAll();
+}
+
+/* ---------- TYPE RATINGS ---------- */
+function rRatings(p){
+  const ss=safetyScore();
+  const nt=S.maxTier+1, req=UPGRADE[nt];
+  const recent=(S.grades||[]).slice(-8).reverse();
+  // rungs: every tier in TIERS
+  const rungs=TIERS.map((cls,tier)=>{
+    const held=tier<=S.maxTier, isNext=tier===nt;
+    let body='';
+    if(isNext&&req){
+      const qp=Math.min(100,Math.round(S.tierQual/req.qual*100));
+      const sp=ss!==null?Math.min(100,Math.round(ss/req.score*100)):0;
+      const qOk=S.tierQual>=req.qual, sOk=ss!==null&&ss>=req.score, cashOk=S.cash>=req.fee;
+      body=`<div class="req-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="req"><div class="rk">Clean ${CLASSES[TIERS[S.maxTier]].label} charters</div>
+          <div class="rv">${S.tierQual} / ${req.qual} ${qOk?'<span class="pos">✓</span>':''}</div>
+          <div class="pbar"><div class="pfill ${qOk?'ok':''}" style="width:${qp}%"></div></div></div>
+        <div class="req"><div class="rk">Safety score</div>
+          <div class="rv">${ss??'—'} / ${req.score} ${sOk?'<span class="pos">✓</span>':''}</div>
+          <div class="pbar"><div class="pfill ${sOk?'ok':''}" style="width:${sp}%"></div></div></div>
+        <div class="req"><div class="rk">Type course fee</div>
+          <div class="rv">${money1k(req.fee)} ${cashOk?'<span class="pos">✓</span>':'<span class="neg">short</span>'}</div>
+          <div class="pbar"><div class="pfill ${cashOk?'ok':''}" style="width:${Math.min(100,Math.round(S.cash/req.fee*100))}%"></div></div></div>
+      </div>
+      <div style="margin-top:14px">${(qOk&&sOk)
+        ? `<button class="btn brass" ${cashOk?'':'disabled'} onclick="claimRating()">Pay ${money(req.fee)} &amp; earn ${req.to} type rating ✈</button>`
+        : `<span class="muted" style="font-size:12.5px">Fly clean ${CLASSES[TIERS[S.maxTier]].label} charters with Sim Link connected to build qualifying flights and keep your safety score up (grade C+ counts). The type-rating course costs ${money(req.fee)} — like in a real flight department, ratings are earned <i>and</i> paid for.</span>`}</div>`;
+    } else if(tier>nt){
+      body=`<div class="rung-sub" style="margin-top:6px">Unlocks after earning the ${CLASSES[TIERS[tier-1]==='turboprop'?'light':TIERS[tier-1]].label} rating.</div>`;
+    }
+    return `<div class="rung ${held?'held':isNext?'next':'locked'}">
+      <div style="display:flex;align-items:flex-start;gap:14px;width:100%">
+        <div class="rung-badge">${held?'✓':isNext?tier+1:'🔒'}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span class="rung-name">${CLASSES[cls].label}</span>
+            ${held?'<span class="tag ok">Rating held</span>':isNext?'<span class="tag warnt">In progress</span>':'<span class="tag muted-t">Locked</span>'}
+          </div>
+          <div class="rung-sub">${held?'You can buy, lease and fly any '+CLASSES[cls].label+' on any charter.':isNext?'Your next type rating.':''}</div>
+          ${body}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  p.innerHTML=`
+    <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat"><div class="k">Current rating</div><div class="v" style="font-family:var(--disp);font-size:19px">${CLASSES[TIERS[S.maxTier]].label}</div><div class="d">${S.maxTier+1} type rating${S.maxTier?'s':''} held</div></div>
+      <div class="stat"><div class="k">Pilot safety score</div><div class="v">${ss??'—'}</div><div class="d">rolling, last ${Math.min(10,(S.grades||[]).length)} flights</div></div>
+      <div class="stat"><div class="k">Qualifying flights</div><div class="v">${S.tierQual}${req?' / '+req.qual:''}</div><div class="d">${req?'toward '+req.to+' rating':'top rating reached'}</div></div>
+    </div>
+    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>Ratings are <b>cumulative</b>: once held, you can fly <b>any</b> aircraft from <b>any</b> rating you've earned on any suitable charter — no need to keep flying smaller types. You progress by flying your current top tier <b>safely</b> (smooth landings, no overspeed/stall/overstress via Sim Link), which is why you can't jump straight into a heavy jet to farm long-haul cash.</span></div>
+    <div class="split" style="grid-template-columns:1.5fr 1fr">
+      <div><div class="sec-head"><div class="eyebrow">Progression</div><div class="sec-title">Type rating ladder</div></div>
+        <div class="ladder">${rungs}</div></div>
+      <div class="card card-pad" style="align-self:start">
+        <div class="eyebrow">Flight record</div><div class="sec-title" style="margin:2px 0 12px">Recent grades</div>
+        ${recent.length?recent.map(g=>`<div class="mini">
+          <div class="grade-pill g${g.letter==='—'?'NA':g.letter}">${g.letter}</div>
+          <div><div class="t mono" style="font-size:13px">${g.route}</div><div class="s">${g.tracked?'Sim Link tracked':'Manual log'} · ${CLASSES[TIERS[g.tier]].label}</div></div>
+          <div class="amt">${g.score}</div></div>`).join('')
+          :'<div class="muted" style="font-size:13px">No graded flights yet. Connect Sim Link and fly a charter — your landing rate and handling are scored automatically.</div>'}
+        <button class="btn ghost sm" style="width:100%;justify-content:center;margin-top:12px" onclick="openSimLink()">${simState.connected?'Sim Link connected ✓':'Set up Sim Link'}</button>
+      </div>
+    </div>`;
+}
+function claimRating(){
+  if(!upgradeReady())return showToast('Requirements not yet met','bad');
+  const nt=S.maxTier+1, req=UPGRADE[nt];
+  if(req.fee&&S.cash<req.fee)return showToast('Not enough cash for checkride','bad');
+  if(req.fee){S.cash-=req.fee;S.ledger.push({t:Date.now(),k:`${req.to} checkride`,a:-req.fee,note:'Type rating'});}
+  S.maxTier=nt; S.tierQual=0;
+  S.ledger.push({t:Date.now(),k:`Earned ${req.to} type rating ✈`,a:0,note:'Checkride passed'});
+  showToast(`Checkride passed — ${req.to} type rating earned! ✈`,'good');
+  renderAll();
+}
+
+/* ---------- EVENTS (real-world events drive the market; VATSIM is informational) ---------- */
+function rEvents(p){
+  const liveRW=rwLive(), upRW=rwUpcoming(45);
+  const rwCard=(x,live)=>{
+    const apts=x.e.apts.filter(a=>APTBY[a]);
+    const boardN=S.board.filter(c=>c.rwEvent&&c.rwEvent.name===x.e.name&&c.expires>Date.now()).length;
+    const when=live?`<span class="tag ok">● LIVE NOW</span>`:`<span class="tag muted-t">${timeUntil(x.o.start)}</span>`;
+    const dr=`${new Date(x.o.date).toLocaleDateString([], {month:'short',day:'numeric'})}`;
+    return `<div class="card card-pad" style="margin-bottom:12px;${live?'border-color:var(--brass)':''}">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px">${when}
+        <span class="sec-title" style="font-size:15px">${x.e.icon} ${x.e.name}</span>
+        <span class="tag ${x.e.type}">${x.e.type}</span>
+        <span class="sec-spacer" style="flex:1"></span><span class="muted mono" style="font-size:12px">~${dr}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px">
+        ${apts.map(a=>`<span class="tag cls">${a}${wxDot(a)}</span>`).join('')||'<span class="muted" style="font-size:12px">Host fields outside network</span>'}</div>
+      ${live?`<div style="display:flex;gap:8px;align-items:center">
+        <button class="btn brass sm" onclick="findEventCharters('${x.e.name.replace(/'/g,"\\'")}')">${boardN?boardN+' charter'+(boardN>1?'s':''):'Find charters'} →</button>
+        <span class="muted" style="font-size:11.5px">driving elevated demand &amp; fares at these fields now</span></div>`
+        :`<div class="muted" style="font-size:11.5px">Market will heat up around these fields as the date approaches.</div>`}
+    </div>`;
+  };
+  const vLive=VATEVENTS.filter(isEventLive), vSoon=VATEVENTS.filter(e=>!isEventLive(e)&&isEventSoon(e));
+  const vCard=e=>{
+    const liveNow=isEventLive(e);
+    return `<div class="card card-pad" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:4px">
+        ${liveNow?'<span class="tag ok">● LIVE</span>':`<span class="tag muted-t">${timeUntil(e._start)}</span>`}
+        <span style="font-weight:600;font-size:13.5px">${e.name}</span></div>
+      <div class="muted" style="font-size:12px">${new Date(e._start).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}–${new Date(e._end).toLocaleString([], {hour:'2-digit',minute:'2-digit'})}Z</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        ${e.airports.slice(0,8).map(a=>`<span class="tag ${APTBY[a]?'cls':'muted-t'}">${a}</span>`).join('')||'<span class="muted" style="font-size:11.5px">No airports listed</span>'}</div>
+    </div>`;
+  };
+  p.innerHTML=`
+    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
+      <span><b>Real-world events drive the Skyledger market.</b> Around major sports, expos, air shows and summits, demand spikes at the host fields — so more charters appear there and fares rise. No artificial bonus; it's the live demand economy reacting, just like the real business-aviation market.</span></div>
+
+    <div class="sec-head"><div><div class="eyebrow" style="color:var(--brass)">Driving the market</div><div class="sec-title">Real-world events</div></div></div>
+    ${liveRW.length?`<div class="eyebrow" style="color:var(--pos);margin:6px 0">Live now</div>${liveRW.map(x=>rwCard(x,true)).join('')}`:'<div class="muted" style="font-size:13px;margin:8px 0 14px">No major event is in its window right now — the market is running on normal demand. Upcoming events below.</div>'}
+    ${upRW.length?`<div class="eyebrow" style="margin:14px 0 6px">Coming up (next 45 days)</div>${upRW.slice(0,8).map(x=>rwCard(x,false)).join('')}`:''}
+
+    <div class="sec-head" style="margin-top:22px"><div><div class="eyebrow">Informational</div><div class="sec-title">Live on the VATSIM network</div></div></div>
+    <div class="help" style="margin:8px 0 14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>Where the controllers and traffic are tonight. Charters touching a live VATSIM event field carry a small <b>📍</b> note on the board — handy if you want ATC service, but they don't change fares.</span></div>
+    ${vLive.length?`<div class="eyebrow" style="color:var(--pos);margin:4px 0">Happening now</div>${vLive.map(vCard).join('')}`:''}
+    ${vSoon.length?`<div class="eyebrow" style="margin:10px 0 4px">Next 36 hours</div>${vSoon.slice(0,10).map(vCard).join('')}`:''}
+    ${!VATEVENTS.length?'<div class="muted" style="font-size:12.5px">Pulling the live VATSIM events calendar…</div>':(!vLive.length&&!vSoon.length?'<div class="muted" style="font-size:12.5px">No VATSIM events live or imminent right now.</div>':'')}`;
+}
+function timeUntil(ts){const d=ts-Date.now();if(d<0)return'now';const h=Math.floor(d/3600e3);return h>=24?'in '+Math.floor(h/24)+'d':h>0?'in '+h+'h':'in '+Math.floor(d/60e3)+'m';}
+function findEventCharters(name){
+  if(!S.board.some(c=>c.rwEvent&&c.rwEvent.name===name)) refreshBoard(false);
+  boardFilter.event=true; boardFilter.cat='all'; boardFilter.aircraft='all'; nav('board');
+}
+
+/* ---------- WEATHER ---------- */
+let wxAdd='', wxLast=0;
+function rWeather(p){
+  const apts=wxAround();
+  if(Date.now()-wxLast>45000){ wxLast=Date.now(); fetchWx(apts).then(()=>{ if(view==='weather')rWeather($('#page')); }); }
+  const card=ic=>{const w=WX[ic];
+    if(!w) return `<div class="card card-pad"><div style="display:flex;align-items:center;gap:8px"><b class="mono">${ic}</b><span class="muted" style="font-size:12px">— ${APTBY[ic]?APTBY[ic].name:''} · loading…</span></div></div>`;
+    const wind=w.wdir==null?'Calm':`${String(w.wdir).padStart(3,'0')}° at ${w.wspd||0}${w.wgst?' gust '+w.wgst:''} kt`;
+    return `<div class="card card-pad">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+        <span class="grade-pill" style="background:${CAT_COLOR[w.cat]};width:auto;padding:0 9px;font-size:11px">${w.cat}</span>
+        <div><div class="mono" style="font-weight:700;font-size:15px">${ic}</div><div class="muted" style="font-size:11px">${APTBY[ic]?APTBY[ic].name:''}</div></div>
+        ${eventForAirport(ic)?'<span class="sec-spacer" style="flex:1"></span><span class="tag evt-tag">★ Event</span>':''}
+      </div>
+      <div class="tel-grid" style="grid-template-columns:repeat(2,1fr);gap:8px">
+        <div class="tel"><div class="tk">Wind</div><div class="tv" style="font-size:13px">${wind}</div></div>
+        <div class="tel"><div class="tk">Visibility</div><div class="tv" style="font-size:13px">${w.vis>=10?'10+ sm':w.vis+' sm'}</div></div>
+        <div class="tel"><div class="tk">Ceiling</div><div class="tv" style="font-size:13px">${w.ceil?w.ceil.toLocaleString()+' ft':'No ceiling'}</div></div>
+        <div class="tel"><div class="tk">Temp / alt</div><div class="tv" style="font-size:13px">${w.temp!=null?Math.round(w.temp)+'°C':'—'} / ${w.altim?(w.altim/33.8639).toFixed(2):'—'}</div></div>
+      </div>
+      <div class="mono muted" style="font-size:10.5px;margin-top:9px;line-height:1.5;word-break:break-word">${w.raw||''}</div>
+    </div>`;
+  };
+  p.innerHTML=`
+    <div class="bar">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        ${Object.entries(CAT_COLOR).filter(([k])=>k!=='—').map(([k,v])=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--muted)"><span style="width:9px;height:9px;border-radius:50%;background:${v}"></span>${k}</span>`).join('')}
+      </div>
+      <div class="sec-spacer" style="flex:1"></div>
+      <input class="field" id="wxAddIn" placeholder="Add ICAO… e.g. KASE" value="${wxAdd}" style="width:150px;text-transform:uppercase" onkeydown="if(event.key==='Enter')addWx(this.value)">
+      <button class="btn ghost sm" onclick="addWx($('#wxAddIn').value)">Add</button>
+      <button class="btn ghost sm" onclick="wxLast=0;rWeather($('#page'))">Refresh</button>
+    </div>
+    <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 18a4 4 0 000-8 6 6 0 00-11.6 1.5A3.5 3.5 0 006 18h11z"/></svg>
+      <span>Live METAR for your base, fleet, active route, top charters and event airports (source: aviationweather.gov). Flight category drives the coloured dots across the app and on the Live Map. For animated precipitation radar, open the <a onclick="nav('map')" style="color:var(--sky);cursor:pointer">Live Map</a> and toggle the radar layer.</span></div>
+    <div class="grid-ac" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:14px">${apts.map(card).join('')}</div>`;
+}
+function addWx(v){ v=(v||'').trim().toUpperCase(); if(!v)return; wxAdd='';
+  if(!S.wxWatch)S.wxWatch=[]; if(!S.wxWatch.includes(v))S.wxWatch.push(v);
+  fetchWx([v]).then(()=>{ if(!WX[v])WX[v]={icao:v,cat:'—',raw:'No report found',vis:0,ceil:null,wdir:null}; if(view==='weather')rWeather($('#page')); });
+}
+
+/* ---------- LEDGER ---------- */
+function rLedger(p){
+  const net=S.ledger.reduce((s,l)=>s+l.a,0);
+  const inc=S.ledger.filter(l=>l.a>0).reduce((s,l)=>s+l.a,0);
+  const exp=S.ledger.filter(l=>l.a<0).reduce((s,l)=>s+l.a,0);
+  p.innerHTML=`
+    <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat"><div class="k">Total revenue</div><div class="v pos">${money1k(inc)}</div></div>
+      <div class="stat"><div class="k">Total costs</div><div class="v neg">${money1k(exp)}</div></div>
+      <div class="stat"><div class="k">Net lifetime</div><div class="v ${net>=0?'pos':'neg'}">${money1k(net)}</div></div>
+    </div>
+    <div class="card">
+      <table class="led"><thead><tr><th>Date</th><th>Transaction</th><th>Detail</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${S.ledger.slice().reverse().map(l=>`<tr><td class="when">${new Date(l.t).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+        <td style="font-weight:600">${l.k}</td><td class="muted">${l.note||''}</td>
+        <td class="amt ${l.a>0?'pos':l.a<0?'neg':''}">${l.a?money(l.a):'—'}</td></tr>`).join('')||'<tr><td colspan=4 class="muted" style="padding:30px;text-align:center">No transactions yet.</td></tr>'}</tbody></table>
+    </div>`;
+}
+
+/* ---------- MAP ---------- */
+let MAP=null,mapLayers=[];
+let mapOpt={wx:true,radar:false,events:true,demand:true};
+let radarLayer=null;
+function rMap(p){
+  p.innerHTML=`<div class="bar">
+    <div class="chiprow">
+      <button class="chip ${mapOpt.wx?'on':''}" onclick="mapToggle('wx')">METAR</button>
+      <button class="chip ${mapOpt.radar?'on':''}" onclick="mapToggle('radar')">Radar</button>
+      <button class="chip ${mapOpt.demand?'on':''}" onclick="mapToggle('demand')">Demand 📈</button>
+      <button class="chip ${mapOpt.events?'on':''}" onclick="mapToggle('events')">Events ★</button>
+    </div>
+    <div class="sec-spacer" style="flex:1"></div>
+    <span class="tag ac">● fleet</span><span class="tag" style="background:var(--brass);color:#fff">● FBO</span>
+    ${S.active?'<span class="tag" style="background:var(--sky);color:#fff">● route</span>':''}
+    <span style="font-size:11px;color:var(--muted)">VFR</span><span style="width:9px;height:9px;border-radius:50%;background:${CAT_COLOR.VFR};display:inline-block"></span>
+    <span style="width:9px;height:9px;border-radius:50%;background:${CAT_COLOR.MVFR};display:inline-block"></span>
+    <span style="width:9px;height:9px;border-radius:50%;background:${CAT_COLOR.IFR};display:inline-block"></span>
+    <span style="width:9px;height:9px;border-radius:50%;background:${CAT_COLOR.LIFR};display:inline-block"></span><span style="font-size:11px;color:var(--muted)">LIFR</span>
+    </div>
+    <div id="map"></div>`;
+  // make sure we have weather + radar data for the map
+  fetchWx(wxAround()).then(()=>{ if(view==='map')initMap(); });
+  if(mapOpt.radar&&!RADAR.host) fetchRadar().then(()=>{ if(view==='map')initMap(); });
+}
+function mapToggle(k){ mapOpt[k]=!mapOpt[k]; if(k==='radar'&&mapOpt.radar&&!RADAR.host){fetchRadar().then(()=>view==='map'&&initMap());return;} initMap(); }
+function initMap(){
+  const el=$('#map'); if(!el)return;
+  if(MAP){MAP.remove();MAP=null;}
+  MAP=L.map('map',{zoomControl:true,attributionControl:false}).setView([39,-70],3);
+  const tileSet=document.documentElement.dataset.theme==='dark'?'dark_all':'light_all';
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${tileSet}/{z}/{x}/{y}{r}.png`,{maxZoom:11,subdomains:'abcd'}).addTo(MAP);
+  // radar overlay (RainViewer)
+  if(mapOpt.radar && RADAR.host && RADAR.frames.length){
+    const fr=RADAR.frames[Math.min(RADAR.idx,RADAR.frames.length-1)];
+    radarLayer=L.tileLayer(`${RADAR.host}${fr.path}/256/{z}/{x}/{y}/2/1_1.png`,{opacity:0.55,maxZoom:11}).addTo(MAP);
+  }
+  const pts=[];
+  // outbound-demand heat (size + green intensity by demand index)
+  if(mapOpt.demand){ Object.entries(S.demand||{}).forEach(([ic,d])=>{ const a=APTBY[ic]; if(!a||a.lat===0||d<1.08)return;
+    const t=Math.min(1,(d-1)/1.3);
+    L.circleMarker([a.lat,a.lon],{radius:8+t*16,color:'#1F7A52',weight:1,fillColor:'#1F9D55',fillOpacity:0.12+t*0.33}).addTo(MAP)
+      .bindPopup(`<b>${ic}</b> · outbound demand ${d.toFixed(2)}×<br>${a.name}<br>${demandLevel(d)} — fly the backlog out for premium fares`); }); }
+  // weather category markers
+  if(mapOpt.wx){ Object.values(WX).forEach(w=>{ const a=APTBY[w.icao]; if(!a||a.lat===0)return;
+    L.circleMarker([a.lat,a.lon],{radius:6,color:'#fff',weight:1.5,fillColor:CAT_COLOR[w.cat],fillOpacity:.95}).addTo(MAP)
+      .bindPopup(`<b>${w.icao}</b> · ${w.cat}<br>${a.name}<br><span style="font-family:monospace;font-size:11px">${w.raw||''}</span>`); }); }
+  // event airports
+  if(mapOpt.events){ eventTargets().forEach(t=>{const a=APTBY[t.icao];
+    L.marker([a.lat,a.lon],{icon:divIcon('fbo','★ '+t.icao)}).addTo(MAP)
+      .bindPopup(`<b>★ ${t.ev.name}</b><br>${a.name}<br>${isEventLive(t.ev)?'LIVE NOW':timeUntil(t.ev._start)}`);
+    pts.push([a.lat,a.lon]);}); }
+  S.fleet.forEach(f=>{const a=APTBY[f.loc];
+    L.marker([a.lat,a.lon],{icon:divIcon('ac',f.tail)}).addTo(MAP)
+      .bindPopup(`<b>${f.tail}</b><br>${ACBY[f.type].name}<br>${a.name} (${f.loc})`);
+    pts.push([a.lat,a.lon]);});
+  if(S.fbo){const a=APTBY[S.fbo];L.marker([a.lat,a.lon],{icon:divIcon('fbo','FBO '+S.fbo)}).addTo(MAP)
+    .bindPopup(`<b>FBO</b><br>${a.name}`);pts.push([a.lat,a.lon]);}
+  if(S.active){const c=S.active.charter,d=APTBY[c.dep],r=APTBY[c.arr];
+    L.marker([d.lat,d.lon],{icon:divIcon('dep',c.dep)}).addTo(MAP);
+    L.marker([r.lat,r.lon],{icon:divIcon('dep',c.arr)}).addTo(MAP);
+    L.polyline([[d.lat,d.lon],[r.lat,r.lon]],{color:'#2D6AE3',weight:2.5,dashArray:'6 5'}).addTo(MAP);
+    pts.push([d.lat,d.lon],[r.lat,r.lon]);}
+  if(pts.length) MAP.fitBounds(pts,{padding:[50,50],maxZoom:6});
+}
+function divIcon(cls,txt){return L.divIcon({className:'',html:`<div class="mk ${cls}">${txt}</div>`,iconSize:null});}
+
+/* =========================================================================
+   SIM LINK — SimConnect flight tracking via local WebSocket bridge
+   The companion skyledger-bridge.py reads MSFS SimConnect and streams JSON:
+   {type:'telemetry',lat,lon,altMsl,gsKt,vsFpm,onGround,overspeed,stall,gForce,title}
+   ========================================================================= */
+let simState={connected:false,ws:null,url:null,telem:null,phase:'—',legIdx:-1,cap:null,wasAir:false,lastVs:0,reconnect:null};
+function distToApt(lat,lon,ic){const A=APTBY[ic],R=3440.065,r=Math.PI/180;
+  const dLa=(A.lat-lat)*r,dLo=(A.lon-lon)*r;
+  const x=Math.sin(dLa/2)**2+Math.cos(lat*r)*Math.cos(A.lat*r)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function connectSim(url){
+  url=url||S.simUrl||CFG.simUrlDefault; S.simUrl=url;
+  try{ if(simState.ws)simState.ws.close(); }catch(e){}
+  updateSimPill('connecting');
+  let ws; try{ ws=new WebSocket(url); }catch(e){ updateSimPill('off'); showToast('Invalid Sim Link address','bad'); return; }
+  simState.ws=ws; simState.url=url;
+  ws.onopen=()=>{ simState.connected=true; updateSimPill(); showToast('Sim Link connected','good'); renderSimModal(); };
+  ws.onmessage=ev=>{ try{ const d=JSON.parse(ev.data); if(d.type==='telemetry'||d.lat!==undefined) onTelemetry(d); }catch(e){} };
+  ws.onclose=()=>{ simState.connected=false; simState.telem=null; updateSimPill('off'); renderSimModal(); };
+  ws.onerror=()=>{ simState.connected=false; updateSimPill('off'); };
+}
+function disconnectSim(){ if(simState.ws){simState.ws.onclose=null;simState.ws.close();} simState.connected=false;simState.telem=null;updateSimPill('off');renderSimModal(); }
+function onTelemetry(d){
+  simState.telem=d;
+  const t=S.active;
+  if(t){
+    const idx=t.legs.findIndex(l=>!l.done);
+    if(idx>=0){
+      const leg=t.legs[idx];
+      if(simState.legIdx!==idx){ simState.legIdx=idx; simState.cap={departed:false,landingFpm:0,overspeed:false,stall:false,overstress:false,maxG:1,crashed:false}; simState.wasAir=false; }
+      const cap=simState.cap;
+      if(!d.onGround){
+        simState.phase='AIRBORNE';
+        if(d.gsKt>40) cap.departed=true;
+        if(d.overspeed) cap.overspeed=true;
+        if(d.stall) cap.stall=true;
+        if(typeof d.gForce==='number'){ cap.maxG=Math.max(cap.maxG,d.gForce); if(d.gForce>2.7||d.gForce<-0.6) cap.overstress=true; }
+        simState.lastVs=d.vsFpm||0;
+      } else {
+        simState.phase=d.gsKt>8?'TAXI':'ON GROUND';
+        if(simState.wasAir && cap.departed){ cap.landingFpm=Math.abs(simState.lastVs||d.vsFpm||0); }
+        const dist=distToApt(d.lat,d.lon,leg.to);
+        if(cap.departed && d.gsKt<35 && dist<6){ leg.capture=cap; simState.legIdx=-1; completeLeg(idx,false,false,cap); return; }
+      }
+      simState.wasAir=!d.onGround;
+    }
+  } else { simState.phase=d.onGround?(d.gsKt>8?'TAXI':'ON GROUND'):'AIRBORNE'; }
+  updateSimPill(); renderSimLive();
+}
+function updateSimPill(force){
+  const dot=$('#simDot'), txt=$('#simTxt'); if(!dot)return;
+  const st=force||(simState.connected?'on':'off');
+  if(st==='connecting'){dot.className='dot';dot.style.background='var(--warn)';txt.textContent='Sim · linking…';return;}
+  dot.style.background='';
+  if(st==='off'||!simState.connected){dot.className='dot off';txt.textContent='Sim Link';return;}
+  dot.className='dot live';
+  const tl=simState.telem;
+  txt.textContent=tl?`Sim · ${simState.phase} ${Math.round(tl.gsKt||0)}kt`:'Sim · waiting';
+}
+function renderSimLive(){
+  const b=$('#simLiveBody'); if(!b)return;
+  const tl=simState.telem;
+  if(!tl){ b.innerHTML='<span class="muted" style="font-size:12.5px">Connected — waiting for a flight in the sim.</span>'; return; }
+  const cap=simState.cap;
+  b.innerHTML=`<span class="phase ${tl.onGround?'':'air'}">${simState.phase}</span>
+    <div class="tel-grid">
+      <div class="tel"><div class="tk">Ground speed</div><div class="tv">${Math.round(tl.gsKt||0)} kt</div></div>
+      <div class="tel"><div class="tk">Altitude</div><div class="tv">${Math.round(tl.altMsl||0).toLocaleString()} ft</div></div>
+      <div class="tel"><div class="tk">Vertical spd</div><div class="tv">${Math.round(tl.vsFpm||0)} fpm</div></div>
+    </div>
+    ${cap&&cap.departed?`<div class="muted" style="font-size:11.5px;margin-top:8px">Airborne logged${cap.overspeed?' · ⚠ overspeed':''}${cap.stall?' · ⚠ stall':''}${cap.overstress?' · ⚠ overstress':''} — land within 6&nbsp;nm of destination to auto-complete the leg.</div>`:''}`;
+}
+function openSimLink(){
+  modal(`<div class="modal-head"><div class="eyebrow">SimConnect flight tracking</div><h2>Sim Link</h2>
+    <div class="lead">Stream live data from MSFS so legs auto-complete and your landings are graded for type-rating progress.</div></div>
+    <div class="modal-body" id="simModalBody"></div>`);
+  renderSimModal();
+}
+function renderSimModal(){
+  const b=$('#simModalBody'); if(!b)return;
+  const tl=simState.telem;
+  b.innerHTML=`
+    <div class="form-row" style="margin-top:4px"><label>Bridge address</label>
+      <input class="field" id="simUrlIn" value="${S.simUrl||CFG.simUrlDefault}" style="width:100%"></div>
+    <div style="display:flex;gap:9px;margin-top:13px">
+      ${simState.connected
+        ?`<button class="btn danger" style="flex:1" onclick="disconnectSim()">Disconnect</button>`
+        :`<button class="btn sky" style="flex:1" onclick="connectSim($('#simUrlIn').value)">Connect</button>`}
+    </div>
+    <div style="margin-top:14px;padding:12px 14px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line)">
+      <div style="display:flex;align-items:center;gap:9px"><span class="dot ${simState.connected?'live':'off'}"></span>
+        <b style="font-size:13px">${simState.connected?'Connected':'Not connected'}</b></div>
+      <div id="simLiveBody" style="margin-top:10px">${simState.connected?'':'<span class="muted" style="font-size:12.5px">Start the bridge, then connect.</span>'}</div>
+    </div>
+    <div class="help" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
+      <span><b>One-time setup (Windows + MSFS):</b><br>1. Install Python 3.10+ then run <b class="mono">pip install SimConnect websockets</b><br>2. Download <b class="mono">skyledger-bridge.py</b> (provided alongside this app) and run <b class="mono">python skyledger-bridge.py</b><br>3. Start a flight in MSFS, then click <b>Connect</b> above. No SimConnect, FSUIPC licence, or extra config needed — the bridge talks to MSFS directly.</span></div>`;
+  renderSimLive();
+}
+
+/* =========================================================================
+   VATSIM LIVE FEED
+   ========================================================================= */
+let vatData=null,vatTime=0;
+async function fetchVat(){
+  if(vatData&&Date.now()-vatTime<30000)return vatData;
+  const r=await fetch('https://data.vatsim.net/v3/vatsim-data.json',{cache:'no-store'});
+  vatData=await r.json();vatTime=Date.now();return vatData;
+}
+function atcCoverage(d,dep,arr){
+  if(!d.controllers)return 0;
+  const pre=[dep.slice(0,3),arr.slice(0,3),dep.slice(0,2),arr.slice(0,2)];
+  return d.controllers.filter(c=>c.facility>0&&pre.some(p=>c.callsign.startsWith(p))).length;
+}
+async function pollVat(){
+  try{
+    const d=await fetchVat();
+    const pilots=d.pilots?.length||0, ctr=(d.controllers||[]).filter(c=>c.facility>0).length;
+    $('#vatDot').className='dot live'; $('#vatTxt').textContent=`${pilots.toLocaleString()} pilots online`;
+    renderVatNet(d,pilots,ctr);
+  }catch(e){
+    $('#vatDot').className='dot off'; $('#vatTxt').textContent='VATSIM offline';
+    const n=$('#vatNet'); if(n)n.innerHTML='<span class="neg">Could not reach the VATSIM feed. If running from file://, the live feed still usually works — check your connection.</span>';
+  }
+}
+function renderVatNet(d,pilots,ctr){
+  const n=$('#vatNet'); if(!n)return;
+  d=d||vatData; if(!d){n.textContent='Connecting to live feed…';return;}
+  pilots=pilots??(d.pilots?.length||0); ctr=ctr??(d.controllers||[]).filter(c=>c.facility>0).length;
+  // controllers relevant to active route or home base
+  let rel=[];
+  if(d.controllers){const tgt=S.active?[S.active.charter.dep,S.active.charter.arr]:[S.base];
+    const pre=tgt.flatMap(t=>[t.slice(0,3),t.slice(0,2)]);
+    rel=d.controllers.filter(c=>c.facility>0&&pre.some(p=>c.callsign.startsWith(p))).slice(0,5);}
+  const liveEv=VATEVENTS.filter(isEventLive), nextEv=VATEVENTS.filter(isEventSoon)[0];
+  const rw=rwLive(), rwNext=rwUpcoming(60)[0];
+  n.innerHTML=`
+    <div style="display:flex;gap:18px;margin-bottom:10px">
+      <div><div class="mono" style="font-size:22px;font-weight:700">${pilots.toLocaleString()}</div><div class="muted" style="font-size:11px">pilots online</div></div>
+      <div><div class="mono" style="font-size:22px;font-weight:700">${ctr}</div><div class="muted" style="font-size:11px">controllers</div></div>
+      <div style="cursor:pointer" onclick="nav('events')"><div class="mono" style="font-size:22px;font-weight:700;color:${rw.length?'var(--brass)':'inherit'}">${rw.length}</div><div class="muted" style="font-size:11px">market events</div></div>
+    </div>
+    ${rw.length?`<div class="mini" style="padding:7px 0;cursor:pointer" onclick="nav('events')"><div class="mini-ic" style="width:26px;height:26px;color:var(--brass)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg></div>
+      <div><div class="t" style="font-size:12.5px">${rw[0].e.icon} ${rw[0].e.name.length>26?rw[0].e.name.slice(0,24)+'…':rw[0].e.name}</div><div class="s">driving demand at ${rw[0].e.apts.filter(a=>APTBY[a])[0]||'host fields'}</div></div></div>`
+      :rwNext?`<div class="muted" style="font-size:11.5px;margin-bottom:6px">Next market event: <b>${rwNext.e.icon} ${rwNext.e.name.length>24?rwNext.e.name.slice(0,22)+'…':rwNext.e.name}</b> ${timeUntil(rwNext.o.start)}</div>`:''}
+    ${liveEv.length?`<div class="muted" style="font-size:11px;margin:6px 0 2px">📍 VATSIM live: <b>${liveEv[0].name.length>28?liveEv[0].name.slice(0,26)+'…':liveEv[0].name}</b>${liveEv.length>1?' +'+(liveEv.length-1):''}</div>`:''}
+    ${rel.length?`<div class="muted" style="font-size:11px;margin:5px 0 5px">Coverage near ${S.active?'your route':S.base}:</div>
+      ${rel.map(c=>`<div class="mini" style="padding:6px 0"><div class="mini-ic" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20M12 6v6l4 2"/></svg></div>
+        <div><div class="t mono" style="font-size:12px">${c.callsign}</div></div><div class="amt mono" style="font-size:11px">${c.frequency}</div></div>`).join('')}`
+      :`<div class="muted" style="font-size:12px">No ATC online near ${S.active?'your route':S.base} right now.</div>`}`;
+}
+
+/* =========================================================================
+   MODAL / TOAST / UTIL UI
+   ========================================================================= */
+function modal(html){$('#modalRoot').innerHTML=`<div class="scrim" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;}
+function closeModal(){$('#modalRoot').innerHTML='';}
+function showToast(msg,kind){const t=document.createElement('div');t.className='toast '+(kind||'');
+  t.innerHTML=msg;$('#toasts').appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(30px)';t.style.transition='.3s';setTimeout(()=>t.remove(),300);},3400);}
+function emptyState(h,s,go,btn){return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
+  <h3>${h}</h3><p>${s}</p>${go?`<button class="btn brass" style="margin:14px auto 0" onclick="nav('${go}')">${btn}</button>`:''}</div>`;}
+
+/* ---------- THEME ---------- */
+const THEME_KEY='skyledger_theme';
+const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg>';
+const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.5A8.5 8.5 0 1111.5 3a6.5 6.5 0 009.5 9.5z"/></svg>';
+function applyTheme(t){
+  document.documentElement.dataset.theme=t;
+  const btn=$('#themeBtn'); if(btn)btn.innerHTML=t==='dark'?SUN:MOON;
+  if(view==='map'&&MAP) setTimeout(initMap,30);
+}
+function toggleTheme(){
+  const cur=document.documentElement.dataset.theme==='dark'?'dark':'light';
+  const next=cur==='dark'?'light':'dark';
+  localStorage.setItem(THEME_KEY,next); applyTheme(next);
+}
+
+/* ---------- ZULU CLOCK ---------- */
+function tickClock(){const d=new Date();$('#zulu').innerHTML=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')} <b>Z</b>`;}
+
+/* ---------- SAVE / LOAD CONTROLS ---------- */
+$('#exportSave').onclick=()=>{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='skyledger-save.json';a.click();URL.revokeObjectURL(u);};
+$('#importSave').onclick=()=>$('#fileIn').click();
+$('#fileIn').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{S=JSON.parse(r.result);save();showToast('Save imported','good');renderAll();}catch(x){showToast('Invalid save file','bad');}};r.readAsText(f);};
+$('#resetSave').onclick=()=>{if(confirm('Reset everything and start a new pilot? This cannot be undone.')){localStorage.removeItem(KEY);location.reload();}};
+
+/* ---------- ONBOARDING ---------- */
+function onboard(){
+  const aptOpts=APT.map(a=>`<option value="${a[0]}">${a[0]} — ${a[1]}</option>`).join('');
+  modal(`<div class="modal-head" style="text-align:center;padding-top:30px">
+      <div class="brand-mark" style="margin:0 auto 14px;width:50px;height:50px"><svg viewBox="0 0 24 24" fill="none"><path d="M2 13.5L21 3l-4 10.5L21 21l-7-3-7 3 1.5-7.5L2 13.5z" fill="#fff"/></svg></div>
+      <div class="eyebrow">Welcome to Skyledger · Step 1 of 2</div>
+      <h2>Start your business aviation career</h2>
+      <div class="lead">An open, living charter economy for MSFS + VATSIM. Fly real legs, track them through SimConnect, and rate up from light jets to heavy metal.</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label>Pilot name</label><input class="field" id="obName" placeholder="Your name or handle" value="${S?.pilot||''}" style="width:100%"></div>
+      <div class="form-row"><label>Home base</label><select class="field" id="obBase" style="width:100%">${aptOpts}</select></div>
+      <div class="pnl" style="margin-top:16px">
+        <div class="pnl-row"><span>Starting cash</span><span class="num pos">${money(CFG.startCash)}</span></div>
+        <div class="pnl-row"><span>Starting type rating</span><span class="num">${CLASSES[TIERS[CFG.startTier]].label}</span></div>
+        <div class="pnl-row"><span>Next step</span><span class="num">Choose your first aircraft</span></div>
+      </div>
+      <button class="btn brass" style="width:100%;justify-content:center;margin-top:18px" onclick="onboardStep2()">Continue
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>`);
+  setTimeout(()=>{const s=$('#obBase');if(s)s.value='KSDF';},10);
+}
+function onboardStep2(){
+  const name=($('#obName').value||'').trim()||'Captain';
+  const base=$('#obBase').value||'KSDF';
+  newGame(name,base);                 // creates state with empty fleet
+  // entry options: turboprop + light (everything at or below starting rating)
+  const opts=AIRCRAFT.filter(a=>CLASSES[a.cls].tier<=S.maxTier);
+  const card=a=>{
+    const dep=a.lease*3, canLease=S.cash>=dep, canBuy=S.cash>=a.price;
+    return `<div class="ac-card">
+      <div class="ac-head"><div class="ac-name" style="font-size:14px">${a.name}</div>
+        <div style="display:flex;gap:6px;margin-top:6px"><span class="tag cls">${CLASSES[a.cls].label}</span></div></div>
+      <div class="ac-spec" style="padding:11px 14px;gap:7px 12px">
+        <div class="spec"><div class="sk">Range</div><div class="sv">${a.range.toLocaleString()}nm</div></div>
+        <div class="spec"><div class="sk">Pax</div><div class="sv">${a.pax}</div></div>
+        <div class="spec"><div class="sk">Lease dep.</div><div class="sv">${money1k(dep)}</div></div>
+        <div class="spec"><div class="sk">Buy</div><div class="sv">${money1k(a.price)}</div></div>
+      </div>
+      <div class="ac-foot" style="padding:11px 14px">
+        <button class="btn ghost sm" ${canLease?'':'disabled'} onclick="firstAircraft('${a.id}','lease')">Lease</button>
+        <div class="sec-spacer" style="flex:1"></div>
+        <button class="btn brass sm" ${canBuy?'':'disabled'} onclick="firstAircraft('${a.id}','buy')">Buy</button>
+      </div></div>`;
+  };
+  modal(`<div class="modal-head"><div class="eyebrow">Step 2 of 2 · ${money(S.cash)} available</div>
+      <h2>Choose your first aircraft</h2>
+      <div class="lead">Lease to start earning with minimal capital, or buy outright. Fly clean charters in it to earn your Midsize rating and unlock heavier jets. Delivered to ${base}.</div></div>
+    <div class="modal-body">
+      <div class="grid-ac" style="grid-template-columns:repeat(2,1fr)">${opts.map(card).join('')}</div>
+      <div class="help" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
+        <span>A light jet lease is the classic starter — low deposit, strong charter availability, and it counts toward your Midsize type rating.</span></div>
+    </div>`);
+}
+function firstAircraft(id,mode){
+  if(mode==='lease') leaseAircraft(id); else buyAircraft(id,true);
+  if(!S.fleet.length) return;          // acquisition failed (e.g. funds) — stay on picker
+  refreshBoard(false);                 // seed charters at the new home base
+  closeModal();
+  showToast(`Welcome aboard, ${S.pilot}. ${ACBY[id].name} is ready at ${S.base}.`,'good');
+  nav('dash');
+}
+
+/* =========================================================================
+   BOOT
+   ========================================================================= */
+document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
+applyTheme(localStorage.getItem(THEME_KEY)||'light');
+tickClock(); setInterval(tickClock,1000);
+S=load();
+if(S){
+  // migrate older saves that predate ratings/sim/events/wx fields
+  if(S.maxTier===undefined)S.maxTier=CFG.startTier;
+  if(!S.grades)S.grades=[]; if(S.tierQual===undefined)S.tierQual=0;
+  if(!S.simUrl)S.simUrl=CFG.simUrlDefault;
+  if(!S.wxWatch)S.wxWatch=[]; if(S.simbriefUser===undefined)S.simbriefUser='';
+  if(!S.demand)S.demand={}; if(S.lastEco===undefined)S.lastEco=0;
+  if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
+  refreshUsed(); rentalTick();                 // top up used listings, settle any finished rentals
+  if(Date.now()-(S.lastBoard||0)>20*60e3) refreshBoard(false);
+  renderAll();
+}else{
+  onboard();
+}
+/* ---- AIRCRAFT RENTAL: idle owned jets listed for rent get picked up by NPC operators ---- */
+function rentalTick(){
+  if(!S||!S.fleet) return; const now=Date.now(); let changed=false;
+  // return aircraft whose rental has ended
+  S.fleet.forEach(f=>{
+    if(f.rentedUntil && f.rentedUntil<=now){
+      f.rentedUntil=0; f.busy=false;
+      f.cond=Math.max(38,(f.cond||100)-(f.rentDays||1)*rnd(0.4,1.3));
+      f.hours=(f.hours||0)+(f.rentDays||1)*rnd(1.5,4);
+      if(Math.random()<0.30){ f.loc=pick(HUBS.filter(h=>h!==f.loc)); }   // renter left it elsewhere
+      f.renter=''; changed=true;
+    }
+  });
+  // start new rentals on idle, listed, owned aircraft
+  S.fleet.forEach(f=>{
+    if(!(f.owned && f.forRent && !f.busy && !f.rentedUntil && f.rentRate>0)) return;
+    const a=ACBY[f.type];
+    // renters compare your rate to the factory lease — over-priced jets sit
+    const ratio=f.rentRate/a.lease;
+    const interest = ratio<=0.6?0.16 : ratio<=0.85?0.12 : ratio<=1.05?0.07 : ratio<=1.3?0.03 : 0.01;
+    const demandF = demandAt(f.loc)>=1.15?1.25:1;          // busy fields rent faster
+    if(Math.random()<interest*demandF){
+      const days=pick([1,1,2,2,3,4]);
+      const net=Math.round(days*f.rentRate*0.90);           // you keep 90% (10% platform fee)
+      f.rentedUntil=now+days*240e3; f.rentDays=days; f.busy=true; f.renter=pick(NPC_RENTERS);
+      S.cash+=net;
+      S.ledger.push({t:now,k:`Rental income ${f.tail}`,a:net,note:`${days}-day dry lease · ${f.renter}`});
+      changed=true;
+    }
+  });
+  if(changed){ save(); if(view==='fleet'||view==='dash'||view==='ledger') renderAll(); }
+}
+setInterval(rentalTick, 30e3);
+
+/* live data: VATSIM net, events, weather, radar */
+pollVat(); setInterval(pollVat,CFG.vatPoll);
+async function pollLive(first){
+  await fetchEvents();
+  if(S){ refreshBoard(false); }              // fold fresh events into the board
+  if(S) await fetchWx(wxAround());
+  if(first) await fetchRadar();
+  if(S && (view==='events'||view==='weather'||view==='dash'||view==='board')) renderAll();
+}
+pollLive(true);
+setInterval(()=>pollLive(false), 8*60e3);    // refresh events/weather every 8 min
+
+</script>
+</body>
+</html>
