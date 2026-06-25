@@ -2,12 +2,49 @@
   "name": "skyledger-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Electron shell that runs Skyledger with direct SimConnect access (no bridge process).",
+  "description": "Skyledger desktop app with direct MSFS SimConnect (single portable exe).",
+  "author": "Skyledger",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win portable --x64"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.skyledger.desktop",
+    "productName": "Skyledger",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../index.html",
+        "to": "app/index.html"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Skyledger-${version}-portable.exe"
+    }
   }
 }
