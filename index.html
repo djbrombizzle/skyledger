@@ -285,6 +285,30 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 .led .amt{font-family:var(--mono);font-weight:600;text-align:right}
 .led .when{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
 
+/* CHARTER BOARD TABLE */
+.board-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:auto;background:var(--surface);box-shadow:var(--shadow);max-height:calc(100vh - 168px)}
+.board-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.board-tbl th{background:var(--surface-2);padding:5px 7px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+.board-tbl th.sortable{cursor:pointer;user-select:none}
+.board-tbl th.sortable:hover{color:var(--ink)}
+.board-tbl th .sort-i{opacity:.35;font-size:9px;margin-left:2px}
+.board-tbl th .sort-i.on{opacity:1;color:var(--brass)}
+.board-tbl tr.board-filters th{background:var(--surface);padding:3px 5px;border-bottom:1px solid var(--line);position:sticky;top:24px;z-index:2;font-weight:500;text-transform:none;letter-spacing:0}
+.board-tbl tr.board-filters .field{padding:3px 6px;font-size:11px;border-radius:6px;width:100%;min-width:0}
+.board-tbl td{padding:4px 7px;border-bottom:1px solid var(--line);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
+.board-tbl tr.board-row:hover td{background:var(--surface-2)}
+.board-tbl tr.board-row.evt td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
+.board-tbl tr.board-row.repo td:first-child{box-shadow:inset 3px 0 0 var(--muted-2)}
+.board-tbl tr.board-row.dim{opacity:.48}
+.board-tbl .mono{font-family:var(--mono)}
+.board-tbl .amt{text-align:right;font-family:var(--mono);font-weight:600}
+.board-tbl .client{max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board-tbl .act{text-align:right;white-space:nowrap;width:72px}
+.board-tbl .tag.sm{font-size:9px;padding:1px 5px;line-height:1.35}
+.board-tbl .flags{display:flex;gap:3px;flex-wrap:nowrap}
+.board-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.board-count{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+
 /* ============ THE JET CARD (signature) ============ */
 .jetcard{background:linear-gradient(135deg,#1f2f47 0%,#16202e 60%,#101822 100%);color:#eaf0f8;
   border-radius:18px;padding:0;box-shadow:0 18px 50px rgba(16,24,34,.4);overflow:hidden;position:relative;
@@ -1486,7 +1510,9 @@ function dashCharterRow(c){
 }
 
 /* ---------- CHARTER BOARD ---------- */
-let boardFilter={cat:'all',cls:'all',ready:false,q:'',aircraft:'all'};
+let boardFilter={cat:'all',cls:'all',status:'all',flags:'all',q:'',dep:'',arr:'',client:'',aircraft:'all'};
+let boardSort={col:'expires',dir:'asc'};
+const CLS_SHORT={turboprop:'TP',light:'Light',midsize:'Mid',supermid:'S-Mid',heavy:'Heavy',ulr:'ULR'};
 function selectedFleetAc(){
   if(boardFilter.aircraft&&boardFilter.aircraft!=='all'){
     const f=S.fleet.find(x=>x.id===boardFilter.aircraft&&!x.busy);
@@ -1500,45 +1526,114 @@ function acForCharter(c){
   if(sel) return (ACBY[sel.type].range>=c.dist && CLASSES[ACBY[sel.type].cls].tier>=c.tier && ACBY[sel.type].pax>=(c.pax||0))?sel:null;
   return bestAircraftFor(c);
 }
-function rBoard(p){
-  const now=Date.now();
+function boardStatusKey(c){
+  const e=charterRowEcon(c);
+  if(!e.plan) return 'blocked';
+  return e.status;
+}
+function applyBoardFilters(list){
   const sel=selectedFleetAc();
-  let list=S.board.filter(c=>c.expires>now);
-  if(sel) list=list.filter(c=>acForCharter(c));                 // only charters this aircraft can fly
+  if(sel) list=list.filter(c=>acForCharter(c));
   if(boardFilter.cat!=='all') list=list.filter(c=>c.cat===boardFilter.cat);
   if(boardFilter.cls!=='all') list=list.filter(c=>c.cls===boardFilter.cls);
-  if(boardFilter.ready) list=list.filter(c=>{const pl=planFor(c);return pl&&pl.ready;});
-  if(boardFilter.event) list=list.filter(c=>c.rwEvent);
+  if(boardFilter.status!=='all'){
+    list=list.filter(c=>{
+      const k=boardStatusKey(c);
+      if(boardFilter.status==='flyable') return !!planFor(c);
+      return k===boardFilter.status;
+    });
+  }
+  if(boardFilter.flags==='event') list=list.filter(c=>c.rwEvent);
+  else if(boardFilter.flags==='repo') list=list.filter(c=>c.repo);
+  else if(boardFilter.flags==='surge') list=list.filter(c=>c.surge);
   if(boardFilter.q){const q=boardFilter.q.toUpperCase();list=list.filter(c=>c.dep.includes(q)||c.arr.includes(q)||APTBY[c.dep].name.toUpperCase().includes(q)||APTBY[c.arr].name.toUpperCase().includes(q));}
-  const evCount=S.board.filter(c=>c.rwEvent&&c.expires>now).length;
+  if(boardFilter.dep){const q=boardFilter.dep.toUpperCase();list=list.filter(c=>c.dep.includes(q));}
+  if(boardFilter.arr){const q=boardFilter.arr.toUpperCase();list=list.filter(c=>c.arr.includes(q));}
+  if(boardFilter.client){const q=boardFilter.client.toUpperCase();list=list.filter(c=>c.client.toUpperCase().includes(q));}
+  return list;
+}
+function sortBoardList(list){
+  const {col,dir}=boardSort, m=dir==='asc'?1:-1;
+  const stOrd={ready:0,rent:1,repo:2,blocked:3};
+  list.sort((a,b)=>{
+    switch(col){
+      case 'dep': return a.dep.localeCompare(b.dep)*m;
+      case 'arr': return a.arr.localeCompare(b.arr)*m;
+      case 'cls': return (CLASSES[a.cls].tier-CLASSES[b.cls].tier)*m || a.cls.localeCompare(b.cls)*m;
+      case 'cat': return a.cat.localeCompare(b.cat)*m;
+      case 'client': return a.client.localeCompare(b.client)*m;
+      case 'dist': return (a.dist-b.dist)*m;
+      case 'pax': return ((a.pax||0)-(b.pax||0))*m;
+      case 'pay': return (a.payout-b.payout)*m;
+      case 'net':{ const na=charterRowEcon(a).net, nb=charterRowEcon(b).net; return ((na??-1e9)-(nb??-1e9))*m; }
+      case 'expires': return (a.expires-b.expires)*m;
+      case 'status': return ((stOrd[boardStatusKey(a)]??9)-(stOrd[boardStatusKey(b)]??9))*m;
+      default: return 0;
+    }
+  });
+  return list;
+}
+function boardSortIcon(col){ return boardSort.col!==col?'<span class="sort-i">↕</span>':boardSort.dir==='asc'?'<span class="sort-i on">↑</span>':'<span class="sort-i on">↓</span>'; }
+function setBoardSort(col){ if(boardSort.col===col) boardSort.dir=boardSort.dir==='asc'?'desc':'asc'; else { boardSort.col=col; boardSort.dir='asc'; } rBoard($('#page')); }
+function clearBoardFilters(){ boardFilter={cat:'all',cls:'all',status:'all',flags:'all',q:'',dep:'',arr:'',client:'',aircraft:boardFilter.aircraft||'all'}; rBoard($('#page')); }
+function rBoard(p){
+  const now=Date.now(), total=S.board.filter(c=>c.expires>now).length;
+  const sel=selectedFleetAc();
+  let list=sortBoardList(applyBoardFilters(S.board.filter(c=>c.expires>now)));
   const idle=S.fleet.filter(f=>!f.busy);
+  const f=boardFilter;
+  const th=(col,label,w)=>`<th class="sortable" style="${w?'width:'+w:''}" onclick="setBoardSort('${col}')">${label}${boardSortIcon(col)}</th>`;
   p.innerHTML=`
-    <div class="bar">
-      ${S.fleet.length?`<select class="field" id="acSel" onchange="setBF('aircraft',this.value)" style="min-width:210px;font-weight:600">
-        <option value="all" ${boardFilter.aircraft==='all'?'selected':''}>All available aircraft (${idle.length})</option>
-        ${S.fleet.map(f=>`<option value="${f.id}" ${boardFilter.aircraft===f.id?'selected':''} ${f.busy?'disabled':''}>${f.tail} · ${ACBY[f.type].name} · @${f.loc}${f.rentedUntil&&f.rentedUntil>Date.now()?' (rented out)':f.busy?' (on trip)':''}</option>`).join('')}
+    <div class="board-toolbar">
+      ${S.fleet.length?`<select class="field" id="acSel" onchange="setBF('aircraft',this.value)" style="min-width:190px;font-size:12px">
+        <option value="all" ${f.aircraft==='all'?'selected':''}>All aircraft (${idle.length})</option>
+        ${S.fleet.map(x=>`<option value="${x.id}" ${f.aircraft===x.id?'selected':''} ${x.busy?'disabled':''}>${x.tail} · ${ACBY[x.type].name} · @${x.loc}</option>`).join('')}
       </select>`:''}
+      <input class="field" id="bq" placeholder="Search route or city…" value="${esc(f.q)}" oninput="setBF('q',this.value)" style="width:160px;font-size:12px">
+      <span class="board-count">${list.length} / ${total}</span>
       <div class="sec-spacer" style="flex:1"></div>
-      <input class="field" id="bq" placeholder="ICAO or city…" value="${boardFilter.q}" oninput="setBF('q',this.value)" style="width:140px">
-      ${evCount?`<button class="chip ${boardFilter.event?'on':''}" onclick="setBF('event',${!boardFilter.event})">${boardFilter.event?'':''}Events (${evCount})</button>`:''}
-      <button class="chip ${boardFilter.ready?'on':''}" onclick="setBF('ready',${!boardFilter.ready})">✓ Ready now</button>
-      <button class="btn ghost sm" onclick="doRefresh()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7M21 4v5h-5"/></svg>Refresh</button>
+      <button class="btn ghost sm" onclick="clearBoardFilters()">Clear filters</button>
+      <button class="btn ghost sm" onclick="doRefresh()">Refresh</button>
     </div>
-    <div class="bar" style="margin-top:-6px">
-      <div class="chiprow">
-        <button class="chip ${boardFilter.cls==='all'?'on':''}" onclick="setBF('cls','all')">All sizes</button>
-        ${Object.keys(CLASSES).map(k=>`<button class="chip ${boardFilter.cls===k?'on':''}" onclick="setBF('cls','${k}')">${CLASSES[k].label}</button>`).join('')}
-      </div>
-    </div>
-    <div class="bar" style="margin-top:-6px">
-      <div class="chiprow">
-        <button class="chip ${boardFilter.cat==='all'?'on':''}" onclick="setBF('cat','all')">All types</button>
-        ${Object.keys(CAT).map(k=>`<button class="chip ${boardFilter.cat===k?'on':''}" onclick="setBF('cat','${k}')">${CAT[k].label}</button>`).join('')}
-      </div>
-    </div>
-    <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>${sel?`Showing only charters <b>${sel.tail}</b> can fly — <b>ready</b> means it's parked at the departure field, otherwise a positioning leg from <b class="mono">${sel.loc}</b> is added.`:'Any charter you\'re <b>type-rated</b> for is open to you — if you don\'t own a suitable jet, you can <b>🔑 rent one on-site</b> at an auto market rate (no positioning needed). Own one to skip the rental and to list yours for rent.'} Coloured dots are live METAR flight category.</span></div>
-    <div class="rows" style="margin-top:14px">${list.map(charterCard).join('')||emptyState('No charters match',sel?'This aircraft can\'t reach these, or none fit the filters. Pick another aircraft or refresh.':'Try clearing filters or refresh the board.')}</div>`;
+    <div class="help" style="margin-bottom:10px;padding:8px 12px;font-size:11.5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>${sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} METAR dots on ICAO codes.</span></div>
+    <div class="board-wrap">
+      <table class="board-tbl">
+        <colgroup>
+          <col style="width:62px"><col style="width:62px"><col style="width:54px"><col style="width:72px">
+          <col style="width:18%"><col style="width:48px"><col style="width:36px"><col style="width:72px">
+          <col style="width:68px"><col style="width:58px"><col style="width:76px"><col style="width:72px">
+        </colgroup>
+        <thead>
+          <tr>${th('dep','Dep')}${th('arr','Arr')}${th('cls','Class','54px')}${th('cat','Type','72px')}
+            ${th('client','Client')}${th('dist','NM','48px')}${th('pax','Pax','36px')}${th('pay','Pay','72px')}
+            ${th('net','Net','68px')}${th('expires','Left','58px')}${th('status','Status','76px')}<th></th></tr>
+          <tr class="board-filters">
+            <th><input class="field mono" placeholder="DEP" value="${esc(f.dep)}" maxlength="4" oninput="this.value=this.value.toUpperCase();setBF('dep',this.value)"></th>
+            <th><input class="field mono" placeholder="ARR" value="${esc(f.arr)}" maxlength="4" oninput="this.value=this.value.toUpperCase();setBF('arr',this.value)"></th>
+            <th><select class="field" onchange="setBF('cls',this.value)"><option value="all">All</option>${Object.keys(CLASSES).map(k=>`<option value="${k}" ${f.cls===k?'selected':''}>${CLS_SHORT[k]||CLASSES[k].label}</option>`).join('')}</select></th>
+            <th><select class="field" onchange="setBF('cat',this.value)"><option value="all">All</option>${Object.keys(CAT).map(k=>`<option value="${k}" ${f.cat===k?'selected':''}>${CAT[k].label}</option>`).join('')}</select></th>
+            <th><input class="field" placeholder="Client…" value="${esc(f.client)}" oninput="setBF('client',this.value)"></th>
+            <th></th><th></th><th></th><th></th><th></th>
+            <th><select class="field" onchange="setBF('status',this.value)">
+              <option value="all" ${f.status==='all'?'selected':''}>All</option>
+              <option value="flyable" ${f.status==='flyable'?'selected':''}>Can fly</option>
+              <option value="ready" ${f.status==='ready'?'selected':''}>Ready</option>
+              <option value="rent" ${f.status==='rent'?'selected':''}>Rent</option>
+              <option value="repo" ${f.status==='repo'?'selected':''}>Repo</option>
+              <option value="blocked" ${f.status==='blocked'?'selected':''}>Blocked</option>
+            </select></th>
+            <th><select class="field" onchange="setBF('flags',this.value)">
+              <option value="all" ${f.flags==='all'?'selected':''}>—</option>
+              <option value="event" ${f.flags==='event'?'selected':''}>Events</option>
+              <option value="surge" ${f.flags==='surge'?'selected':''}>Surge</option>
+              <option value="repo" ${f.flags==='repo'?'selected':''}>Ferry</option>
+            </select></th>
+          </tr>
+        </thead>
+        <tbody>${list.length?list.map(charterRow).join(''):`<tr><td colspan="12" style="padding:28px;text-align:center;color:var(--muted)">No charters match — clear filters or refresh the board.</td></tr>`}</tbody>
+      </table>
+    </div>`;
 }
 function setBF(k,v){boardFilter[k]=v;rBoard($('#page'));}
 function wxDot(ic){const w=WX[ic];if(!w)return'';return `<span title="${w.cat} · ${w.raw}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CAT_COLOR[w.cat]};margin-left:5px;vertical-align:middle"></span>`;}
@@ -1580,18 +1675,53 @@ function planFor(c){
   }
   return null;
 }
-function charterCard(c){
+function charterRowEcon(c){
   const plan=planFor(c);
+  if(!plan) return {plan:null,net:null,status:'blocked',statusLabel:'—'};
+  const acm=ACBY[plan.rental?plan.type:plan.ac.type];
+  const reposNm=plan.rental?0:(plan.ac.loc===c.dep?0:haversine(plan.ac.loc,c.dep));
+  const rev=legEcon(c.dep,c.arr,acm), repE=reposNm?legEcon(plan.ac.loc,c.dep,acm):null;
+  const totBlock=rev.block+(repE?repE.block:0);
+  const hire=plan.rental?rentalCost(plan.rate,totBlock):(!plan.ac.owned?Math.round(acm.lease*(totBlock/8)):0);
+  const net=c.payout-rev.opcost-(repE?repE.opcost:0)-hire;
+  if(plan.rental) return {plan,net,status:'rent',statusLabel:'Rent'};
+  if(plan.ready) return {plan,net,status:'ready',statusLabel:'Ready'};
+  return {plan,net,status:'repo',statusLabel:reposNm+'nm'};
+}
+function charterRow(c){
+  const e=charterRowEcon(c);
+  const flags=[];
+  if(c.rwEvent) flags.push(`<span class="tag evt-tag sm" title="${esc(c.rwEvent.name)}">${c.rwEvent.icon}</span>`);
+  if(c.surge) flags.push('<span class="tag warnt sm">⚡</span>');
+  const stCls=e.status==='ready'?'ok':e.status==='rent'?'muted-t':e.status==='repo'?'warnt':'muted-t';
+  let btn;
+  if(e.plan){
+    btn=e.plan.rental?`<button class="btn brass sm" onclick="openAccept('${c.id}')">Rent</button>`
+      :e.plan.ready?`<button class="btn brass sm" onclick="openAccept('${c.id}')">Go</button>`
+      :`<button class="btn brass sm" onclick="openAccept('${c.id}')">Repo</button>`;
+  } else btn='<button class="btn ghost sm" disabled>—</button>';
+  return `<tr class="board-row ${c.rwEvent?'evt':''} ${c.repo?'repo':''} ${!e.plan?'dim':''}">
+    <td class="mono" style="font-weight:600">${c.dep}${wxDot(c.dep)}</td>
+    <td class="mono" style="font-weight:600">${c.arr}${wxDot(c.arr)}</td>
+    <td><span class="tag cls sm">${CLS_SHORT[c.cls]||CLASSES[c.cls].label}</span></td>
+    <td><span class="tag ${c.cat} sm">${CAT[c.cat].label}</span></td>
+    <td class="client" title="${esc(c.client)}">${esc(c.client)}</td>
+    <td class="amt">${c.dist}</td>
+    <td class="amt">${c.pax||'—'}</td>
+    <td class="amt">${money1k(c.payout)}</td>
+    <td class="amt ${e.net!=null?(e.net>=0?'pos':'neg'):''}">${e.net!=null?money1k(e.net):'—'}</td>
+    <td class="mono" style="font-size:11px;color:var(--muted)">${timeLeft(c.expires)}</td>
+    <td><span class="tag ${stCls} sm">${e.statusLabel}</span>${flags.length?`<span class="flags">${flags.join('')}</span>`:''}</td>
+    <td class="act">${btn}</td></tr>`;
+}
+function charterCard(c){
+  const e=charterRowEcon(c), plan=e.plan;
   const evIc = c.rwEvent ? (rwAt(c.dep)?c.dep:c.arr) : null;
   let right;
   if(plan){
     const acm = ACBY[plan.rental?plan.type:plan.ac.type];
     const reposNm = plan.rental?0:(plan.ac.loc===c.dep?0:haversine(plan.ac.loc,c.dep));
-    const rev=legEcon(c.dep,c.arr,acm), repE=reposNm?legEcon(plan.ac.loc,c.dep,acm):null;
-    const totBlock=rev.block+(repE?repE.block:0);
-    const hire = plan.rental?rentalCost(plan.rate,totBlock):(!plan.ac.owned?Math.round(acm.lease*(totBlock/8)):0);
-    const net=c.payout-rev.opcost-(repE?repE.opcost:0)-hire;
-    const netLine=`<span class="net-line ${net>=0?'pos':'neg'}">net ${money(net)}</span>`;
+    const netLine=`<span class="net-line ${e.net>=0?'pos':'neg'}">net ${money(e.net)}</span>`;
     right = plan.rental
       ? `<div class="ready-line">rent a ${CLASSES[acm.cls].label} @ ${c.dep} · ${money(plan.rate)}/day<br>${netLine}</div>
          <button class="btn brass" onclick="openAccept('${c.id}')">Rent &amp; fly</button>`
@@ -2686,7 +2816,7 @@ function rEvents(p){
 function timeUntil(ts){const d=ts-Date.now();if(d<0)return'now';const h=Math.floor(d/3600e3);return h>=24?'in '+Math.floor(h/24)+'d':h>0?'in '+h+'h':'in '+Math.floor(d/60e3)+'m';}
 function findEventCharters(name){
   if(!S.board.some(c=>c.rwEvent&&c.rwEvent.name===name)) refreshBoard(false);
-  boardFilter.event=true; boardFilter.cat='all'; boardFilter.aircraft='all'; nav('board');
+  boardFilter.flags='event'; boardFilter.cat='all'; boardFilter.aircraft='all'; nav('board');
 }
 
 /* ---------- WEATHER ---------- */
