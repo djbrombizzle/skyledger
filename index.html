@@ -451,7 +451,7 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
   <header class="top">
     <div><span class="crumb" id="crumb">Dashboard</span> <span class="crumb-sub" id="crumbSub"></span></div>
     <div class="top-spacer"></div>
-    <div class="vat-pill" id="simPill" title="SimConnect flight tracking" style="cursor:pointer" onclick="openSimLink()"><span class="dot off" id="simDot"></span><span id="simTxt">Sim Link</span></div>
+    <div class="vat-pill" id="simPill" title="MSFS SimConnect" style="cursor:pointer" onclick="openSimLink()"><span class="dot off" id="simDot"></span><span id="simTxt">Sim Link</span></div>
     <div class="vat-pill" id="vatPill" title="Live VATSIM network status"><span class="dot off" id="vatDot"></span><span id="vatTxt">VATSIM —</span></div>
     <button class="theme-btn" id="themeBtn" title="Toggle dark / light" onclick="toggleTheme()"></button>
     <div class="zulu" id="zulu">--:--:-- <b>Z</b></div>
@@ -978,7 +978,7 @@ function newGame(name,base){
     tierQual:0,                     // clean charters flown at current top tier
     simUrl:CFG.simUrlDefault,
     simMode:(typeof SkySimConnect!=='undefined'&&SkySimConnect.available())?'direct':'bridge',
-    simConn:{transport:'pipe',pipe:(typeof SkySimConnect!=='undefined'?SkySimConnect.DEFAULT_PIPE:''),host:'localhost',port:2048,protocol:'SunRise'},
+    simConn:{transport:'pipe',pipe:(typeof SkySimConnect!=='undefined'?SkySimConnect.DEFAULT_PIPE:''),host:'localhost',port:2048,protocol:'SunRise',autoDetect:true},
     simbriefUser:'', wxWatch:[],
     pirepCode:genPirepCode(),      // pairing code for the MSFS toolbar PIREP panel
     demand:{}, lastEco:0,          // dynamic outbound-demand economy
@@ -1744,9 +1744,11 @@ function rActive(p){
           <div class="sec-title" style="margin:2px 0 10px">SimConnect tracking</div>
           ${simState.connected
             ? `<div id="simLiveBody"></div><p class="muted" style="font-size:11.5px;margin-top:10px">Fly the open leg — touchdown within 6&nbsp;nm of the destination auto-completes it and grades your landing.</p>`
-            : `${IS_ELECTRON?`<div class="help" style="margin-bottom:11px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span><b>Desktop app</b> — built-in SimConnect. Start MSFS, then connect below (no bridge or MSFS toolbar panel).</span></div>`:''}
-               <p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
-               <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
+            : IS_ELECTRON
+              ? `<p class="muted" style="font-size:12.5px;margin-bottom:11px">${simUserDisconnected?'Auto-link paused.':'MSFS auto-link is on — start the sim and load a flight.'} The status pill at the top shows when you're linked.</p>
+                 ${simUserDisconnected?`<button class="btn sky sm" style="width:100%;justify-content:center" onclick="resumeAutoSim()">Resume auto-link</button>`:''}`
+              : `<p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
+                 <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
         </div>
         ${pirepCard()}
         <div class="card card-pad" id="sbCard">${simbriefCard(c,acm)}</div>
@@ -2406,7 +2408,9 @@ function rRatings(p){
           <div><div class="t mono" style="font-size:13px">${g.route}</div><div class="s">${g.tracked?'Sim Link tracked':'Manual log'} · ${CLASSES[TIERS[g.tier]].label}</div></div>
           <div class="amt">${g.score}</div></div>`).join('')
           :'<div class="muted" style="font-size:13px">No graded flights yet. Connect Sim Link and fly a charter — your landing rate and handling are scored automatically.</div>'}
-        <button class="btn ghost sm" style="width:100%;justify-content:center;margin-top:12px" onclick="openSimLink()">${simState.connected?'Sim Link connected ✓':'Set up Sim Link'}</button>
+        ${IS_ELECTRON
+          ? `<div class="muted" style="font-size:12.5px;margin-top:12px">${simState.connected?'MSFS linked — fly a charter to build your rating record.':(simUserDisconnected?'Auto-link paused. <a onclick="resumeAutoSim()" style="color:var(--sky);cursor:pointer">Resume</a>':'MSFS auto-links when the sim is running.')}</div>`
+          : `<button class="btn ghost sm" style="width:100%;justify-content:center;margin-top:12px" onclick="openSimLink()">${simState.connected?'Sim Link connected ✓':'Set up Sim Link'}</button>`}
       </div>
     </div>`;
 }
@@ -2945,7 +2949,60 @@ const SkySimConnect = (function(){
   return {available, connect, disconnect, DEFAULT_PIPE};
 })();
 
-let simState={connected:false,direct:false,ws:null,url:null,telem:null,phase:'—',legIdx:-1,cap:null,wasAir:false,lastVs:0,reconnect:null};
+let simState={connected:false,direct:false,ws:null,url:null,telem:null,phase:'—',legIdx:-1,cap:null,wasAir:false,lastVs:0,autoBusy:false};
+let simUserDisconnected=false, simAutoTimer=null;
+const SIM_PROTO_LABEL={SunRise:'MSFS 2024',KittyHawk:'MSFS 2020'};
+function simPipeUnreachable(msg){ return /ENOENT|ECONNREFUSED|EADDRNOTAVAIL|cannot find|does not exist|connect.*failed|pipe.*not/i.test(String(msg||'')); }
+function simProtocolsToTry(){
+  const m=S.simConn||{};
+  if(m.autoDetect===false) return [m.protocol||'SunRise'];
+  return ['SunRise','KittyHawk'];
+}
+function tryConnectProtocols(protocols,idx,ctx){
+  if(idx>=protocols.length){
+    simState.autoBusy=false;
+    updateSimPill(IS_ELECTRON?'waiting':'off');
+    if(ctx&&ctx.done) ctx.done(false);
+    return;
+  }
+  const protocol=protocols[idx], prevProto=(S.simConn&&S.simConn.protocol)||'SunRise';
+  if(!S.simConn) S.simConn={};
+  S.simConn.protocol=protocol;
+  updateSimPill('connecting');
+  try{ if(simState.ws)simState.ws.close(); }catch(e){}
+  try{ if(simState.direct)SkySimConnect.disconnect(); }catch(e){}
+  try{
+    SkySimConnect.connect(simDirectOpts(),{
+      telemetry:d=>onTelemetry(d),
+      state:(st,msg)=>{
+        if(st==='open'){
+          S.simConn.protocol=protocol; S.simConn.detected=protocol; save();
+          simState.connected=true; simState.direct=true; simState.autoBusy=false;
+          updateSimPill();
+          if(!ctx||!ctx.quiet) showToast('Linked to '+(SIM_PROTO_LABEL[protocol]||'MSFS'),'good');
+          if(view==='active'||view==='ratings') renderAll();
+          renderSimModal();
+          if(ctx&&ctx.done) ctx.done(true);
+          return;
+        }
+        if(st==='error'){
+          try{ SkySimConnect.disconnect(); }catch(e){}
+          simState.connected=false; simState.direct=false;
+          if(simPipeUnreachable(msg)){
+            S.simConn.protocol=prevProto; simState.autoBusy=false;
+            updateSimPill(IS_ELECTRON?'waiting':'off');
+            if(ctx&&ctx.done) ctx.done(false);
+            return;
+          }
+          tryConnectProtocols(protocols,idx+1,ctx);
+        }else if(st==='close'){
+          simState.connected=false; simState.direct=false; simState.telem=null;
+          updateSimPill(IS_ELECTRON?'waiting':'off'); renderSimModal();
+        }
+      }
+    });
+  }catch(e){ tryConnectProtocols(protocols,idx+1,ctx); }
+}
 function distToApt(lat,lon,ic){const A=APTBY[ic],R=3440.065,r=Math.PI/180;
   const dLa=(A.lat-lat)*r,dLo=(A.lon-lon)*r;
   const x=Math.sin(dLa/2)**2+Math.cos(lat*r)*Math.cos(A.lat*r)*Math.sin(dLo/2)**2;
@@ -2968,31 +3025,40 @@ function simDirectOpts(){
     pipe:m.pipe||SkySimConnect.DEFAULT_PIPE, host:m.host||'localhost', port:m.port||2048};
 }
 /* connect straight to MSFS — no companion process */
-function connectSimDirect(){
+function connectSimDirect(opts){
+  opts=opts||{};
   if(!SkySimConnect.available()){
     showToast('Built-in SimConnect needs a socket-capable host (Electron / NW.js)','bad');
     updateSimPill('off'); return;
   }
-  try{ if(simState.ws)simState.ws.close(); }catch(e){}
-  try{ if(simState.direct)SkySimConnect.disconnect(); }catch(e){}
-  updateSimPill('connecting');
-  try{
-    SkySimConnect.connect(simDirectOpts(),{
-      telemetry:d=>onTelemetry(d),
-      state:(st,msg)=>{
-        if(st==='open'){ simState.connected=true; simState.direct=true; updateSimPill();
-          showToast('SimConnect linked — tracking your flight','good'); renderSimModal();
-          if(view==='active'||view==='ratings') renderAll(); }
-        else { simState.connected=false; simState.direct=false; simState.telem=null; updateSimPill('off');
-          if(st==='error'&&msg) showToast('SimConnect: '+msg,'bad'); renderSimModal(); }
-      }
-    });
-  }catch(e){ updateSimPill('off'); showToast(e.message||'SimConnect error','bad'); }
+  simUserDisconnected=false;
+  simState.autoBusy=true;
+  tryConnectProtocols(simProtocolsToTry(),0,{quiet:!!opts.quiet,done:()=>{simState.autoBusy=false;}});
 }
-function disconnectSim(){
+function connectSimAuto(){
+  if(!IS_ELECTRON||!SkySimConnect.available()) return;
+  if(simState.connected||simState.autoBusy||simUserDisconnected||!S) return;
+  S.simMode='direct';
+  connectSimDirect({quiet:true});
+}
+function startSimAutoLink(){
+  if(!IS_ELECTRON||!SkySimConnect.available()) return;
+  if(simAutoTimer) clearInterval(simAutoTimer);
+  if(!simState.connected&&!simUserDisconnected) updateSimPill('waiting');
+  simAutoTimer=setInterval(connectSimAuto,6000);
+  setTimeout(connectSimAuto,800);
+}
+function resumeAutoSim(){
+  simUserDisconnected=false;
+  connectSimAuto();
+  showToast('MSFS auto-link resumed','good');
+}
+function disconnectSim(manual){
+  if(manual!==false) simUserDisconnected=true;
   if(simState.direct){ try{ SkySimConnect.disconnect(); }catch(e){} }
   else if(simState.ws){ simState.ws.onclose=null; simState.ws.close(); }
-  simState.connected=false; simState.direct=false; simState.telem=null; updateSimPill('off'); renderSimModal();
+  simState.connected=false; simState.direct=false; simState.telem=null; simState.autoBusy=false;
+  updateSimPill(IS_ELECTRON?'waiting':'off'); renderSimModal();
 }
 function onTelemetry(d){
   simState.telem=d;
@@ -3022,14 +3088,25 @@ function onTelemetry(d){
   updateSimPill(); renderSimLive();
 }
 function updateSimPill(force){
-  const dot=$('#simDot'), txt=$('#simTxt'); if(!dot)return;
+  const dot=$('#simDot'), txt=$('#simTxt'), pill=$('#simPill'); if(!dot)return;
   const st=force||(simState.connected?'on':'off');
-  if(st==='connecting'){dot.className='dot';dot.style.background='var(--warn)';txt.textContent='Sim · linking…';return;}
   dot.style.background='';
-  if(st==='off'||!simState.connected){dot.className='dot off';txt.textContent='Sim Link';return;}
+  if(st==='connecting'){dot.className='dot';dot.style.background='var(--warn)';txt.textContent=IS_ELECTRON?'MSFS · linking…':'Sim · linking…';return;}
+  if((st==='waiting'||(st==='off'&&!simState.connected&&IS_ELECTRON&&!simUserDisconnected))){
+    dot.className='dot off'; txt.textContent='MSFS · waiting';
+    if(pill) pill.title='Waiting for MSFS — auto-connecting every few seconds';
+    return;
+  }
+  if(st==='off'||!simState.connected){
+    dot.className='dot off';
+    txt.textContent=IS_ELECTRON?'MSFS · offline':'Sim Link';
+    if(pill) pill.title=IS_ELECTRON?'MSFS not detected — start the sim, or click for link settings':'SimConnect flight tracking';
+    return;
+  }
   dot.className='dot live';
   const tl=simState.telem;
-  txt.textContent=tl?`Sim · ${simState.phase} ${Math.round(tl.gsKt||0)}kt`:'Sim · waiting';
+  txt.textContent=tl?(IS_ELECTRON?'MSFS · ':'Sim · ')+simState.phase+' '+Math.round(tl.gsKt||0)+'kt':(IS_ELECTRON?'MSFS · linked':'Sim · waiting');
+  if(pill) pill.title='Linked to '+(SIM_PROTO_LABEL[(S.simConn&&S.simConn.detected)||'']||'MSFS');
 }
 function renderSimLive(){
   const b=$('#simLiveBody'); if(!b)return;
@@ -3045,16 +3122,51 @@ function renderSimLive(){
     ${cap&&cap.departed?`<div class="muted" style="font-size:11.5px;margin-top:8px">Airborne logged${cap.overspeed?' · ⚠ overspeed':''}${cap.stall?' · ⚠ stall':''}${cap.overstress?' · ⚠ overstress':''} — land within 6&nbsp;nm of destination to auto-complete the leg.</div>`:''}`;
 }
 function openSimLink(){
-  modal(`<div class="modal-head"><div class="eyebrow">SimConnect flight tracking</div><h2>Sim Link</h2>
-    <div class="lead">Stream live data from MSFS so legs auto-complete and your landings are graded for type-rating progress.</div></div>
+  modal(`<div class="modal-head"><div class="eyebrow">${IS_ELECTRON?'MSFS SimConnect':'SimConnect flight tracking'}</div><h2>${IS_ELECTRON?'MSFS Link':'Sim Link'}</h2>
+    <div class="lead">${IS_ELECTRON?'Skyledger links to MSFS automatically when the sim is running. Touchdown auto-completes legs and grades your landings.':'Stream live data from MSFS so legs auto-complete and your landings are graded for type-rating progress.'}</div></div>
     <div class="modal-body" id="simModalBody"></div>`);
   renderSimModal();
 }
 function setSimMode(m){ S.simMode=m; save(); renderSimModal(); }
-function setSimConn(k,v){ if(!S.simConn)S.simConn={}; S.simConn[k]=v; save(); renderSimModal(); }
+function setSimConn(k,v){ if(!S.simConn)S.simConn={}; S.simConn[k]=k==='autoDetect'?!!v:v; save(); renderSimModal(); }
 function simDirectBody(){
   const canDirect=SkySimConnect.available();
   const m=S.simConn||{}, transport=m.transport||'pipe', proto=m.protocol||'SunRise';
+  const detected=m.detected, autoOn=IS_ELECTRON&&m.autoDetect!==false;
+  const adv=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <div class="form-row" style="margin-top:0"><label>Sim version</label>
+        <select class="field" onchange="setSimConn('protocol',this.value)" style="width:100%">
+          <option value="SunRise" ${proto==='SunRise'?'selected':''}>MSFS 2024</option>
+          <option value="KittyHawk" ${proto==='KittyHawk'?'selected':''}>MSFS 2020</option></select></div>
+      <div class="form-row" style="margin-top:0"><label>Transport</label>
+        <select class="field" onchange="setSimConn('transport',this.value)" style="width:100%">
+          <option value="pipe" ${transport==='pipe'?'selected':''}>Named pipe (default)</option>
+          <option value="ipv4" ${transport==='ipv4'?'selected':''}>TCP / IPv4</option></select></div>
+    </div>
+    ${transport==='ipv4'
+      ? `<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px">
+          <div class="form-row" style="margin-top:0"><label>Host</label><input class="field" value="${m.host||'localhost'}" onchange="setSimConn('host',this.value)" style="width:100%"></div>
+          <div class="form-row" style="margin-top:0"><label>Port</label><input class="field mono" type="number" value="${m.port||2048}" onchange="setSimConn('port',+this.value)" style="width:100%"></div>
+        </div>`
+      : `<div class="form-row" style="margin-top:10px"><label>SimConnect pipe</label><input class="field mono" value="${(m.pipe||SkySimConnect.DEFAULT_PIPE).replace(/"/g,'&quot;')}" onchange="setSimConn('pipe',this.value)" style="width:100%;font-size:11.5px"></div>`}`;
+  if(IS_ELECTRON){
+    return `
+      <div class="help" style="margin-top:4px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span><b>Auto-link</b> is ${autoOn?'on':'off'}${detected?` · linked to <b>${SIM_PROTO_LABEL[detected]||detected}</b>`:''}. When MSFS is running, Skyledger connects automatically — no button needed.</span></div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;margin-top:12px;cursor:pointer">
+        <input type="checkbox" ${autoOn?'checked':''} onchange="setSimConn('autoDetect',this.checked);simUserDisconnected=false;startSimAutoLink()"> Auto-detect MSFS 2024 / 2020
+      </label>
+      <div style="display:flex;gap:9px;margin-top:13px">
+        ${simState.connected
+          ? `<button class="btn danger" style="flex:1" onclick="disconnectSim(true)">Disconnect</button>`
+          : simUserDisconnected
+            ? `<button class="btn sky" style="flex:1" onclick="resumeAutoSim()">Resume auto-link</button>
+               <button class="btn ghost" style="flex:1" onclick="connectSimDirect()">Connect now</button>`
+            : `<button class="btn ghost" style="flex:1" onclick="connectSimDirect()">Connect now</button>`}
+      </div>
+      <details style="margin-top:14px"><summary class="muted" style="font-size:12.5px;cursor:pointer">Advanced transport settings</summary>${adv}</details>`;
+  }
   return `
     ${canDirect?'':`<div class="help" style="margin-top:12px;border-style:solid;border-color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
       <span>This page is in a sandboxed browser tab, which can't open MSFS's local SimConnect socket. Open <b class="mono">index.html</b> inside a socket-capable host (Electron / NW.js / WebView2 with Node) to use the built-in client with <b>no extra process</b> — or use the WebSocket bridge tab.</span></div>`}
@@ -3076,7 +3188,7 @@ function simDirectBody(){
       : `<div class="form-row" style="margin-top:10px"><label>SimConnect pipe</label><input class="field mono" value="${(m.pipe||SkySimConnect.DEFAULT_PIPE).replace(/"/g,'&quot;')}" onchange="setSimConn('pipe',this.value)" style="width:100%;font-size:11.5px"></div>`}
     <div style="display:flex;gap:9px;margin-top:13px">
       ${simState.connected
-        ? `<button class="btn danger" style="flex:1" onclick="disconnectSim()">Disconnect</button>`
+        ? `<button class="btn danger" style="flex:1" onclick="disconnectSim(true)">Disconnect</button>`
         : `<button class="btn sky" style="flex:1" ${canDirect?'':'disabled'} onclick="connectSimDirect()">Connect to MSFS</button>`}
     </div>
     <div class="help" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
@@ -3088,7 +3200,7 @@ function simBridgeBody(){
       <input class="field" id="simUrlIn" value="${S.simUrl||CFG.simUrlDefault}" style="width:100%"></div>
     <div style="display:flex;gap:9px;margin-top:13px">
       ${simState.connected
-        ? `<button class="btn danger" style="flex:1" onclick="disconnectSim()">Disconnect</button>`
+        ? `<button class="btn danger" style="flex:1" onclick="disconnectSim(true)">Disconnect</button>`
         : `<button class="btn sky" style="flex:1" onclick="connectSim($('#simUrlIn').value)">Connect</button>`}
     </div>
     <div class="help" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
@@ -3098,15 +3210,15 @@ function renderSimModal(){
   const b=$('#simModalBody'); if(!b)return;
   const direct=(S.simMode||(SkySimConnect.available()?'direct':'bridge'))==='direct';
   b.innerHTML=`
-    <div class="toggle" style="margin-top:4px;width:100%">
+    ${IS_ELECTRON?'':`<div class="toggle" style="margin-top:4px;width:100%">
       <button class="${direct?'on':''}" style="flex:1" onclick="setSimMode('direct')">⚡ Built-in SimConnect</button>
       <button class="${!direct?'on':''}" style="flex:1" onclick="setSimMode('bridge')">🔌 WebSocket bridge</button>
-    </div>
+    </div>`}
     ${direct?simDirectBody():simBridgeBody()}
     <div style="margin-top:14px;padding:12px 14px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:9px"><span class="dot ${simState.connected?'live':'off'}"></span>
-        <b style="font-size:13px">${simState.connected?('Connected'+(simState.direct?' · built-in SimConnect':' · bridge')):'Not connected'}</b></div>
-      <div id="simLiveBody" style="margin-top:10px">${simState.connected?'':'<span class="muted" style="font-size:12.5px">'+(direct?'Start a flight in MSFS, then connect — no extra app needed.':'Start the bridge, then connect.')+'</span>'}</div>
+        <b style="font-size:13px">${simState.connected?('Connected'+(simState.direct?' · '+(SIM_PROTO_LABEL[(S.simConn&&S.simConn.detected)||'']||'MSFS'):' · bridge')):(IS_ELECTRON?'Waiting for MSFS':'Not connected')}</b></div>
+      <div id="simLiveBody" style="margin-top:10px">${simState.connected?'':`<span class="muted" style="font-size:12.5px">${IS_ELECTRON?'Start MSFS and load a flight — auto-link will connect within a few seconds.':(direct?'Start a flight in MSFS, then connect — no extra app needed.':'Start the bridge, then connect.')}</span>`}</div>
     </div>`;
   renderSimLive();
 }
@@ -3569,7 +3681,8 @@ function migrateSave(){
   if(!S.grades)S.grades=[]; if(S.tierQual===undefined)S.tierQual=0;
   if(!S.simUrl)S.simUrl=CFG.simUrlDefault;
   if(!S.simMode)S.simMode=SkySimConnect.available()?'direct':'bridge';
-  if(!S.simConn)S.simConn={transport:'pipe',pipe:SkySimConnect.DEFAULT_PIPE,host:'localhost',port:2048,protocol:'SunRise'};
+  if(!S.simConn)S.simConn={transport:'pipe',pipe:SkySimConnect.DEFAULT_PIPE,host:'localhost',port:2048,protocol:'SunRise',autoDetect:true};
+  if(IS_ELECTRON){ S.simMode='direct'; if(S.simConn.autoDetect===undefined)S.simConn.autoDetect=true; }
   if(!S.wxWatch)S.wxWatch=[]; if(S.simbriefUser===undefined)S.simbriefUser='';
   if(!S.demand)S.demand={}; if(S.lastEco===undefined)S.lastEco=0;
   if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
@@ -3587,6 +3700,7 @@ function resumeGame(){
   refreshUsed(); rentalTick();
   if(Date.now()-(S.lastBoard||0)>20*60e3) refreshBoard(false);
   renderAll();
+  if(IS_ELECTRON) startSimAutoLink();
 }
 function startLocal(){ S=load(); if(S){ resumeGame(); } else { onboard(); } }
 function playOffline(){ hideAuthGate(); startLocal(); }
