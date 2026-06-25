@@ -999,7 +999,7 @@ function newGame(name,base){
     pirepCode:genPirepCode(),      // pairing code for the MSFS toolbar PIREP panel
     demand:{}, lastEco:0,          // dynamic outbound-demand economy
     used:[], lastUsed:0,           // pre-owned aircraft market
-    account:{realName:'',company:'',phone:'',addr1:'',city:'',region:'',postal:'',country:''}  // editable account profile
+    account:{realName:'',company:''}  // editable account profile
   };
   refreshUsed(); refreshBoard(true); save();
 }
@@ -3540,25 +3540,13 @@ function rSettings(p){
   <div class="split" style="grid-template-columns:1fr 1fr;align-items:start">
    <div>
     <div class="card card-pad">
-      <div class="sec-head"><div><div class="eyebrow">Account</div><div class="sec-title">Pilot &amp; contact</div></div></div>
+      <div class="sec-head"><div><div class="eyebrow">Account</div><div class="sec-title">Pilot profile</div></div></div>
       <div class="form-row"><label>Pilot name / callsign</label><input class="field" id="setPilot" value="${esc(S.pilot)}" style="width:100%"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-row"><label>Full name</label><input class="field" id="setReal" value="${esc(a.realName)}" style="width:100%"></div>
         <div class="form-row"><label>Company / flight dept</label><input class="field" id="setCo" value="${esc(a.company)}" style="width:100%"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-row"><label>Email</label><input class="field" id="setEmail" type="email" value="${esc(cloud?(AUTH.user.email||''):'')}" ${cloud?'':'disabled placeholder="offline — connect cloud"'} style="width:100%"></div>
-        <div class="form-row"><label>Phone</label><input class="field" id="setPhone" value="${esc(a.phone)}" style="width:100%"></div>
-      </div>
-      <div class="form-row"><label>Address</label><input class="field" id="setAddr" value="${esc(a.addr1)}" placeholder="Street address" style="width:100%"></div>
-      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
-        <div class="form-row"><label>City</label><input class="field" id="setCity" value="${esc(a.city)}" style="width:100%"></div>
-        <div class="form-row"><label>State / region</label><input class="field" id="setRegion" value="${esc(a.region)}" style="width:100%"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px">
-        <div class="form-row"><label>Postal code</label><input class="field" id="setPostal" value="${esc(a.postal)}" style="width:100%"></div>
-        <div class="form-row"><label>Country</label><input class="field" id="setCountry" value="${esc(a.country)}" style="width:100%"></div>
-      </div>
+      <div class="form-row"><label>Email</label><input class="field" id="setEmail" type="email" value="${esc(cloud?(AUTH.user.email||''):'')}" ${cloud?'':'disabled placeholder="offline — connect cloud"'} style="width:100%"></div>
       <button class="btn brass" style="margin-top:14px" onclick="saveAccount()">Save account</button>
     </div>
     ${cloud?`<div class="card card-pad" style="margin-top:16px">
@@ -3593,6 +3581,11 @@ function rSettings(p){
         <button class="btn ghost sm" onclick="document.getElementById('importSave').onclick()">Import save</button>
         <button class="btn ghost sm" style="color:var(--neg)" onclick="document.getElementById('resetSave').onclick()">Reset pilot</button>
       </div>
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+        <div style="font-weight:600;font-size:13px">Privacy · GDPR</div>
+        <p class="muted" style="font-size:12px;margin:6px 0 10px">Permanently erase your save, profile fields, and cloud records tied to this account or device. This is separate from “Reset pilot”, which only clears local progress.</p>
+        <button class="btn danger sm" onclick="openGdprDelete()">Delete all my data</button>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
         <div><div style="font-weight:600;font-size:13px">Admin tools (this device)</div>
           <div class="muted" style="font-size:11.5px">Unlock the Admin console locally for testing.</div></div>
@@ -3604,14 +3597,63 @@ function rSettings(p){
 }
 function saveAccount(){
   S.pilot=($('#setPilot').value||'').trim()||S.pilot;
-  S.account={realName:$('#setReal').value.trim(),company:$('#setCo').value.trim(),phone:$('#setPhone').value.trim(),
-    addr1:$('#setAddr').value.trim(),city:$('#setCity').value.trim(),region:$('#setRegion').value.trim(),
-    postal:$('#setPostal').value.trim(),country:$('#setCountry').value.trim()};
+  S.account={realName:$('#setReal').value.trim(),company:$('#setCo').value.trim()};
   save(); renderTop();
   const cloud=cloudEnabled()&&AUTH.user, newEmail=($('#setEmail')&&$('#setEmail').value||'').trim();
   if(cloud && newEmail && newEmail!==AUTH.user.email) updateEmail(newEmail);
   else showToast('Account saved','good');
   renderAll();
+}
+const SKY_LOCAL_KEYS=[KEY,THEME_KEY,'sky_supa_url','sky_supa_anon','sky_admin_dev','sky_admin_catalog'];
+function wipeLocalSkyData(){
+  SKY_LOCAL_KEYS.forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} });
+}
+async function deleteCloudUserData(uid,pirepCode){
+  const sb=getSB(); if(!sb||!uid) return;
+  const wipe=async(table,col,val)=>{ try{ await sb.from(table).delete().eq(col,val); }catch(e){} };
+  await wipe('saves','user_id',uid);
+  await wipe('profiles','id',uid);
+  await wipe('activity','user_id',uid);
+  if(pirepCode) await wipe('pireps','code',pirepCode);
+  try{ await sb.rpc('delete_my_account'); }catch(e){}
+}
+function openGdprDelete(){
+  const cloud=cloudEnabled()&&AUTH.user;
+  modal(`<div class="modal-head">
+      <div class="eyebrow" style="color:var(--neg)">Privacy · GDPR</div>
+      <h2>Delete all my data</h2>
+      <div class="lead">Permanent erasure of your Skyledger profile, save game, and any cloud records stored for this service.</div></div>
+    <div class="modal-body">
+      <div class="help" style="border-color:var(--neg-soft);background:var(--neg-soft);margin-bottom:14px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <span><b>This cannot be undone.</b> You will lose all progress and linked records.</span></div>
+      <ul style="margin:0 0 14px 18px;font-size:13px;color:var(--muted);line-height:1.55">
+        <li>Local save on this device (pilot, fleet, ledger, preferences)</li>
+        ${cloud?`<li>Cloud save, leaderboard profile, and community activity tied to <b>${esc(AUTH.user.email)}</b></li>
+        <li>Sign-in account removal (where supported by the backend)</li>`
+        :`<li>Locally stored theme, Supabase config overrides, and admin test flags</li>`}
+      </ul>
+      <label style="display:flex;gap:10px;align-items:flex-start;font-size:13px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="gdprAck" style="margin-top:3px">
+        <span>I understand this is <b>permanent</b> and I want all of my Skyledger data erased.</span></label>
+      <div class="form-row"><label>Type <b class="mono">DELETE</b> to confirm</label>
+        <input class="field mono" id="gdprConfirm" placeholder="DELETE" style="width:100%" autocomplete="off"></div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn ghost" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn danger" style="flex:1;justify-content:center" onclick="executeGdprDelete()">Delete everything</button>
+      </div>
+    </div>`);
+}
+async function executeGdprDelete(){
+  const ack=$('#gdprAck'), typed=($('#gdprConfirm')&&$('#gdprConfirm').value||'').trim();
+  if(!ack||!ack.checked) return showToast('Please confirm you understand this is permanent','bad');
+  if(typed!=='DELETE') return showToast('Type DELETE to confirm','bad');
+  closeModal();
+  const uid=AUTH.user&&AUTH.user.id, pirep=S&&S.pirepCode, cloud=cloudEnabled()&&uid;
+  if(cloud) await deleteCloudUserData(uid,pirep);
+  wipeLocalSkyData();
+  if(cloud){ try{ const sb=getSB(); if(sb) await sb.auth.signOut(); }catch(e){} }
+  location.reload();
 }
 async function updateEmail(email){
   const sb=getSB(); if(!sb)return;
@@ -3891,7 +3933,8 @@ function migrateSave(){
   if(!S.demand)S.demand={}; if(S.lastEco===undefined)S.lastEco=0;
   if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
   if(!S.pirepCode)S.pirepCode=genPirepCode();
-  if(!S.account)S.account={realName:'',company:'',phone:'',addr1:'',city:'',region:'',postal:'',country:''};
+  if(!S.account)S.account={realName:'',company:''};
+  else S.account={realName:S.account.realName||'',company:S.account.company||''};
   if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now()}); }
   if(S.fbo!==undefined)delete S.fbo;
   if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
