@@ -656,12 +656,12 @@ async function fetchRadar(){
 }
 
 const CLASSES = {
-  turboprop:{label:'Turboprop',  hourly:1800,  tier:0},
-  light:    {label:'Light Jet',  hourly:3500,  tier:1},
-  midsize:  {label:'Midsize Jet',hourly:4700,  tier:2},
-  supermid: {label:'Super-Mid',  hourly:6000,  tier:3},
-  heavy:    {label:'Heavy Jet',  hourly:10000, tier:4},
-  ulr:      {label:'Ultra-Long', hourly:13000, tier:5},
+  turboprop:{label:'Turboprop',  hourly:1800,  tier:0, minRwy:1500},
+  light:    {label:'Light Jet',  hourly:3500,  tier:1, minRwy:3500},
+  midsize:  {label:'Midsize Jet',hourly:4700,  tier:2, minRwy:4500},
+  supermid: {label:'Super-Mid',  hourly:6000,  tier:3, minRwy:5500},
+  heavy:    {label:'Heavy Jet',  hourly:10000, tier:4, minRwy:6500},
+  ulr:      {label:'Ultra-Long', hourly:13000, tier:5, minRwy:7500},
 };
 const CAT = {
   exec:     {label:'Executive',      mult:1.00},
@@ -713,62 +713,56 @@ const AIRCRAFT = [
 ];
 const ACBY = Object.fromEntries(AIRCRAFT.map(a=>[a.id,a]));
 
-/* ---------- AIRPORT DATABASE (curated bizav network) ---------- */
-/* [icao, name, lat, lon, class s|m|i, region] */
-const APT = [
-  ['KSDF','Louisville',38.174,-85.736,'m','NA'],['KTEB','Teterboro',40.850,-74.061,'m','NA'],
-  ['KHPN','Westchester',41.067,-73.708,'m','NA'],['KBOS','Boston Logan',42.366,-71.010,'i','NA'],
-  ['KBED','Bedford',42.470,-71.289,'s','NA'],['KMMU','Morristown',40.799,-74.415,'s','NA'],
-  ['KFRG','Farmingdale',40.728,-73.413,'s','NA'],['KDCA','Washington Natl',38.852,-77.038,'m','NA'],
-  ['KIAD','Dulles',38.953,-77.456,'i','NA'],['KPDK','Atlanta DeKalb',33.876,-84.302,'m','NA'],
-  ['KATL','Atlanta',33.640,-84.427,'i','NA'],['KMIA','Miami',25.793,-80.291,'i','NA'],
-  ['KOPF','Opa-Locka',25.907,-80.278,'m','NA'],['KFLL','Ft Lauderdale',26.072,-80.153,'i','NA'],
-  ['KPBI','West Palm Beach',26.683,-80.096,'m','NA'],['KTPA','Tampa',27.975,-82.533,'m','NA'],
-  ['KORL','Orlando Exec',28.545,-81.333,'s','NA'],['KLAS','Las Vegas',36.080,-115.152,'i','NA'],
-  ['KVNY','Van Nuys',34.209,-118.490,'m','NA'],['KLAX','Los Angeles',33.942,-118.408,'i','NA'],
-  ['KSNA','John Wayne',33.676,-117.868,'m','NA'],['KBUR','Burbank',34.201,-118.358,'m','NA'],
-  ['KSFO','San Francisco',37.619,-122.375,'i','NA'],['KSJC','San Jose',37.363,-121.929,'m','NA'],
-  ['KOAK','Oakland',37.721,-122.221,'m','NA'],['KASE','Aspen',39.223,-106.869,'s','NA'],
-  ['KEGE','Eagle / Vail',39.643,-106.918,'s','NA'],['KJAC','Jackson Hole',43.607,-110.738,'s','NA'],
-  ['KAPA','Denver Centennial',39.570,-104.849,'m','NA'],['KDEN','Denver',39.862,-104.673,'i','NA'],
-  ['KSLC','Salt Lake City',40.788,-111.978,'i','NA'],['KSCF','Scottsdale',33.623,-111.911,'s','NA'],
-  ['KPHX','Phoenix',33.434,-112.012,'i','NA'],['KDAL','Dallas Love',32.847,-96.852,'m','NA'],
-  ['KADS','Addison',32.969,-96.836,'s','NA'],['KDFW','Dallas Ft Worth',32.897,-97.038,'i','NA'],
-  ['KHOU','Houston Hobby',29.645,-95.279,'m','NA'],['KIAH','Houston Intl',29.984,-95.341,'i','NA'],
-  ['KAUS','Austin',30.197,-97.666,'m','NA'],['KMDW','Chicago Midway',41.786,-87.752,'m','NA'],
-  ['KORD',"Chicago O'Hare",41.978,-87.905,'i','NA'],['KPWK','Chicago Exec',42.114,-87.901,'s','NA'],
-  ['KSEA','Seattle',47.450,-122.309,'i','NA'],['KBFI','Boeing Field',47.530,-122.302,'m','NA'],
-  ['KPDX','Portland',45.589,-122.597,'i','NA'],['KISP','Long Island MacArthur',40.795,-73.100,'s','NA'],
-  ['CYYZ','Toronto Pearson',43.677,-79.625,'i','NA'],['CYUL','Montreal',45.470,-73.741,'i','NA'],
-  ['CYVR','Vancouver',49.195,-123.182,'i','NA'],['CYYC','Calgary',51.114,-114.020,'i','NA'],
-  ['EGLL','London Heathrow',51.470,-0.461,'i','EU'],['EGGW','London Luton',51.875,-0.368,'m','EU'],
-  ['EGLF','Farnborough',51.276,-0.776,'m','EU'],['EGKB','Biggin Hill',51.331,0.033,'s','EU'],
-  ['EGTK','Oxford',51.837,-1.320,'s','EU'],['LFPB','Paris Le Bourget',48.969,2.441,'m','EU'],
-  ['LFPG','Paris CDG',49.010,2.548,'i','EU'],['LFMN','Nice',43.658,7.216,'i','EU'],
-  ['LSGG','Geneva',46.238,6.109,'i','EU'],['LSZH','Zurich',47.458,8.555,'i','EU'],
-  ['EDDM','Munich',48.354,11.786,'i','EU'],['EDDF','Frankfurt',50.037,8.562,'i','EU'],
-  ['LEMD','Madrid',40.472,-3.561,'i','EU'],['LEBL','Barcelona',41.297,2.078,'i','EU'],
-  ['LEPA','Palma',39.551,2.739,'m','EU'],['LIML','Milan Linate',45.445,9.277,'m','EU'],
-  ['LIRA','Rome Ciampino',41.799,12.595,'m','EU'],['EHAM','Amsterdam',52.309,4.764,'i','EU'],
-  ['LOWW','Vienna',48.110,16.570,'i','EU'],['LGAV','Athens',37.937,23.945,'i','EU'],
-  ['LTFM','Istanbul',41.262,28.742,'i','EU'],['OMDB','Dubai',25.253,55.364,'i','ME'],
-  ['OMDW','Dubai World Ctrl',24.896,55.161,'m','ME'],['OTHH','Doha',25.273,51.608,'i','ME'],
-  ['OERK','Riyadh',24.958,46.699,'i','ME'],['VHHH','Hong Kong',22.308,113.918,'i','AS'],
-  ['RJTT','Tokyo Haneda',35.552,139.780,'i','AS'],['RJAA','Tokyo Narita',35.765,140.386,'i','AS'],
-  ['WSSS','Singapore',1.357,103.989,'i','AS'],['VTBS','Bangkok',13.681,100.747,'i','AS'],
-  ['YSSY','Sydney',-33.946,151.177,'i','OC'],['YMML','Melbourne',-37.673,144.843,'i','OC'],
-  ['FAOR','Johannesburg',-26.139,28.246,'i','AF'],['MMMX','Mexico City',19.436,-99.072,'i','NA'],
-  ['MMTO','Toluca',19.337,-99.566,'m','NA'],['SBGR','São Paulo GRU',-23.432,-46.469,'i','SA'],
-  ['SBSP','São Paulo Congonhas',-23.626,-46.656,'m','SA'],['SBJR','Rio Jacarepaguá',-22.987,-43.370,'s','SA'],
-  ['SCEL','Santiago',-33.393,-70.785,'i','SA'],['SAEZ','Buenos Aires',-34.822,-58.536,'i','SA'],
-  ['KDAB','Daytona Beach',29.180,-81.058,'m','NA'],['KOSH','Oshkosh Wittman',43.984,-88.557,'s','NA'],
-  ['KLAL','Lakeland Linder',27.989,-82.019,'s','NA'],['KAGS','Augusta',33.370,-81.964,'m','NA'],
-  ['KIND','Indianapolis',39.717,-86.294,'i','NA'],['KRNO','Reno-Tahoe',39.499,-119.768,'m','NA'],
-  ['KFXE','Ft Lauderdale Exec',26.197,-80.171,'s','NA'],['KPSP','Palm Springs',33.829,-116.507,'m','NA'],
-  ['KMRY','Monterey',36.587,-121.843,'s','NA'],['LSZS','Samedan / St Moritz',46.534,9.884,'s','EU'],
+/* ---------- AIRPORT DATABASE (OurAirports · hard runway ≥1500 ft) ---------- */
+/* Tuple: [icao, name, lat, lon, cls s|m|i, region, max_hard_rwy_ft] */
+let APT = [];
+let APTBY = {};
+const HUB_ICAO = ['KTEB','KVNY','KPDK','KOPF','LFPB','EGLF','LSGG','OMDB','KAPA','KDAL','KSDF','KHPN','KSCF','KBED','EGKB'];
+let HUBS = [];
+const FALLBACK_APT = [
+  ['KSDF','Louisville',38.174,-85.736,'m','NA',10000],['KTEB','Teterboro',40.850,-74.061,'m','NA',7000],
+  ['KHPN','Westchester',41.067,-73.708,'m','NA',6549],['KBOS','Boston Logan',42.366,-71.010,'i','NA',10000],
+  ['KATL','Atlanta',33.640,-84.427,'i','NA',11890],['KMIA','Miami',25.793,-80.291,'i','NA',13016],
+  ['KLAS','Las Vegas',36.080,-115.152,'i','NA',14510],['KVNY','Van Nuys',34.209,-118.490,'m','NA',8000],
+  ['KLAX','Los Angeles',33.942,-118.408,'i','NA',12091],['KDEN','Denver',39.862,-104.673,'i','NA',16000],
+  ['KDFW','Dallas Ft Worth',32.897,-97.038,'i','NA',13401],['KORD',"Chicago O'Hare",41.978,-87.905,'i','NA',13000],
+  ['KSEA','Seattle',47.450,-122.309,'i','NA',11900],['EGLL','London Heathrow',51.470,-0.461,'i','EU',12802],
+  ['LFPB','Paris Le Bourget',48.969,2.441,'m','EU',9843],['LSGG','Geneva',46.238,6.109,'i','EU',12795],
+  ['OMDB','Dubai',25.253,55.364,'i','ME',13124],['VHHH','Hong Kong',22.308,113.918,'i','AS',12467],
 ];
-const APTBY = Object.fromEntries(APT.map(a=>[a[0],{icao:a[0],name:a[1],lat:a[2],lon:a[3],cls:a[4],region:a[5]}]));
-const HUBS = ['KTEB','KVNY','KPDK','KOPF','LFPB','EGLF','LSGG','OMDB','KAPA','KDAL','KSDF','KHPN','KSCF','KBED','EGKB'];
+function buildAptIndex(rows){
+  APT=rows||[];
+  APTBY=Object.fromEntries(APT.map(a=>[a[0],{icao:a[0],name:a[1],lat:a[2],lon:a[3],cls:a[4],region:a[5],rwy:a[6]||1500}]));
+  HUBS=HUB_ICAO.filter(h=>APTBY[h]);
+}
+function runwayFt(ic){ return (APTBY[ic]&&APTBY[ic].rwy)||0; }
+function runwayOk(ic,cls){ const c=CLASSES[cls]; return c&&runwayFt(ic)>=c.minRwy; }
+function capClassByRunway(dep,arr,cls){
+  let t=CLASSES[cls]?CLASSES[cls].tier:0;
+  while(t>=0){ const k=TIERS[t]; if(runwayOk(dep,k)&&runwayOk(arr,k)) return k; t--; }
+  return null;
+}
+function onboardingBases(){
+  const hubs=new Set(HUBS);
+  return APT.filter(a=>hubs.has(a[0])||a[4]==='i').sort((a,b)=>a[0].localeCompare(b[0]));
+}
+let _aptReady=null;
+function loadAirportDB(){
+  if(_aptReady) return _aptReady;
+  _aptReady=(async()=>{
+    try{
+      const r=await fetch('data/airports.json',{cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      buildAptIndex(await r.json());
+      console.log('Skyledger airports loaded:',APT.length);
+    }catch(e){
+      console.warn('Airport DB fetch failed — using fallback network',e);
+      buildAptIndex(FALLBACK_APT);
+    }
+  })();
+  return _aptReady;
+}
+buildAptIndex(FALLBACK_APT);
 
 /* =========================================================================
    REAL-WORLD EVENTS — these drive the charter market (demand spikes + themed
@@ -1184,6 +1178,14 @@ function weightedArr(from){
 }
 function genCharter(forceDep,opts){
   opts=opts||{};
+  for(let n=0;n<32;n++){
+    const c=_genCharterOnce(forceDep,opts);
+    if(c) return c;
+  }
+  return null;
+}
+function _genCharterOnce(forceDep,opts){
+  opts=opts||{};
   let dep = forceDep || weightedOrigin();
   let arr;
   if(opts.arrTo){ arr=opts.arrTo; dep=forceDep||weightedArr(arr); }
@@ -1215,7 +1217,6 @@ function genCharter(forceDep,opts){
   else if(cat==='group'){ /* big groups need a bigger cabin */ if(CLASSES[cls].tier<2&&Math.random()<0.5)cls=pick(['midsize','supermid']); }
   // optional caps so the board can guarantee charters a given aircraft can actually fly
   if(opts.capTier!=null && CLASSES[cls].tier>opts.capTier){ cls=TIERS[opts.capTier]; if(cat==='sports')cat=pick(['attendee','group','exec','family']); }
-  const tier=CLASSES[cls].tier;
   // ---- passenger count, sized to the category & cabin ----
   let pax;
   if(cat==='cargo') pax=0;
@@ -1227,6 +1228,10 @@ function genCharter(forceDep,opts){
     pax=Math.min(cap, Math.max(r[0], Math.round(rnd(r[0],r[1]))));
   }
   if(opts.capPax!=null && pax>opts.capPax) pax=opts.capPax;
+  cls=capClassByRunway(dep,arr,cls);
+  if(!cls) return null;
+  if(opts.capTier!=null && CLASSES[cls].tier>opts.capTier){ cls=TIERS[opts.capTier]; if(!runwayOk(dep,cls)||!runwayOk(arr,cls)) return null; }
+  const tier=CLASSES[cls].tier;
   // ---- hourly charter pricing (realistic) × demand × category, with a 1.0h minimum ----
   const acmRef=AIRCRAFT.find(a=>a.cls===cls)||AIRCRAFT[0];
   const block=dist/acmRef.cruise+CFG.taxiPad;
@@ -1287,14 +1292,21 @@ function ensureExit(ic){
 }
 /* can any idle aircraft currently fly this charter? (range + rating tier + seats) */
 function fleetCanFly(c){
-  return S.fleet.some(f=>!f.busy && ACBY[f.type].range>=c.dist && CLASSES[ACBY[f.type].cls].tier>=c.tier && ACBY[f.type].pax>=(c.pax||0));
+  return S.fleet.some(f=>{ if(f.busy) return false; const a=ACBY[f.type];
+    return a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
+      && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls); });
 }
 /* generate a charter guaranteed flyable by a specific idle aircraft (right tier, range, seats) */
 function genFlyableFor(f){
   const a=ACBY[f.type], capTier=CLASSES[a.cls].tier;
   let arr=null;
-  for(let t=0;t<40 && !arr;t++){ const cand=weightedArr(f.loc); const d=haversine(f.loc,cand); if(d>=90&&d<=a.range*0.95) arr=cand; }
-  if(!arr){ const inrange=APT.map(x=>x[0]).filter(ic=>ic!==f.loc).map(ic=>[ic,haversine(f.loc,ic)]).filter(x=>x[1]>=90&&x[1]<=a.range*0.95).sort((p,q)=>p[1]-q[1]); arr=inrange.length?inrange[Math.floor(Math.random()*Math.min(8,inrange.length))][0]:null; }
+  for(let t=0;t<40 && !arr;t++){
+    const cand=weightedArr(f.loc); const d=haversine(f.loc,cand);
+    if(d>=90&&d<=a.range*0.95&&runwayOk(cand,a.cls)&&runwayOk(f.loc,a.cls)) arr=cand;
+  }
+  if(!arr){ const inrange=APT.map(x=>x[0]).filter(ic=>ic!==f.loc).map(ic=>[ic,haversine(f.loc,ic)])
+    .filter(x=>x[1]>=90&&x[1]<=a.range*0.95&&runwayOk(x[0],a.cls)&&runwayOk(f.loc,a.cls))
+    .sort((p,q)=>p[1]-q[1]); arr=inrange.length?inrange[Math.floor(Math.random()*Math.min(8,inrange.length))][0]:null; }
   if(!arr) return null;
   return genCharter(f.loc,{arrTo:arr, capTier, capPax:a.pax});
 }
@@ -1331,7 +1343,9 @@ function refreshBoard(full){
 
 /* find best idle aircraft to serve a charter (suitable class+range, prefer at dep) */
 function bestAircraftFor(c){
-  const cand=S.fleet.filter(f=>!f.busy && ACBY[f.type].range>=c.dist && CLASSES[ACBY[f.type].cls].tier>=c.tier && ACBY[f.type].pax>=(c.pax||0));
+  const cand=S.fleet.filter(f=>{ if(f.busy) return false; const a=ACBY[f.type];
+    return a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
+      && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls); });
   if(!cand.length) return null;
   cand.sort((a,b)=>{
     const da=a.loc===c.dep?0:haversine(a.loc,c.dep), db=b.loc===c.dep?0:haversine(b.loc,c.dep);
@@ -1659,7 +1673,8 @@ function rentalTypeFor(c){ return rentalTypesFor(c)[0]||null; }
    Preference: aircraft in the charter's own class first; if that group can't cover the
    range/seats, widen to larger classes you hold a rating for. Sorted cheapest-first. */
 function rentalTypesFor(c){
-  const fits=a=>a.range>=c.dist && a.pax>=(c.pax||0) && CLASSES[a.cls].tier<=S.maxTier && CLASSES[a.cls].tier>=c.tier;
+  const fits=a=>a.range>=c.dist && a.pax>=(c.pax||0) && CLASSES[a.cls].tier<=S.maxTier && CLASSES[a.cls].tier>=c.tier
+    && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls);
   let group=AIRCRAFT.filter(a=>a.cls===c.cls && fits(a));
   if(!group.length) group=AIRCRAFT.filter(fits);          // widen if the native class can't do it
   return group.sort((x,y)=>x.lease-y.lease);
@@ -2528,7 +2543,9 @@ function injectOperatorCharter(){
   const dep=($('#scDep').value||'').trim().toUpperCase(), arr=($('#scArr').value||'').trim().toUpperCase();
   if(!APTBY[dep]||!APTBY[arr]) return showToast('Enter valid ICAO codes','bad');
   if(dep===arr) return showToast('Departure and destination must differ','bad');
-  const cls=$('#scCls').value||'light', tier=CLASSES[cls].tier;
+  const cls=$('#scCls').value||'light';
+  if(!runwayOk(dep,cls)||!runwayOk(arr,cls)) return showToast('Runway too short for '+CLASSES[cls].label+' at one or both fields','bad');
+  const tier=CLASSES[cls].tier;
   const c=genCharter(dep,{arrTo:arr,capTier:tier});
   const pay=+($('#scPay').value||0); if(pay>0) c.payout=Math.round(pay);
   const client=($('#scClient').value||'').trim();
@@ -2906,6 +2923,7 @@ function rAirport(p){
   const rw=rwAt(ic), d=demandAt(ic);
   const fbos=fbosFor(ic);
   const clsLabel={s:'Regional',m:'Metro',i:'International'}[a.cls]||a.cls;
+  const rwyLabel=a.rwy?`<span class="tag muted-t">${a.rwy.toLocaleString()} ft paved</span>`:'';
   fetchWx([ic]).then(()=>{const el=$('#aptWx');if(el)el.innerHTML=wxStrip(ic);});
   const fleetRowMini=f=>{
     const idle=!f.busy && !(f.rentedUntil&&f.rentedUntil>Date.now());
@@ -2928,7 +2946,7 @@ function rAirport(p){
         <div><div style="font-family:var(--mono);font-weight:700;font-size:30px;line-height:1">${ic}</div>
           <div class="muted" style="font-size:12.5px;margin-top:2px">${a.name}</div></div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
-          <span class="tag cls">${clsLabel}</span><span class="tag muted-t">${a.region}</span>
+          <span class="tag cls">${clsLabel}</span><span class="tag muted-t">${a.region}</span>${rwyLabel}
           ${d>=1.12?`<span class="tag demand">📈 ${demandLevel(d)} demand</span>`:''}
           ${rw?`<span class="tag evt-tag">${rw.icon} ${rw.name}</span>`:''}
           ${ownsFbo(ic)?'<span class="tag ok">★ Your FBO</span>':''}
@@ -2989,7 +3007,7 @@ function openFerry(kind,ref){
   }
   const acm=ACBY[type];
   const dests=APT.map(x=>x[0]).filter(x=>x!==dep&&APTBY[x]).map(x=>[x,haversine(dep,x)]).filter(x=>x[1]>=60).sort((p,q)=>p[1]-q[1]);
-  const inRange=dests.filter(x=>x[1]<=acm.range*0.95);
+  const inRange=dests.filter(x=>x[1]<=acm.range*0.95&&runwayOk(x[0],acm.cls));
   const defDest=((inRange[0]||dests[0])||[null])[0];
   _ferry={kind,ref,type,rate,dep,owned,tail,dest:defDest};
   modal(`
@@ -2999,7 +3017,7 @@ function openFerry(kind,ref){
     <div class="modal-body">
       <div class="form-row" style="margin-top:4px"><label>Destination</label>
         <select class="field" id="ferryDest" onchange="setFerryDest(this.value)" style="width:100%">
-          ${dests.map(([x,dd])=>`<option value="${x}" ${x===defDest?'selected':''} ${dd>acm.range*0.95?'disabled':''}>${x} · ${APTBY[x].name} · ${dd.toLocaleString()}nm${dd>acm.range*0.95?' (out of range)':''}</option>`).join('')}
+          ${dests.map(([x,dd])=>`<option value="${x}" ${x===defDest?'selected':''} ${dd>acm.range*0.95||!runwayOk(x,acm.cls)?'disabled':''}>${x} · ${APTBY[x].name} · ${dd.toLocaleString()}nm${dd>acm.range*0.95?' (out of range)':!runwayOk(x,acm.cls)?' (runway short)':''}</option>`).join('')}
         </select></div>
       <div id="ferryPnl"></div>
       <div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
@@ -3039,6 +3057,7 @@ function launchFerry(){
   if(S.active){ showToast('Finish your active trip first','bad'); return; }
   const {kind,ref,type,rate,dep,dest,owned}=_ferry, acm=ACBY[type];
   if(haversine(dep,dest)>acm.range*0.95){ showToast('Destination is out of range','bad'); return; }
+  if(!runwayOk(dest,acm.cls)||!runwayOk(dep,acm.cls)){ showToast('Runway too short for this aircraft at dep or destination','bad'); return; }
   let ac;
   if(kind==='owned'){
     ac=S.fleet.find(x=>x.id===ref);
@@ -3968,7 +3987,7 @@ $('#resetSave').onclick=()=>{if(confirm('Reset everything and start a new pilot?
 
 /* ---------- ONBOARDING ---------- */
 function onboard(){
-  const aptOpts=APT.map(a=>`<option value="${a[0]}">${a[0]} — ${a[1]}</option>`).join('');
+  const aptOpts=onboardingBases().map(a=>`<option value="${a[0]}">${a[0]} — ${a[1]}</option>`).join('');
   modal(`<div class="modal-head" style="text-align:center;padding-top:30px">
       <div class="brand-mark" style="margin:0 auto 14px;width:50px;height:50px"><svg viewBox="0 0 24 24" fill="none"><path d="M2 13.5L21 3l-4 10.5L21 21l-7-3-7 3 1.5-7.5L2 13.5z" fill="#fff"/></svg></div>
       <div class="eyebrow">Welcome to Skyledger · Step 1 of 2</div>
@@ -4339,13 +4358,19 @@ function rCommunity(p){
 /* =========================================================================
    BOOT
    ========================================================================= */
-document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
-applyTheme(localStorage.getItem(THEME_KEY)||'light');
-tickClock(); setInterval(tickClock,1000);
-{ const so=$('#signOutLink'); if(so)so.onclick=signOut; }
-// Multiplayer-aware boot: cloud sign-in gate when Supabase is configured, else local play.
-if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
-if(cloudEnabled()){ initCloud(); } else { startLocal(); }
+async function boot(){
+  await loadAirportDB();
+  document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
+  applyTheme(localStorage.getItem(THEME_KEY)||'light');
+  tickClock(); setInterval(tickClock,1000);
+  { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
+  if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
+  if(cloudEnabled()){ initCloud(); } else { startLocal(); }
+  pollVat(); setInterval(pollVat,CFG.vatPoll);
+  pollLive(true);
+  setInterval(()=>pollLive(false), 8*60e3);
+}
+boot();
 /* ---- AIRCRAFT RENTAL: idle owned jets listed for rent get picked up by NPC operators ---- */
 function rentalTick(){
   if(!S||!S.fleet) return; const now=Date.now(); let changed=false;
@@ -4366,16 +4391,13 @@ function rentalTick(){
 setInterval(rentalTick, 30e3);
 
 /* live data: VATSIM net, events, weather, radar */
-pollVat(); setInterval(pollVat,CFG.vatPoll);
 async function pollLive(first){
   await fetchEvents();
-  if(S){ refreshBoard(false); }              // fold fresh events into the board
+  if(S){ refreshBoard(false); }
   if(S) await fetchWx(wxAround());
   if(first) await fetchRadar();
   if(S && (view==='events'||view==='weather'||view==='dash'||view==='board')) renderAll();
 }
-pollLive(true);
-setInterval(()=>pollLive(false), 8*60e3);    // refresh events/weather every 8 min
 
 /* auto-pick up PIREPs submitted from the MSFS toolbar panel while a trip is open */
 setInterval(()=>{ if(S&&S.active&&view==='active'&&cloudEnabled()&&AUTH.user&&!(typeof SkySimConnect!=='undefined'&&SkySimConnect.available())) cloudPullPireps(true); }, 15000);
