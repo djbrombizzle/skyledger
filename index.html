@@ -127,11 +127,21 @@ input,select{font-family:inherit;font-size:14px}
 .cash b{font-family:var(--mono);font-weight:700;font-size:16px;color:var(--ink)}
 .cash span{font-size:9.5px;letter-spacing:.14em;color:var(--muted);font-weight:600}
 .pilot-chip{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 12px;border-radius:24px;
-  background:var(--navy);color:#fff}
+  background:var(--navy);color:#fff;cursor:pointer;border:none}
 .pilot-chip .pname{font-size:12.5px;font-weight:600;line-height:1.1}
 .pilot-chip .prank{font-size:9.5px;color:#9db0cb;font-family:var(--mono)}
 .pilot-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--brass),#7d5c1f);
   display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;font-family:var(--disp)}
+.pilot-menu{position:relative}
+.pilot-drop{position:absolute;top:calc(100% + 8px);right:0;min-width:240px;background:var(--surface);color:var(--ink);
+  border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);z-index:300;padding:6px}
+.pilot-drop-hd{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;
+  padding:8px 12px 4px;font-family:var(--mono)}
+.pilot-drop-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:10px 12px;
+  border-radius:8px;font-size:13px;text-align:left;background:none;border:none;color:inherit}
+.pilot-drop-item:hover{background:var(--surface-2)}
+.pilot-drop-item.on{background:var(--surface-2);font-weight:600}
+.pilot-drop-item .sub{font-size:11px;color:var(--muted);font-weight:400}
 
 /* MAIN */
 .main{grid-area:main;overflow-y:auto;padding:24px 26px 60px}
@@ -421,24 +431,27 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
       <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M2 13.5L21 3l-4 10.5L21 21l-7-3-7 3 1.5-7.5L2 13.5z" fill="#fff"/></svg></div>
       <div><div class="brand-name">SKYLEDGER</div><div class="brand-sub">BIZAV ECONOMY</div></div>
     </div>
-    <div class="nav-label">Operations</div>
-    <a class="nav-item" data-nav="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
-    <a class="nav-item" data-nav="board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h12"/></svg>Charter Board<span class="badge" id="boardBadge">0</span></a>
-    <a class="nav-item" data-nav="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9L2 12z"/></svg>Active Trip<span class="badge" id="activeBadge" style="display:none">1</span></a>
-    <a class="nav-item" data-nav="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>VATSIM Events<span class="badge" id="eventBadge" style="display:none">0</span></a>
-    <a class="nav-item" data-nav="weather"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 18a4 4 0 000-8 6 6 0 00-11.6 1.5A3.5 3.5 0 006 18h11z"/></svg>Weather</a>
-    <a class="nav-item" data-nav="airport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Airports</a>
-    <a class="nav-item" data-nav="community"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Community<span class="badge" id="commBadge" style="display:none">0</span></a>
-    <div class="nav-label">Assets</div>
-    <a class="nav-item" data-nav="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16l9-12 9 12M5 16h14l-2 4H7l-2-4z"/></svg>My Fleet</a>
-    <a class="nav-item" data-nav="market"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-4h16l1 4M4 9v10a1 1 0 001 1h14a1 1 0 001-1V9M3 9h18M9 13h6"/></svg>Marketplace</a>
-    <a class="nav-item" data-nav="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M9 21v-6h2v6M14 11h1M14 15h1M7 11h1M7 15h1"/><path d="M3 21h18"/></svg>Operator</a>
-    <div class="nav-label">Career</div>
-    <a class="nav-item" data-nav="ratings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>Type Ratings<span class="badge" id="ratingBadge" style="display:none">!</span></a>
-    <div class="nav-label">Records</div>
-    <a class="nav-item" data-nav="ledger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>Ledger</a>
-    <a class="nav-item" data-nav="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15"/></svg>Live Map</a>
-    <a class="nav-item" data-nav="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+    <div class="nav-label" data-section="operations">Operations</div>
+    <a class="nav-item" data-nav="dash" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
+    <a class="nav-item" data-nav="board" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h12"/></svg>Charter Board<span class="badge" id="boardBadge">0</span></a>
+    <a class="nav-item" data-nav="active" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9L2 12z"/></svg>Active Trip<span class="badge" id="activeBadge" style="display:none">1</span></a>
+    <a class="nav-item" data-nav="events" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>VATSIM Events<span class="badge" id="eventBadge" style="display:none">0</span></a>
+    <a class="nav-item" data-nav="weather" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 18a4 4 0 000-8 6 6 0 00-11.6 1.5A3.5 3.5 0 006 18h11z"/></svg>Weather</a>
+    <a class="nav-item" data-nav="airport" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Airports</a>
+    <a class="nav-item" data-nav="community" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Community<span class="badge" id="commBadge" style="display:none">0</span></a>
+    <div class="nav-label" id="navAssetsLabel" data-section="operators">Operators</div>
+    <a class="nav-item" data-nav="operator" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M9 21v-6h2v6M14 11h1M14 15h1M7 11h1M7 15h1"/><path d="M3 21h18"/></svg>Operator Dashboard</a>
+    <a class="nav-item" data-nav="fuel" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 12h0M9 16h0M15 12h0M15 16h0"/></svg>Fuel Prices</a>
+    <a class="nav-item" data-nav="spcharter" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>Special Charter Ops</a>
+    <a class="nav-item" data-nav="fboads" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>FBO Advertising</a>
+    <a class="nav-item" data-nav="fleet" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16l9-12 9 12M5 16h14l-2 4H7l-2-4z"/></svg>My Fleet</a>
+    <a class="nav-item" data-nav="market" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-4h16l1 4M4 9v10a1 1 0 001 1h14a1 1 0 001-1V9M3 9h18M9 13h6"/></svg>Marketplace</a>
+    <div class="nav-label" data-section="career">Career</div>
+    <a class="nav-item" data-nav="ratings" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>Type Ratings<span class="badge" id="ratingBadge" style="display:none">!</span></a>
+    <div class="nav-label" data-section="records">Records</div>
+    <a class="nav-item" data-nav="ledger" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>Ledger</a>
+    <a class="nav-item" data-nav="map" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15"/></svg>Live Map</a>
+    <a class="nav-item" data-nav="settings" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
     <a class="nav-item" data-nav="admin" id="navAdmin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>Admin<span class="badge" id="adminBadge" style="display:none;background:#b03426">★</span></a>
     <div class="rail-foot">
       <span id="acctLine" style="display:none">Signed in as <b id="acctEmail" style="color:#8fa0b8"></b> · <a id="signOutLink">Sign out</a><br></span>
@@ -456,9 +469,12 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
     <button class="theme-btn" id="themeBtn" title="Toggle dark / light" onclick="toggleTheme()"></button>
     <div class="zulu" id="zulu">--:--:-- <b>Z</b></div>
     <div class="cash"><b id="cashTop">$0</b><span>CASH ON HAND</span></div>
-    <div class="pilot-chip">
-      <div><div class="pname" id="pilotName">Pilot</div><div class="prank" id="pilotRank">—</div></div>
-      <div class="pilot-av" id="pilotAv">?</div>
+    <div class="pilot-menu" id="pilotMenu">
+      <div class="pilot-chip" id="pilotChipBtn" onclick="togglePilotMenu(event)">
+        <div><div class="pname" id="pilotName">Pilot</div><div class="prank" id="pilotRank">—</div></div>
+        <div class="pilot-av" id="pilotAv">?</div>
+      </div>
+      <div class="pilot-drop" id="pilotDrop" style="display:none"></div>
     </div>
   </header>
 
@@ -1297,6 +1313,51 @@ function bestAircraftFor(c){
   return cand[0];
 }
 
+const ROLE_LABEL={pilot:'Pilot',operator:'Operator',both:'Pilot + Operator'};
+const ROLE_DESC={pilot:'Fly charters & build ratings',operator:'Run fleet, FBOs & charter ops',both:'Full access to everything'};
+function effectiveRole(){ return (S&&S.role)||'both'; }
+function navVisible(navKey){
+  const r=effectiveRole();
+  const el=document.querySelector('.nav-item[data-nav="'+navKey+'"]');
+  const zone=el?el.dataset.zone:'shared';
+  if(r==='both') return true;
+  if(r==='pilot') return zone!=='operator';
+  if(r==='operator') return zone!=='pilot';
+  return true;
+}
+function applyRoleNav(){
+  const r=effectiveRole();
+  const label=$('#navAssetsLabel');
+  if(label) label.textContent=r==='pilot'?'Assets':'Operators';
+  document.querySelectorAll('.nav-item[data-nav]').forEach(el=>{
+    el.style.display=navVisible(el.dataset.nav)?'flex':'none';
+  });
+  document.querySelectorAll('.nav-label[data-section]').forEach(el=>{
+    const sec=el.dataset.section;
+    let show=true;
+    if(sec==='career') show=r!=='operator';
+    if(sec==='operators') show=r!=='pilot';
+    el.style.display=show?'block':'none';
+  });
+  renderPilotMenu();
+}
+function renderPilotMenu(){
+  const drop=$('#pilotDrop'); if(!drop||!S) return;
+  const r=effectiveRole();
+  const mk=(k)=>`<button class="pilot-drop-item ${r===k?'on':''}" onclick="setRole('${k}')">
+    <span>${r===k?'✓ ':''}${ROLE_LABEL[k]}</span><span class="sub">${ROLE_DESC[k]}</span></button>`;
+  drop.innerHTML=`<div class="pilot-drop-hd">Choose how you play</div>${mk('pilot')}${mk('operator')}${mk('both')}`;
+}
+function togglePilotMenu(ev){
+  ev.stopPropagation();
+  const drop=$('#pilotDrop'); if(!drop) return;
+  const open=drop.style.display!=='none';
+  drop.style.display=open?'none':'block';
+  if(!open) renderPilotMenu();
+}
+function closePilotMenu(){ const d=$('#pilotDrop'); if(d)d.style.display='none'; }
+document.addEventListener('click',()=>closePilotMenu());
+
 /* =========================================================================
    ROUTER / RENDER
    ========================================================================= */
@@ -1305,11 +1366,15 @@ const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:
   events:['VATSIM Events','live network'],weather:['Weather','live METAR + radar'],
   airport:['Airport Explorer','charters · aircraft · fees'],
   community:['Community','live network'],
-  fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator',''],
+  fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator Dashboard',''],
+  fuel:['Fuel Prices','global Jet-A trends'],spcharter:['Special Charter Ops','post jobs to the board'],
+  fboads:['FBO Advertising','sponsor events & drive traffic'],
   ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network'],
   settings:['Settings','account & preferences'],admin:['Admin Console','manage the network']};
-function nav(v){ view=v; renderAll(); }
+function nav(v){ if(!navVisible(v)){ showToast('Not available in '+ROLE_LABEL[effectiveRole()]+' mode','bad'); return; } view=v; renderAll(); }
 function renderAll(){
+  applyRoleNav();
+  if(!navVisible(view)) view=effectiveRole()==='operator'?'operator':'dash';
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
   $('#crumb').textContent=CRUMB[view][0]; $('#crumbSub').textContent=CRUMB[view][1];
   $('#boardBadge').textContent=S.board.filter(c=>c.expires>Date.now()).length;
@@ -1321,7 +1386,7 @@ function renderAll(){
   const adminNav=$('#navAdmin'); if(adminNav)adminNav.style.display=isAdmin()?'flex':'none';
   renderTop();
   const p=$('#page');
-  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
+  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,fuel:rFuel,spcharter:rSpecCharter,fboads:rFboAds,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
   if(view==='map') setTimeout(initMap,40);
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
   save();
@@ -1335,7 +1400,8 @@ function upgradeReady(){
 function renderTop(){
   $('#cashTop').textContent=money(S.cash);
   $('#pilotName').textContent=S.pilot;
-  $('#pilotRank').textContent=rankFor(S.rep).toUpperCase();
+  const roleTag=effectiveRole()==='both'?'':(' · '+ROLE_LABEL[effectiveRole()]);
+  $('#pilotRank').textContent=rankFor(S.rep).toUpperCase()+roleTag;
   $('#pilotAv').textContent=S.pilot.trim()[0]?.toUpperCase()||'P';
 }
 
@@ -2171,7 +2237,6 @@ function rOperator(p){
   const nw=netWorth(), pl7=plWindow(7*864e5), util=fleetUtil(), ss=safetyScore();
   const spark=plDaily(14), revTail=util.total?Math.round(pl7.rev/util.total):0;
   const prog = next? Math.max(0,Math.min(1, Math.min((S.fleet||[]).length/next.fleet, S.rep/next.rep, nw/next.worth))) : 1;
-  const roleSeg=(k,lab)=>`<button class="chip ${S.role===k?'on':''}" onclick="setRole('${k}')">${lab}</button>`;
   const kpi=(lab,val,sub,tone)=>`<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">${lab}</div>
     <div class="mono" style="font-size:21px;font-weight:700;margin-top:3px;${tone?`color:var(--${tone})`:''}">${val}</div><div class="muted" style="font-size:11.5px;margin-top:2px">${sub}</div></div>`;
   p.innerHTML=`
@@ -2182,8 +2247,6 @@ function rOperator(p){
           <div style="font-family:var(--disp);font-weight:700;font-size:23px;line-height:1.1">${o.name}</div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span class="tag" style="background:${tier.color};color:#fff">${tier.name}</span>
             <span class="muted" style="font-size:12.5px">${(S.fleet||[]).length} aircraft · ${(S.fbos||[]).length} FBO · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
-        <div style="text-align:right"><div class="muted" style="font-size:11px">Choose how you play</div>
-          <div class="chiprow" style="justify-content:flex-end;margin-top:4px">${roleSeg('pilot','Pilot')}${roleSeg('operator','Operator')}${roleSeg('both','Both')}</div></div>
       </div>
       ${next?`<div style="margin-top:14px">
         <div style="display:flex;justify-content:space-between;font-size:12px"><span class="muted">Progress to <b>${next.name}</b></span>
@@ -2242,7 +2305,148 @@ function rOperator(p){
       </div>
     </div>`;
 }
-function setRole(r){ S.role=r; save(); showToast('Play style: '+({pilot:'Pilot',operator:'Operator',both:'Pilot + Operator'}[r]||r),'good'); renderAll(); }
+function setRole(r){
+  S.role=r; save(); closePilotMenu();
+  applyRoleNav();
+  if(!navVisible(view)) nav(r==='operator'?'operator':'dash');
+  else renderAll();
+  showToast('Playing as '+ROLE_LABEL[r],'good');
+}
+function operOnlyGate(p,msg){
+  if(!S.operator){ p.innerHTML=emptyState('Operator company required','Found your operator company from the Operator Dashboard first.','operator','Open Operator Dashboard'); return true; }
+  if(effectiveRole()==='pilot'){ p.innerHTML=emptyState('Operator mode required','Switch your play style to Operator or Both using your profile menu (top right).'); return true; }
+  return false;
+}
+function tickGlobalFuel(){
+  if(!S.globalFuel) S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
+  Object.keys(S.globalFuel).forEach(k=>{
+    S.globalFuel[k]=Math.max(0.82,Math.min(1.22,S.globalFuel[k]+rnd(-0.018,0.018)));
+  });
+}
+function regionFuelPrice(reg){ const base=FUEL_REGION[reg]||7.8, mult=(S.globalFuel&&S.globalFuel[reg])||1; return +(base*mult).toFixed(2); }
+function rFuel(p){
+  if(operOnlyGate(p)) return;
+  tickGlobalFuel();
+  const regions=Object.keys(FUEL_REGION).map(reg=>{
+    const px=regionFuelPrice(reg), trend=(S.globalFuel[reg]||1);
+    const arrow=trend>1.03?'↑ rising':trend<0.97?'↓ easing':'→ stable';
+    return `<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px">${reg} REGION</div>
+      <div class="mono" style="font-size:22px;font-weight:700;margin-top:4px">$${px.toFixed(2)}<span style="font-size:12px;color:var(--muted)">/gal</span></div>
+      <div class="muted" style="font-size:11.5px;margin-top:4px">${arrow} · wholesale ~$${(px*0.92).toFixed(2)}</div></div>`;
+  }).join('');
+  const hubs=HUBS.map(ic=>{ const a=APTBY[ic]; if(!a)return null;
+    const f=cheapestFuelFbo(ic), dem=demandAt(ic);
+    return {ic,name:a.name,fuel:f.fuel,dem}; }).filter(Boolean).sort((a,b)=>a.fuel-b.fuel);
+  const mine=(S.fbos||[]).map(f=>{ const a=APTBY[f.ic]; return a?{ic:f.ic,name:a.name,fuel:f.fuel,mine:true,dem:demandAt(f.ic)}:null; }).filter(Boolean);
+  const row=(x)=>`<tr><td class="mono" style="font-weight:600">${x.ic}</td><td class="muted">${x.name}</td>
+    <td class="amt">$${x.fuel.toFixed(2)}</td><td>${x.mine?'<span class="tag ok">Your FBO</span>':demandLevel(x.dem)}</td></tr>`;
+  p.innerHTML=`
+    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>Global Jet-A benchmarks by region. Your FBO retail pricing and competitor fields feed the live charter economy — cheap fuel spawns traffic; dear fuel widens margin.</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px">${regions}</div>
+    <div class="split">
+      <div class="card card-pad"><div class="sec-head"><div><div class="eyebrow">Market scan</div><div class="sec-title">Cheapest hub fuel</div></div></div>
+        <table class="led"><thead><tr><th>ICAO</th><th>Field</th><th style="text-align:right">Jet-A</th><th>Demand</th></tr></thead>
+          <tbody>${hubs.slice(0,12).map(row).join('')}</tbody></table></div>
+      <div class="card card-pad">${mine.length?`<div class="sec-head"><div><div class="eyebrow">Your network</div><div class="sec-title">FBO pump prices</div></div>
+          <button class="btn ghost sm" onclick="nav('operator')">Manage FBOs</button></div>
+          <table class="led"><thead><tr><th>ICAO</th><th>Field</th><th style="text-align:right">Your price</th><th>Traffic</th></tr></thead>
+          <tbody>${mine.map(row).join('')}</tbody></table>`
+        :`<div class="muted" style="font-size:13px">No FBOs yet — acquire fields from the Operator Dashboard to set pump prices and earn fuel margin.</div>
+          <button class="btn brass sm" style="margin-top:12px" onclick="nav('operator')">Open Operator Dashboard</button>`}</div>
+    </div>`;
+}
+function rSpecCharter(p){
+  if(operOnlyGate(p)) return;
+  const o=S.operator, posted=(S.board||[]).filter(c=>c.operatorPosted);
+  p.innerHTML=`
+    <div class="split" style="grid-template-columns:1fr 1fr;align-items:start">
+      <div class="card card-pad">
+        <div class="sec-head"><div><div class="eyebrow">Charter ops</div><div class="sec-title">Post a special charter</div></div></div>
+        <p class="muted" style="font-size:12.5px;margin-bottom:12px">Inject a bespoke job onto the live charter board. Real pilots (and your own fleet) can accept it like any other posting.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-row" style="margin-top:0"><label>From</label><input class="field mono" id="scDep" maxlength="4" placeholder="KTEB" style="width:100%" oninput="this.value=this.value.toUpperCase()"></div>
+          <div class="form-row" style="margin-top:0"><label>To</label><input class="field mono" id="scArr" maxlength="4" placeholder="KMIA" style="width:100%" oninput="this.value=this.value.toUpperCase()"></div>
+        </div>
+        <div class="form-row"><label>Client / label</label><input class="field" id="scClient" placeholder="${o.name} · VIP movement" style="width:100%"></div>
+        <div class="form-row"><label>Payout override ($)</label><input class="field mono" id="scPay" type="number" placeholder="Auto from market" style="width:100%"></div>
+        <div class="form-row"><label>Class</label>
+          <select class="field" id="scCls" style="width:100%">
+            ${TIERS.map(t=>`<option value="${t}">${CLASSES[t].label}</option>`).join('')}
+          </select></div>
+        <button class="btn brass" style="width:100%;justify-content:center;margin-top:8px" onclick="injectOperatorCharter()">Post to charter board</button>
+      </div>
+      <div class="card card-pad">
+        <div class="sec-head"><div><div class="eyebrow">Live postings</div><div class="sec-title">Your special charters</div></div></div>
+        ${posted.length?posted.map(c=>`<div class="mini" style="margin-bottom:8px">
+          <div class="grade-pill gNA" style="font-size:11px">OP</div>
+          <div><div class="t mono">${c.dep} → ${c.arr}</div><div class="s">${c.client} · ${money(c.payout)} · ${CLASSES[c.cls].label}</div></div>
+          <div class="amt">${c.expires>Date.now()?'open':'expired'}</div></div>`).join('')
+          :'<div class="muted" style="font-size:13px">No operator postings yet.</div>'}
+        <button class="btn ghost sm" style="width:100%;margin-top:12px" onclick="nav('board')">View charter board</button>
+      </div>
+    </div>`;
+}
+function injectOperatorCharter(){
+  const dep=($('#scDep').value||'').trim().toUpperCase(), arr=($('#scArr').value||'').trim().toUpperCase();
+  if(!APTBY[dep]||!APTBY[arr]) return showToast('Enter valid ICAO codes','bad');
+  if(dep===arr) return showToast('Departure and destination must differ','bad');
+  const cls=$('#scCls').value||'light', tier=CLASSES[cls].tier;
+  const c=genCharter(dep,{arrTo:arr,capTier:tier});
+  const pay=+($('#scPay').value||0); if(pay>0) c.payout=Math.round(pay);
+  const client=($('#scClient').value||'').trim();
+  c.client=client||(S.operator.name+' · special charter');
+  c.operatorPosted=true; c.operatorName=S.operator.name;
+  c.hot=true; c.surge=Math.random()<0.35;
+  S.board.push(c);
+  S.ledger.push({t:Date.now(),k:'Posted special charter',a:0,note:c.dep+'→'+c.arr});
+  save(); showToast('Charter posted to the board','good');
+  if(view==='spcharter') rSpecCharter($('#page'));
+  if(view==='board') rBoard($('#page'));
+}
+function rFboAds(p){
+  if(operOnlyGate(p)) return;
+  const o=S.operator, ads=S.fboAds||[], upcoming=rwUpcoming(90), live=rwLive();
+  const myIcs=new Set((S.fbos||[]).map(f=>f.ic));
+  const adRow=(item,isLive)=>{
+    const ics=item.e.apts.filter(ic=>myIcs.has(ic));
+    if(!ics.length) return '';
+    const ic=ics[0], a=APTBY[ic];
+    const sponsored=ads.some(x=>x.event===item.e.name&&x.ic===ic&&x.until>Date.now());
+    const cost=Math.round(35000+item.e.apts.length*8000+(isLive?15000:0));
+    return `<div class="card card-pad" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">${item.e.icon}</span>
+        <div style="flex:1"><div style="font-weight:600">${item.e.name}</div>
+          <div class="muted" style="font-size:12px">${isLive?'LIVE NOW':timeUntil(item.o.start)} · sponsor at <b class="mono">${ic}</b> ${a?a.name:''}</div></div>
+        ${sponsored?'<span class="tag ok">Sponsored</span>'
+          :`<button class="btn brass sm" onclick="sponsorFboAd(${JSON.stringify(item.e.name)},'${ic}',${cost})">Sponsor · ${money(cost)}</button>`}
+      </div></div>`;
+  };
+  p.innerHTML=`
+    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
+      <span>Sponsor real-world style events at fields where you own an FBO. Advertising boosts local demand and spawns extra charter traffic to your field — paid from <b>${o.name}</b> operating cash.</span></div>
+    <div class="sec-head"><div><div class="eyebrow">Live events</div><div class="sec-title">Sponsor now</div></div></div>
+    ${live.length?live.map(x=>adRow(x,true)).join('')||'<div class="muted" style="font-size:13px;margin-bottom:14px">No live events at your FBO locations right now.</div>'
+      :'<div class="muted" style="font-size:13px;margin-bottom:14px">No major events live this week.</div>'}
+    <div class="sec-head" style="margin-top:18px"><div><div class="eyebrow">Pipeline</div><div class="sec-title">Upcoming (90 days)</div></div></div>
+    ${upcoming.length?upcoming.slice(0,10).map(x=>adRow(x,false)).join('')||'<div class="muted">No upcoming events at your FBO airports.</div>'
+      :'<div class="muted">No upcoming events in range.</div>'}
+    ${ads.filter(a=>a.until>Date.now()).length?`<div class="sec-head" style="margin-top:18px"><div class="sec-title">Active campaigns</div></div>
+      ${ads.filter(a=>a.until>Date.now()).map(a=>`<div class="help" style="margin-top:8px"><span><b>${a.event}</b> at <span class="mono">${a.ic}</span> — ${money(a.cost)} · ends ${new Date(a.until).toLocaleDateString()}</span></div>`).join('')}`:''}`;
+}
+function sponsorFboAd(eventName,ic,cost){
+  if(!S.fbos.some(f=>f.ic===ic)) return showToast('You need an FBO at '+ic,'bad');
+  if(S.cash<cost) return showToast('Need '+money(cost),'bad');
+  if((S.fboAds||[]).some(a=>a.event===eventName&&a.ic===ic&&a.until>Date.now())) return showToast('Already sponsoring this event','bad');
+  S.cash-=cost;
+  if(!S.fboAds) S.fboAds=[];
+  S.fboAds.push({event:eventName,ic,cost,until:Date.now()+21*864e5});
+  bumpDemand(ic,0.22);
+  refreshBoard(false);
+  S.ledger.push({t:Date.now(),k:'FBO ad · '+eventName,a:-cost,note:ic});
+  save(); showToast('Sponsored '+eventName+' at '+ic,'good');
+  if(view==='fboads') rFboAds($('#page'));
+}
 function opSpark(arr,w,h){
   const max=Math.max(1,...arr.map(v=>Math.abs(v))), n=arr.length;
   const pts=arr.map((v,i)=>`${(i/(n-1)*w).toFixed(1)},${(h/2-(v/max)*(h/2-3)).toFixed(1)}`).join(' ');
@@ -3691,6 +3895,8 @@ function migrateSave(){
   if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now()}); }
   if(S.fbo!==undefined)delete S.fbo;
   if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
+  if(!S.fboAds)S.fboAds=[];
+  if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
