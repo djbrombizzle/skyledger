@@ -748,17 +748,30 @@ function onboardingBases(){
   return APT.filter(a=>hubs.has(a[0])||a[4]==='i').sort((a,b)=>a[0].localeCompare(b[0]));
 }
 let _aptReady=null;
+function skyRoot(){
+  const p=location.pathname||'/';
+  const i=p.indexOf('/skyledger');
+  if(i>=0) return p.slice(0,i+'/skyledger'.length)+'/';
+  return p.endsWith('/')?p:(p.replace(/\/[^/]*$/,'')||'/')+'/';
+}
+function skyAsset(path){ return skyRoot()+String(path||'').replace(/^\//,''); }
+function fetchWithTimeout(url,opts,ms){
+  opts=opts||{}; ms=ms||15000;
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),ms);
+  return fetch(url,{...opts,signal:ctrl.signal}).finally(()=>clearTimeout(t));
+}
 function loadAirportDB(){
   if(_aptReady) return _aptReady;
   _aptReady=(async()=>{
     try{
-      const r=await fetch('data/airports.json',{cache:'no-store'});
+      const r=await fetchWithTimeout(skyAsset('data/airports.json'),{cache:'no-store'},20000);
       if(!r.ok) throw new Error('HTTP '+r.status);
       buildAptIndex(await r.json());
       console.log('Skyledger airports loaded:',APT.length);
     }catch(e){
       console.warn('Airport DB fetch failed — using fallback network',e);
-      buildAptIndex(FALLBACK_APT);
+      if(APT.length<=FALLBACK_APT.length) buildAptIndex(FALLBACK_APT);
     }
   })();
   return _aptReady;
@@ -813,7 +826,7 @@ function rwTargets(){ const out=[]; rwLive().forEach(({e,o})=>e.apts.forEach(ic=
 /* ---------- HELPERS ---------- */
 const IS_ELECTRON = typeof process!=='undefined' && !!(process.versions&&process.versions.electron);
 let SKY_SHELL_VERSION='', SKY_GAME_VERSION='', SKY_UPDATE_STATUS={state:'idle'};
-const GAME_VERSION_URL='https://djbrombizzle.github.io/skyledger/version.json';
+const GAME_VERSION_URL=()=>skyAsset('version.json');
 function semverCmp(a,b){
   const pa=String(a||'0').split('.').map(Number), pb=String(b||'0').split('.').map(Number);
   for(let i=0;i<3;i++){ const d=(pa[i]||0)-(pb[i]||0); if(d) return d>0?1:-1; }
@@ -831,7 +844,7 @@ async function initDesktopShell(){
 async function checkGameVersion(){
   if(!IS_ELECTRON)return;
   try{
-    const r=await fetch(GAME_VERSION_URL+'?t='+Date.now());
+    const r=await fetchWithTimeout(GAME_VERSION_URL()+'?t='+Date.now(),{},8000);
     if(!r.ok)return;
     const m=await r.json();
     SKY_GAME_VERSION=m.version||'';
@@ -986,7 +999,7 @@ function loadFboDB(){
   if(_fboReady) return _fboReady;
   _fboReady=(async()=>{
     try{
-      const r=await fetch('data/fbos.json',{cache:'no-store'});
+      const r=await fetchWithTimeout(skyAsset('data/fbos.json'),{cache:'no-store'},10000);
       if(!r.ok) throw new Error('HTTP '+r.status);
       FBOBY=await r.json();
       invalidateFboCache();
@@ -4630,12 +4643,15 @@ function rCommunity(p){
    BOOT
    ========================================================================= */
 async function boot(){
-  await Promise.all([loadAirportDB(), loadFboDB()]);
+  const pg=$('#page');
+  if(pg) pg.innerHTML='<div class="empty" style="margin-top:48px"><h3>Loading Skyledger…</h3><p class="muted">Starting up — airport data loads in the background.</p></div>';
   document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
   applyTheme(localStorage.getItem(THEME_KEY)||'light');
   tickClock(); setInterval(tickClock,1000);
   { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
   if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
+  loadAirportDB().then(()=>{ if(S){ refreshBoard(false); renderAll(); } }).catch(()=>{});
+  loadFboDB();
   if(cloudEnabled()){ initCloud(); } else { startLocal(); }
   pollVat(); setInterval(pollVat,CFG.vatPoll);
   pollLive(true);
