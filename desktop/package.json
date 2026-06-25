@@ -41,6 +41,10 @@
       {
         "from": "../data/airports.json",
         "to": "app/data/airports.json"
+      },
+      {
+        "from": "../data/fbos.json",
+        "to": "app/data/fbos.json"
       }
     ],
     "publish": {
