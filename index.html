@@ -776,7 +776,6 @@ function loadAirportDB(){
   })();
   return _aptReady;
 }
-buildAptIndex(FALLBACK_APT);
 
 /* =========================================================================
    REAL-WORLD EVENTS — these drive the charter market (demand spikes + themed
@@ -994,6 +993,7 @@ function baseFbos(ic){
   _fboCache[ic]=out; return out;
 }
 function invalidateFboCache(){ Object.keys(_fboCache).forEach(k=>delete _fboCache[k]); }
+buildAptIndex(FALLBACK_APT);
 let _fboReady=null;
 function loadFboDB(){
   if(_fboReady) return _fboReady;
@@ -1534,6 +1534,7 @@ const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:
   settings:['Settings','account & preferences'],admin:['Admin Console','manage the network']};
 function nav(v){ if(!navVisible(v)){ showToast('Not available in '+ROLE_LABEL[effectiveRole()]+' mode','bad'); return; } view=v; renderAll(); }
 function renderAll(){
+  if(!S) return;
   applyRoleNav();
   if(!navVisible(view)) view=effectiveRole()==='operator'?'operator':'dash';
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
@@ -4463,7 +4464,11 @@ async function initCloud(){
   if(!sb){ showToast('Multiplayer library unavailable — playing offline','bad'); startLocal(); return; }
   sb.auth.onAuthStateChange((event)=>{ if(event==='SIGNED_OUT'){ location.reload(); } });
   try{
-    const {data:{session}}=await sb.auth.getSession();
+    const sess=await Promise.race([
+      sb.auth.getSession(),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('auth timeout')),12000))
+    ]);
+    const session=sess.data&&sess.data.session;
     if(session){ AUTH.session=session; AUTH.user=session.user; await onSignedIn(); }
     else { showAuthGate('signin'); }
   }catch(e){ showAuthGate('signin'); }
@@ -4643,19 +4648,25 @@ function rCommunity(p){
    BOOT
    ========================================================================= */
 async function boot(){
-  const pg=$('#page');
-  if(pg) pg.innerHTML='<div class="empty" style="margin-top:48px"><h3>Loading Skyledger…</h3><p class="muted">Starting up — airport data loads in the background.</p></div>';
-  document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
-  applyTheme(localStorage.getItem(THEME_KEY)||'light');
-  tickClock(); setInterval(tickClock,1000);
-  { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
-  if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
-  loadAirportDB().then(()=>{ if(S){ refreshBoard(false); renderAll(); } }).catch(()=>{});
-  loadFboDB();
-  if(cloudEnabled()){ initCloud(); } else { startLocal(); }
-  pollVat(); setInterval(pollVat,CFG.vatPoll);
-  pollLive(true);
-  setInterval(()=>pollLive(false), 8*60e3);
+  try{
+    const pg=$('#page');
+    if(pg) pg.innerHTML='<div class="empty" style="margin-top:48px"><h3>Loading Skyledger…</h3><p class="muted">Starting up — airport data loads in the background.</p></div>';
+    document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
+    applyTheme(localStorage.getItem(THEME_KEY)||'light');
+    tickClock(); setInterval(tickClock,1000);
+    { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
+    if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
+    loadAirportDB().then(()=>{ if(S){ refreshBoard(false); renderAll(); } }).catch(()=>{});
+    loadFboDB();
+    if(cloudEnabled()){ initCloud(); } else { startLocal(); }
+    pollVat(); setInterval(pollVat,CFG.vatPoll);
+    pollLive(true);
+    setInterval(()=>pollLive(false), 8*60e3);
+  }catch(e){
+    console.error('Skyledger boot failed',e);
+    const pg=$('#page');
+    if(pg) pg.innerHTML=`<div class="empty" style="margin-top:48px"><h3>Startup error</h3><p class="muted">${esc(e&&e.message||String(e))}</p><p class="muted" style="margin-top:12px"><a onclick="playOffline()" style="cursor:pointer;color:var(--sky)">Continue offline</a></p></div>`;
+  }
 }
 boot();
 /* ---- AIRCRAFT RENTAL: idle owned jets listed for rent get picked up by NPC operators ---- */
