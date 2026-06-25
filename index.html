@@ -734,6 +734,7 @@ function buildAptIndex(rows){
   APT=rows||[];
   APTBY=Object.fromEntries(APT.map(a=>[a[0],{icao:a[0],name:a[1],lat:a[2],lon:a[3],cls:a[4],region:a[5],rwy:a[6]||1500}]));
   HUBS=HUB_ICAO.filter(h=>APTBY[h]);
+  invalidateFboCache();
 }
 function runwayFt(ic){ return (APTBY[ic]&&APTBY[ic].rwy)||0; }
 function runwayOk(ic,cls){ const c=CLASSES[cls]; return c&&runwayFt(ic)>=c.minRwy; }
@@ -913,35 +914,86 @@ function nextRank(rep){for(const x of RANKS)if(rep<x.min)return x;return null;}
 const FUEL_REGION = {NA:7.6, EU:9.7, ME:6.6, AS:8.7, OC:8.9, SA:8.1, AF:8.5};   // $/gal base
 const PREMIUM_FIELDS = new Set(['KTEB','KASE','KVNY','KEGE','KJAC','KHPN','KBED','KSCF','KSMO','KPBI',
   'LFPB','LFMN','EGLF','EGKB','EGTK','LSGG','LSZH','LIRA','OMDW','OERK']);
-/* brand: [name, fuelFactor, rampFactor] */
-const FBO_BRANDS = [
-  ['Signature',1.16,1.20],['Atlantic Aviation',1.10,1.10],['Jet Aviation',1.20,1.25],
-  ['Million Air',1.08,1.05],['Sheltair',1.00,0.95],['Ross Aviation',1.05,1.00],
-  ['Clay Lacy',1.18,1.18],['Avflight',0.97,0.92],['TAC Air',1.00,0.98],
-  ['Modern Aviation',1.06,1.02],['Contract Fuel (Avfuel)',0.90,0.85]
-];
-const RAMP_BASE={s:90,m:240,i:430};                       // ramp/handling base by airport class
+/* brand: [name, fuelFactor, rampFactor] — pools used only when no curated FBO list exists */
+const FBO_POOL = {
+  US:[['Signature Flight Support',1.16,1.20],['Atlantic Aviation',1.10,1.10],['Jet Aviation',1.20,1.25],
+    ['Million Air',1.08,1.05],['Sheltair',1.00,0.95],['Ross Aviation',1.05,1.00],['Clay Lacy Aviation',1.18,1.18],
+    ['Avflight',0.97,0.92],['TAC Air',1.00,0.98],['Modern Aviation',1.06,1.02]],
+  CA:[['Skyservice Business Aviation',1.06,1.04],['Shell Aerocentre',1.00,0.98],['ExecuJet',1.12,1.08],
+    ['Imperial Oil Avitat',0.98,0.94],['Esso Avitat',0.96,0.92]],
+  NA_OTHER:[['Avfuel Contract Fuel',0.90,0.85],['World Fuel Services',0.92,0.88],['Airport FBO',1.00,1.00]],
+  EU:[['ExecuJet',1.14,1.12],['Jet Aviation',1.18,1.20],['DC Aviation',1.12,1.10],['Universal Aviation',1.10,1.08],
+    ['Gama Aviation',1.08,1.06],['Swissport Executive',0.95,0.92],['Menzies Aviation',0.93,0.90],['Landmark Aviation',1.06,1.04]],
+  ME:[['Jet Aviation',1.15,1.14],['ExecuJet',1.14,1.12],['DC Aviation',1.12,1.10],['Universal Aviation',1.10,1.08]],
+  AS:[['Jet Aviation',1.12,1.10],['ExecuJet',1.10,1.08],['Metrojet',1.08,1.06],['Universal Aviation',1.06,1.04]],
+  OC:[['Jet Aviation',1.10,1.08],['ExecuJet',1.08,1.06],['Cathay Pacific Services',1.06,1.04],['Inflite',1.00,0.98]],
+  SA:[['Lider Aviação',1.02,0.98],['Universal Aviation',1.06,1.04],['American Jet',1.00,0.96],['Aerus',0.98,0.94]],
+  AF:[['ExecuJet',1.10,1.08],['Jet Aviation',1.12,1.10],['National Aviation Services',0.96,0.94]],
+};
+const FBO_BRAND_IDX={};   // name -> [fuelFactor, rampFactor] for curated lists
+Object.values(FBO_POOL).flat().forEach(b=>{ FBO_BRAND_IDX[b[0]]=[b[1],b[2]]; });
+const RAMP_BASE={s:90,m:240,i:430};
 const SIZE_F={turboprop:0.6,light:1.0,midsize:1.45,supermid:1.9,heavy:2.7,ulr:3.3};
-const LANDING_BASE={s:35,m:120,i:240};                    // movement/landing fee (port authority)
+const LANDING_BASE={s:35,m:120,i:240};
 function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 const _fboCache={};
+let FBOBY={};
+function fboMarket(ic){
+  const a=APTBY[ic]; if(!a)return 'NA_OTHER';
+  if(a.region==='NA'){
+    if(ic.startsWith('K'))return 'US';
+    if(ic.startsWith('C')&&ic.length===4)return 'CA';
+    return 'NA_OTHER';
+  }
+  return a.region in FBO_POOL?a.region:'NA_OTHER';
+}
+function brandFactors(name){
+  const b=FBO_BRAND_IDX[name];
+  return b||[1.0,1.0];
+}
+function fboEntry(ic,name,idx,premium,regBase,clsF,premF){
+  const [ff,rf]=brandFactors(name);
+  const jitter=0.97+(((hashStr(ic+name)>>>(idx*3))%14)/100);
+  return {name,rampF:rf,premium,fuel:+(regBase*clsF*premF*ff*jitter).toFixed(2)};
+}
 function baseFbos(ic){
   if(_fboCache[ic])return _fboCache[ic];
   const a=APTBY[ic]; if(!a){_fboCache[ic]=[];return [];}
-  const h=hashStr(ic), premium=PREMIUM_FIELDS.has(ic);
-  const n = a.cls==='s'?(premium?2:1) : a.cls==='i'?3 : 2;
-  const pool = premium ? FBO_BRANDS.filter(b=>b[2]>=1.04) : FBO_BRANDS;
+  const premium=PREMIUM_FIELDS.has(ic);
   const regBase=FUEL_REGION[a.region]||7.8;
   const clsF=a.cls==='s'?0.96:a.cls==='m'?1.06:1.16;
   const premF=premium?1.34:1.0;
-  const out=[],seen=new Set();
-  for(let i=0;i<pool.length && out.length<n;i++){
-    const b=pool[(h>>>(i*5))%pool.length]; if(seen.has(b[0]))continue; seen.add(b[0]);
-    const jitter=0.95+(((h>>>(i*7))%18)/100);             // 0.95–1.12 deterministic
-    out.push({name:b[0], rampF:b[2], premium, fuel:+(regBase*clsF*premF*b[1]*jitter).toFixed(2)});
+  const curated=(FBOBY[ic]||[]).map(n=>String(n).trim()).filter(Boolean);
+  let out=[];
+  if(curated.length){
+    out=curated.map((name,i)=>fboEntry(ic,name,i,premium,regBase,clsF,premF));
+  } else {
+    const pool=FBO_POOL[fboMarket(ic)]||FBO_POOL.NA_OTHER;
+    const n=a.cls==='s'?(premium?2:1):a.cls==='i'?Math.min(3,pool.length):2;
+    const seen=new Set();
+    for(let i=0;i<pool.length&&out.length<n;i++){
+      const b=pool[(hashStr(ic)>>(i*5))%pool.length];
+      if(seen.has(b[0]))continue; seen.add(b[0]);
+      out.push({name:b[0],rampF:b[2],premium,fuel:+(regBase*clsF*premF*b[1]*(0.95+(((hashStr(ic)>>(i*7))%18)/100))).toFixed(2)});
+    }
   }
-  if(!out.length) out.push({name:'Airport FBO',rampF:1,premium,fuel:+(regBase*clsF*premF).toFixed(2)});
+  if(!out.length) out.push({name:a.cls==='i'?'Executive Terminal':'Airport FBO',rampF:1,premium,fuel:+(regBase*clsF*premF).toFixed(2)});
   _fboCache[ic]=out; return out;
+}
+function invalidateFboCache(){ Object.keys(_fboCache).forEach(k=>delete _fboCache[k]); }
+let _fboReady=null;
+function loadFboDB(){
+  if(_fboReady) return _fboReady;
+  _fboReady=(async()=>{
+    try{
+      const r=await fetch('data/fbos.json',{cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      FBOBY=await r.json();
+      invalidateFboCache();
+      console.log('Skyledger FBO directory loaded:',Object.keys(FBOBY).length,'airports');
+    }catch(e){ console.warn('FBO directory fetch failed — using regional pools',e); FBOBY={}; }
+  })();
+  return _fboReady;
 }
 /* the player's owned FBO at a field (if any) */
 function myFbo(ic){ return (S&&S.fbos||[]).find(f=>f.ic===ic)||null; }
@@ -950,7 +1002,9 @@ function ownsFbo(ic){ return !!myFbo(ic); }
 function fbosFor(ic){
   const base=baseFbos(ic), mine=myFbo(ic);
   if(!mine) return base;
-  return base.concat([{name:(S.operator?S.operator.name:'Your')+' FBO',rampF:mine.rampMult||1,premium:false,fuel:mine.fuel,mine:true}]);
+  const opName=(S.operator&&S.operator.name)?S.operator.name:'Your';
+  const mineEntry={name:opName+' FBO',rampF:mine.rampMult||1,premium:false,fuel:mine.fuel,mine:true,providesFuel:true};
+  return [mineEntry].concat(base.filter(f=>!f.mine));
 }
 function rampFeeFor(ic,fbo,acCls){
   const a=APTBY[ic]; const base=RAMP_BASE[a.cls]*(PREMIUM_FIELDS.has(ic)?2.1:1);
@@ -978,35 +1032,56 @@ function legEcon(dep,arr,ac,fuelPrice,arrRamp){
 }
 const GAL_TO_LB=6.7;
 function fuelGalToLb(gal){ return gal*GAL_TO_LB; }
-function plannedFuelGal(dep,arr,acm,fuelPrice,arrRamp){ return acm.burn*legEcon(dep,arr,acm,fuelPrice,arrRamp).block; }
-function plannedFuelLb(dep,arr,acm,fuelPrice,arrRamp){ return fuelGalToLb(plannedFuelGal(dep,arr,acm,fuelPrice,arrRamp)); }
-function initTripFuel(t,acm){
-  const rev=t.legs.find(l=>l.kind==='revenue'); if(!rev)return;
-  const depFuel=t.fbo?t.fbo.depFuel:null, arrRamp=t.fbo?t.fbo.arrRamp:null;
-  const plannedLb=plannedFuelLb(rev.from,rev.to,acm,depFuel,arrRamp);
-  t.fuel={plannedLb,simbriefLb:null,tankerLb:S.tankerFuelLb||0,adjCost:0,overburnTotal:0};
+function fuelLbToGal(lb){ return lb/GAL_TO_LB; }
+function estFuelGal(dep,arr,acm,fuelPrice,arrRamp){ return acm.burn*legEcon(dep,arr,acm,fuelPrice,arrRamp).block; }
+function estFuelCost(dep,arr,acm,fuelPrice,arrRamp){ const e=legEcon(dep,arr,acm,fuelPrice,arrRamp); return e.fuel; }
+function initTripFuel(t){
+  if(!t||!t.fbo)return;
+  t.fuel={plannedLb:null,pricePerGal:t.fbo.depFuel,tankerLb:S.tankerFuelLb||0};
   t.ofpSynced=false;
 }
 function applySimbriefFuelAdj(t){
   if(!t||!t.fuel||!t.ofp||!t.ofp.fuel)return;
-  const sbLb=+t.ofp.fuel;
-  t.fuel.simbriefLb=sbLb;
-  if(sbLb>t.fuel.plannedLb){
-    const extraGal=(sbLb-t.fuel.plannedLb)/GAL_TO_LB;
-    t.fuel.adjCost=Math.round(extraGal*(t.fbo?t.fbo.depFuel:medFuel(t.charter.dep)));
-  } else t.fuel.adjCost=0;
+  t.fuel.plannedLb=+t.ofp.fuel;
   t.ofpSynced=t.ofp.origin===t.charter.dep&&t.ofp.destination===t.charter.arr;
 }
-function settleLegFuel(leg,t,acm){
-  if(!t.fuel||leg.fuelStartLb==null)return 0;
-  const usedLb=Math.max(0,leg.fuelStartLb-(leg.fuelEndLb!=null?leg.fuelEndLb:leg.fuelStartLb)+(leg.fuelAddedLb||0));
-  leg.fuelUsedLb=usedLb;
-  const planned=leg.kind==='revenue'?t.fuel.plannedLb:plannedFuelLb(leg.from,leg.to,acm);
-  const pricePerLb=(t.fbo&&leg.from===t.charter.dep?t.fbo.depFuel:medFuel(leg.from))/GAL_TO_LB;
-  let over=0;
-  if(usedLb>planned){ over=Math.round((usedLb-planned)*pricePerLb*0.5); t.fuel.overburnTotal=(t.fuel.overburnTotal||0)+over; }
-  if(leg.to===t.charter.arr&&leg.fuelEndLb!=null) S.tankerFuelLb=Math.round(leg.fuelEndLb);
-  return over;
+function legFuelBurnedLb(leg){
+  if(leg.fuelUsedLb!=null) return Math.max(0,leg.fuelUsedLb);
+  if(leg.fuelStartLb!=null&&leg.fuelEndLb!=null)
+    return Math.max(0,leg.fuelStartLb-leg.fuelEndLb+(leg.fuelAddedLb||0));
+  return null;
+}
+function chargeLegFuel(leg,t,acm,e){
+  const priceGal=(t&&t.fbo&&leg.from===t.charter.dep)?t.fbo.depFuel:(e.fuelPrice||medFuel(leg.from));
+  let burnedLb=legFuelBurnedLb(leg);
+  if(leg.kind==='revenue'){
+    if(!burnedLb){
+      if(t&&t.fuel&&t.fuel.plannedLb) burnedLb=t.fuel.plannedLb;
+      else return Math.round(e.fuel||0);
+    }
+    let gal=fuelLbToGal(burnedLb);
+    if(S.tankerFuelLb>0&&t.fuel&&t.fuel.plannedLb){
+      const savedGal=Math.min(fuelLbToGal(S.tankerFuelLb),fuelLbToGal(t.fuel.plannedLb));
+      if(savedGal>0){
+        gal=Math.max(0,gal-savedGal);
+        S.tankerFuelLb=Math.round(Math.max(0,S.tankerFuelLb-savedGal*GAL_TO_LB));
+        S.ledger.push({t:Date.now(),k:`Tanker fuel credit ${leg.from}`,a:Math.round(savedGal*priceGal),note:Math.round(savedGal)+' gal carried'});
+      }
+    }
+    leg.fuelUsedLb=burnedLb; leg.fuelChargedGal=gal;
+    return Math.round(gal*priceGal);
+  }
+  if(!burnedLb) burnedLb=fuelGalToLb(acm.burn*e.block);
+  leg.fuelUsedLb=burnedLb;
+  return Math.round(fuelLbToGal(burnedLb)*priceGal);
+}
+function applyPirepFuelToLeg(leg,cap){
+  if(!leg||!cap)return;
+  if(cap.fuelBurnedLb!=null) leg.fuelUsedLb=Math.max(0,+cap.fuelBurnedLb);
+  else if(cap.fuelStartLb!=null&&cap.fuelEndLb!=null)
+    leg.fuelUsedLb=Math.max(0,+cap.fuelStartLb-+cap.fuelEndLb+(+(cap.fuelAddedLb||0)));
+  if(cap.fuelStartLb!=null) leg.fuelStartLb=+cap.fuelStartLb;
+  if(cap.fuelEndLb!=null) leg.fuelEndLb=+cap.fuelEndLb;
 }
 
 /* ---------- CLIENT NAME GENERATOR ---------- */
@@ -1659,7 +1734,7 @@ function rBoard(p){
       <button class="btn ghost sm" onclick="doRefresh()">Refresh</button>
     </div>
     <div class="help" style="margin-bottom:10px;padding:8px 12px;font-size:11.5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>${sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} METAR dots on ICAO codes.</span></div>
+      <span>${sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
     <div class="board-wrap">
       <table class="board-tbl">
         <colgroup>
@@ -1756,7 +1831,9 @@ function charterRowEcon(c){
   const rev=legEcon(c.dep,c.arr,acm), repE=reposNm?legEcon(plan.ac.loc,c.dep,acm):null;
   const totBlock=rev.block+(repE?repE.block:0);
   const hire=plan.rental?rentalCost(plan.rate,totBlock):(!plan.ac.owned?Math.round(acm.lease*(totBlock/8)):0);
-  const net=c.payout-rev.opcost-(repE?repE.opcost:0)-hire;
+  const opcost=rev.maint+rev.handling+rev.intlNav+(repE?repE.maint+repE.handling+repE.intlNav:0);
+  const fuelEst=rev.fuel+(repE?repE.fuel:0);
+  const net=c.payout-opcost-fuelEst-hire;
   if(plan.rental) return {plan,net,status:'rent',statusLabel:'Rent'};
   if(plan.ready) return {plan,net,status:'ready',statusLabel:'Ready'};
   return {plan,net,status:'repo',statusLabel:reposNm+'nm'};
@@ -1901,7 +1978,7 @@ function openAccept(cid, keep){
       </div>
       <div id="accPnl"></div>
       <div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
-        <span>Pick a cheaper-fuel departure FBO and a lower-handling arrival FBO to protect your margin. Fuel &amp; ramp figures are modelled on real-world ranges (AirNav, GlobalAir, ForeFlight JetFuelX, Avfuel/World Fuel, FBO chains). Fly online on VATSIM for an estimated <b class="pos">+${money(onlineEst)}</b> bonus.</span></div>
+        <span>Pick departure/arrival FBOs for handling fees. Fuel on the board is an <b>estimate</b> only — after you accept, planned fuel comes from your SimBrief OFP; actual burn is charged when you file the PIREP. Fly online on VATSIM for an estimated <b class="pos">+${money(onlineEst)}</b> bonus.</span></div>
       <div style="display:flex;gap:10px;margin-top:18px">
         <button class="btn ghost" onclick="_acc=null;closeModal()" style="flex:1">Cancel</button>
         <button class="btn brass" onclick="acceptCharter()" style="flex:2">Accept &amp; build trip
@@ -1920,8 +1997,9 @@ function accEcon(){
   const repos = ready?null:legEcon(ac.loc,c.dep,acm);   // positioning uses median FBO defaults
   const totBlock=rev.block+(repos?repos.block:0);
   const leaseCost = ac.owned?0 : (ac.rental?rentalCost(ac.rentalRate,totBlock):Math.round(acm.lease*(totBlock/8)));
-  const opcost=rev.opcost+(repos?repos.opcost:0);
-  return {depFuel,arrRamp,rev,repos,totBlock,leaseCost,opcost,net:c.payout-opcost-leaseCost};
+  const opcost=rev.maint+rev.handling+rev.intlNav+(repos?repos.maint+repos.handling+repos.intlNav:0);
+  const fuelEst=rev.fuel+(repos?repos.fuel:0);
+  return {depFuel,arrRamp,rev,repos,totBlock,leaseCost,opcost,fuelEst,net:c.payout-opcost-fuelEst-leaseCost};
 }
 function renderAccPnl(){
   const el=$('#accPnl'); if(!el||!_acc)return;
@@ -1929,7 +2007,7 @@ function renderAccPnl(){
   el.innerHTML=`<div class="pnl" style="margin-top:14px">
       <div class="pnl-row"><span>${c.repo?'Ferry value':'Charter value'}${c.rwEvent?' · '+c.rwEvent.icon+' event demand':c.surge?' · ⚡ surge':''}</span><span class="num pos">${money(c.payout)}</span></div>
       ${e.repos?`<div class="pnl-row"><span>Positioning ${ac.loc}→${c.dep} (${e.repos.dist}nm)</span><span class="num neg">-${money(e.repos.opcost)}</span></div>`:''}
-      <div class="pnl-row"><span>Fuel · ${Math.round(acm.burn*e.rev.block).toLocaleString()} gal @ $${e.depFuel.toFixed(2)}</span><span class="num neg">-${money(e.rev.fuel)}</span></div>
+      <div class="pnl-row"><span>Fuel <span class="muted">(est.)</span> · ${Math.round(acm.burn*e.rev.block).toLocaleString()} gal @ $${e.depFuel.toFixed(2)}</span><span class="num neg">-${money(e.rev.fuel)}</span></div>
       <div class="pnl-row"><span>Maintenance reserve (${e.totBlock.toFixed(1)} blk hrs)</span><span class="num neg">-${money(e.rev.maint+(e.repos?e.repos.maint:0))}</span></div>
       <div class="pnl-row"><span>Ramp + landing @ ${c.arr}${e.rev.intlNav?' + intl/overflight':''}</span><span class="num neg">-${money(e.rev.handling+e.rev.intlNav+(e.repos?e.repos.handling+e.repos.intlNav:0))}</span></div>
       ${e.leaseCost?`<div class="pnl-row"><span>${ac.rental?'Aircraft rental (auto rate)':'Lease &amp; insurance share'}</span><span class="num neg">-${money(e.leaseCost)}</span></div>`:''}
@@ -1951,7 +2029,7 @@ function acceptCharter(){
   ac.busy=true;
   S.active={cid:c.id,acId:ac.id,charter:c,legs,started:Date.now(),verifiedAny:false,rental:!!_acc.rental,
     fbo:{dep:depF[depIdx].name,depFuel:depF[depIdx].fuel,arr:arrF[arrIdx].name,arrRamp:rampFeeFor(c.arr,arrF[arrIdx],acm.cls)}};
-  initTripFuel(S.active,acm);
+  initTripFuel(S.active);
   S.board=S.board.filter(x=>x.id!==c.id);
   _acc=null; closeModal();
   showToast(S.active.rental?'Rental booked — sync SimBrief on the active trip page':'Trip built — sync your SimBrief OFP before flying','good');
@@ -2040,23 +2118,23 @@ function rActive(p){
 }
 function fuelCard(t,c,acm,curLeg){
   const f=t.fuel, tanker=f.tankerLb||0;
-  const plannedGal=(f.plannedLb/GAL_TO_LB).toFixed(0);
-  const sbGal=f.simbriefLb?Math.round(f.simbriefLb/GAL_TO_LB):null;
+  const plannedLb=f.plannedLb;
   const legFuel=curLeg&&curLeg.fuelStartLb!=null;
-  const usedLb=curLeg&&curLeg.fuelUsedLb!=null?curLeg.fuelUsedLb:(legFuel&&simState.telem&&simState.telem.fuelLb!=null?Math.max(0,curLeg.fuelStartLb-simState.telem.fuelLb):null);
+  const burnedLb=curLeg?legFuelBurnedLb(curLeg):null;
+  const liveLb=simState.telem&&simState.telem.fuelLb!=null?simState.telem.fuelLb:null;
   return `<div class="eyebrow">Fuel accounting</div>
-    <div class="sec-title" style="margin:2px 0 10px">Planned vs actual</div>
+    <div class="sec-title" style="margin:2px 0 10px">SimBrief plan vs actual burn</div>
     <div class="tel-grid" style="grid-template-columns:1fr 1fr">
-      <div class="tel"><div class="tk">Charter planned</div><div class="tv">${Math.round(f.plannedLb).toLocaleString()} lb</div></div>
-      <div class="tel"><div class="tk">SimBrief block</div><div class="tv">${sbGal?sbGal.toLocaleString()+' gal':'— sync OFP'}</div></div>
+      <div class="tel"><div class="tk">Planned (SimBrief)</div><div class="tv">${plannedLb?Math.round(plannedLb).toLocaleString()+' lb':'— pull OFP'}</div></div>
+      <div class="tel"><div class="tk">Departure fuel price</div><div class="tv">$${(f.pricePerGal||t.fbo.depFuel).toFixed(2)}/gal</div></div>
       <div class="tel"><div class="tk">Tanker aboard</div><div class="tv">${tanker?Math.round(tanker).toLocaleString()+' lb':'—'}</div></div>
-      <div class="tel"><div class="tk">Sim fuel now</div><div class="tv">${simState.telem&&simState.telem.fuelLb!=null?Math.round(simState.telem.fuelLb).toLocaleString()+' lb':'—'}</div></div>
+      <div class="tel"><div class="tk">Sim fuel now</div><div class="tv">${liveLb!=null?Math.round(liveLb).toLocaleString()+' lb':'—'}</div></div>
     </div>
-    ${f.adjCost?`<div class="help" style="margin-top:10px;border-color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-      <span>SimBrief fuel exceeds charter plan — <b class="neg">+${money(f.adjCost)}</b> uplift cost applied at settlement.</span></div>`:''}
     ${!t.ofpSynced?`<div class="help" style="margin-top:10px;border-color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-      <span><b>Sync SimBrief</b> to this charter before flying — pull your OFP below.</span></div>`:''}
-    ${usedLb!=null?`<div class="muted" style="font-size:11.5px;margin-top:8px">Leg burn so far: ${Math.round(usedLb).toLocaleString()} lb${f.overburnTotal?` · overburn charges ${money(f.overburnTotal)}`:''}</div>`:''}`;
+      <span><b>Sync SimBrief</b> for this route — planned fuel on the active trip is your OFP block fuel in pounds.</span></div>`
+    :`<div class="help" style="margin-top:10px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
+      <span>Planned fuel is <b>${Math.round(plannedLb).toLocaleString()} lb</b> from SimBrief. Actual burn is charged when you file the PIREP (or on landing with Sim Link fuel data).</span></div>`}
+    ${burnedLb!=null?`<div class="muted" style="font-size:11.5px;margin-top:8px">Open leg burn: ${Math.round(burnedLb).toLocaleString()} lb${plannedLb?` · vs plan ${burnedLb>plannedLb?'+' :''}${Math.round(burnedLb-plannedLb).toLocaleString()} lb`:''}</div>`:''}`;
 }
 function simbriefCard(c,acm){
   const o=S.active&&S.active.ofp;
@@ -2077,7 +2155,7 @@ function simbriefCard(c,acm){
       ${o.route?`<div style="margin-top:9px"><div class="muted" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase">Filed route</div>
         <div class="mono" style="font-size:11px;margin-top:3px;word-break:break-word;line-height:1.5">${o.route}</div></div>`:''}
       <div class="help" style="margin-top:11px;${match?'':'border-color:var(--neg)'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${match?'<path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/>':'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>'}</svg>
-        <span>${match?`OFP matches the charter — fuel and timings above reflect your real SimBrief plan.`:`Heads up: your latest SimBrief OFP is <b>${o.origin}→${o.destination}</b>, not this charter's <b>${c.dep}→${c.arr}</b>. Generate a new plan for this route.`}</span></div>
+        <span>${match?`OFP matches the charter — <b>${Math.round(o.fuel).toLocaleString()} lb</b> block fuel becomes your planned fuel for billing.`:`Heads up: your latest SimBrief OFP is <b>${o.origin}→${o.destination}</b>, not this charter's <b>${c.dep}→${c.arr}</b>. Generate a new plan for this route.`}</span></div>
       <div style="display:flex;gap:8px;margin-top:11px">
         <a class="btn ghost sm" style="flex:1;justify-content:center" target="_blank" href="https://dispatch.simbrief.com/options/custom?orig=${c.dep}&dest=${c.arr}&type=${sbType(acm)}">New OFP</a>
         <button class="btn ghost sm" style="flex:1;justify-content:center" onclick="pullOFP(false)">Re-pull</button>
@@ -2125,7 +2203,7 @@ function legRow(l,i,acm){
   return `<div class="leg ${l.done?'done':''} ${active?'active':''}">
     <div class="leg-num">${l.done?'✓':i+1}</div>
     <div style="flex:1"><div class="leg-rt">${l.from} → ${l.to} ${l.verified?'<span class="tag ok" style="margin-left:6px">✓ VATSIM</span>':''}</div>
-      <div class="leg-tag">${l.kind==='position'?'Positioning leg (no revenue)':'Revenue leg'} · ${e.dist}nm · ${e.block.toFixed(1)}h · fuel ${money(e.fuel)}</div></div>
+      <div class="leg-tag">${l.kind==='position'?'Positioning leg (no revenue)':'Revenue leg'} · ${e.dist}nm · ${e.block.toFixed(1)}h · fuel est ${money(e.fuel)}</div></div>
     ${l.done?'<span class="muted" style="font-size:12px">flown</span>':active?'<span class="tag warnt">open</span>':'<span class="muted" style="font-size:12px">queued</span>'}
   </div>`;
 }
@@ -2158,20 +2236,15 @@ function completeLeg(idx,verified,atc,capArg){
   const t=S.active, leg=t.legs[idx], ac=S.fleet.find(f=>f.id===t.acId), acm=ACBY[ac.type];
   if(leg.done)return;
   const e=(leg.kind==='revenue'&&t.fbo)?legEcon(leg.from,leg.to,acm,t.fbo.depFuel,t.fbo.arrRamp):legEcon(leg.from,leg.to,acm);
-  // charge operating costs of the leg now
-  let cost=e.opcost;
-  if(leg.kind==='revenue'&&S.tankerFuelLb>0){
-    const plannedGal=acm.burn*e.block, tankerGal=S.tankerFuelLb/GAL_TO_LB, savedGal=Math.min(tankerGal,plannedGal);
-    const saved=Math.round(savedGal*e.fuelPrice);
-    if(saved){ cost-=saved; S.tankerFuelLb=Math.round(Math.max(0,S.tankerFuelLb-savedGal*GAL_TO_LB));
-      S.ledger.push({t:Date.now(),k:`Tanker fuel credit ${leg.from}`,a:saved,note:Math.round(savedGal)+' gal carried'}); }
-  }
+  let cost=e.maint+e.handling+e.intlNav;
   if(!ac.owned) cost+=ac.rental?rentalCost(ac.rentalRate,e.block):Math.round(acm.lease*(e.block/8));
-  const fuelOver=settleLegFuel(leg,t,acm);
-  if(fuelOver){ cost+=fuelOver; S.ledger.push({t:Date.now(),k:`Fuel overburn ${leg.from}→${leg.to}`,a:-fuelOver,note:'50% local fuel rate'}); }
+  const fuelCost=chargeLegFuel(leg,t,acm,e);
+  cost+=fuelCost;
+  if(leg.to===t.charter.arr&&leg.fuelEndLb!=null) S.tankerFuelLb=Math.round(leg.fuelEndLb);
   S.cash-=cost;
   const ferry=!!(t.charter&&t.charter.ferry);
-  S.ledger.push({t:Date.now(),k:`${ferry?'Ferry':leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-cost,note:acm.name});
+  S.ledger.push({t:Date.now(),k:`${ferry?'Ferry':leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-(cost-fuelCost),note:acm.name});
+  if(fuelCost) S.ledger.push({t:Date.now(),k:`Fuel burn ${leg.from}→${leg.to}`,a:-fuelCost,note:leg.fuelUsedLb?Math.round(leg.fuelUsedLb)+' lb':'actual'});
   leg.done=true; leg.verified=leg.verified||!!verified;
   ac.loc=leg.to; ac.hours+=e.block; ac.cond=Math.max(40,ac.cond-rnd(0.4,1.6));
   S.hours+=e.block; S.nm+=e.dist;
@@ -2199,10 +2272,6 @@ function settleTrip(){
   const ferry=!!c.ferry;
   let payout=ferry?0:c.payout, bonusNote=[];
   if(!ferry && t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
-  if(t.fuel&&t.fuel.adjCost){
-    S.cash-=t.fuel.adjCost;
-    S.ledger.push({t:Date.now(),k:`SimBrief fuel uplift ${c.dep}→${c.arr}`,a:-t.fuel.adjCost,note:'OFP exceeds charter plan'});
-  }
   if(payout){
     S.cash+=payout;
     S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
@@ -2736,6 +2805,7 @@ function setFboFuel(ic,v,liveOnly){
 function sellFbo(ic){
   if(!confirm('Sell your FBO at '+ic+'? You recover 60% of the purchase price.'))return;
   S.fbos=(S.fbos||[]).filter(f=>f.ic!==ic);
+  invalidateFboCache();
   const refund=Math.round(1500000*0.6); S.cash+=refund;
   S.ledger.push({t:Date.now(),k:`Sold FBO ${ic}`,a:refund,note:'60% recovery'}); save(); showToast('FBO sold',' good'.trim()); renderAll();
 }
@@ -2752,29 +2822,44 @@ function operAlerts(){
   if(!al.length) al.push({i:'✅',t:'All nominal. Acquire FBOs and tune fuel pricing to grow your network and bend the market.',tone:'good'});
   return al.slice(0,6);
 }
+function previewFboIc(raw){
+  const el=$('#fboPreview'); if(!el)return;
+  const ic=(raw||'').trim().toUpperCase();
+  if(!ic||ic.length<3){ el.innerHTML=''; return; }
+  if(!APTBY[ic]){ el.innerHTML='<span class="neg">Unknown ICAO</span>'; return; }
+  const a=APTBY[ic], fb=baseFbos(ic).slice(0,3);
+  el.innerHTML=`${a.name} · ${fb.length?fb.map(f=>f.name).join(', '):'regional FBOs'} — your operator FBO will list Jet-A alongside these.`;
+}
 function openBuyFbo(){
   const slots=fboSlots(), have=(S.fbos||[]).length;
+  if(!S.operator) return showToast('Found your operator company first','bad');
   if(have>=slots) return showToast(`${operTier().name} allows ${slots} FBO${slots>1?'s':''} — reach the next tier for more`,'bad');
   if(S.cash<1500000) return showToast('FBOs cost $1,500,000','bad');
   modal(`<div class="modal-head"><div class="eyebrow">Expand network · ${have}/${slots} slots used</div><h2>Acquire an FBO</h2>
-    <div class="lead">Own the fuel &amp; ramp at a field and set your own Jet-A price. You earn margin on every gallon the field's traffic uplifts.</div></div>
+    <div class="lead">Open a fixed-base operation and set Jet-A pricing at any airport in the network. Your FBO <b>provides fuel services</b> to all traffic at that field.</div></div>
     <div class="modal-body">
-      <div class="form-row"><label>Airport ICAO</label><input class="field mono" id="fboIc" placeholder="e.g. KTEB" maxlength="4" value="${esc(S.base)}" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
-      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg><span>Hubs and premium fields see the most traffic. Flat cost of ${money(1500000)}.</span></div>
+      <div class="form-row"><label>Airport ICAO</label><input class="field mono" id="fboIc" placeholder="e.g. KTEB" maxlength="4" value="${esc(S.base)}" oninput="this.value=this.value.toUpperCase();previewFboIc(this.value)" style="width:100%"></div>
+      <div id="fboPreview" class="muted" style="font-size:12px;margin-top:4px"></div>
+      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg><span>Flat acquisition cost ${money(1500000)}. You set pump price after opening — cheap fuel draws traffic; premium pricing earns more per gallon.</span></div>
       <div style="display:flex;gap:10px;margin-top:18px"><button class="btn ghost" style="flex:1" onclick="closeModal()">Cancel</button>
         <button class="btn brass" style="flex:2" onclick="buyFboAt()">Acquire · ${money(1500000)}</button></div>
     </div>`);
+  setTimeout(()=>previewFboIc($('#fboIc')&&$('#fboIc').value),30);
 }
 function buyFboAt(){
   const ic=($('#fboIc').value||'').toUpperCase();
   if(!APTBY[ic])return showToast('Unknown ICAO','bad');
+  if(!S.operator)return showToast('Found your operator company first','bad');
   if(ownsFbo(ic))return showToast('You already own that FBO','bad');
   if((S.fbos||[]).length>=fboSlots())return showToast('No FBO slots — reach the next tier','bad');
   if(S.cash<1500000)return showToast('Not enough cash','bad');
-  S.cash-=1500000; S.fbos.push({ic,fuel:medFuel(ic),rampMult:1.0,gallons:0,margin:0,bought:Date.now()});
+  const startFuel=+(regionFuelPrice(APTBY[ic].region)||medFuel(ic)).toFixed(2);
+  S.cash-=1500000;
+  S.fbos.push({ic,fuel:startFuel,rampMult:1.0,gallons:0,margin:0,bought:Date.now(),providesFuel:true});
+  invalidateFboCache();
   S.ledger.push({t:Date.now(),k:`Acquired FBO at ${ic}`,a:-1500000,note:APTBY[ic].name});
   if(typeof cloudActivity==='function')cloudActivity(`opened an FBO at ${ic} ⛽`);
-  save(); closeModal(); showToast(`FBO acquired at ${ic}`,'good'); renderAll();
+  save(); closeModal(); showToast(`FBO acquired at ${ic} — Jet-A from $${startFuel.toFixed(2)}/gal`,'good'); renderAll();
 }
 function openFound(){
   modal(`<div class="modal-head"><div class="eyebrow">New operator</div><h2>Name your company</h2>
@@ -4277,7 +4362,8 @@ function migrateSave(){
   if(!S.pirepCode)S.pirepCode=genPirepCode();
   if(!S.account)S.account={realName:'',company:''};
   else S.account={realName:S.account.realName||'',company:S.account.company||''};
-  if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now()}); }
+  if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now(),providesFuel:true}); }
+  (S.fbos||[]).forEach(f=>{ if(f.providesFuel===undefined)f.providesFuel=true; });
   if(S.fbo!==undefined)delete S.fbo;
   if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
   if(!S.fboAds)S.fboAds=[];
@@ -4285,7 +4371,7 @@ function migrateSave(){
   if(S.rentStarter===undefined)S.rentStarter=false;
   if(S.vatCallsign===undefined)S.vatCallsign='';
   if(S.tankerFuelLb===undefined)S.tankerFuelLb=0;
-  if(S.active&&!S.active.fuel){ const ac=(S.fleet||[]).find(f=>f.id===S.active.acId); if(ac&&ACBY[ac.type]){ initTripFuel(S.active,ACBY[ac.type]); if(S.active.ofp) applySimbriefFuelAdj(S.active); } }
+  if(S.active&&!S.active.fuel){ initTripFuel(S.active); if(S.active.ofp) applySimbriefFuelAdj(S.active); }
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
@@ -4442,10 +4528,16 @@ function applyPirep(pirep){
   if(!S.active){ showToast('No active trip to log this PIREP against','bad'); return false; }
   const t=S.active, idx=t.legs.findIndex(l=>!l.done);
   if(idx<0){ showToast('All legs already flown — settle the trip','bad'); return false; }
+  const leg=t.legs[idx];
   const c=pirep.cap||pirep;
   const cap={ departed:c.departed!==false, landingFpm:Math.abs(+c.landingFpm||0),
-    overspeed:!!c.overspeed, stall:!!c.stall, overstress:!!c.overstress, maxG:+c.maxG||1, crashed:!!c.crashed };
-  completeLeg(idx,false,false,cap);   // grades + completes the leg (shows its own toast)
+    overspeed:!!c.overspeed, stall:!!c.stall, overstress:!!c.overstress, maxG:+c.maxG||1, crashed:!!c.crashed,
+    fuelStartLb:c.fuelStartLb!=null?+c.fuelStartLb:(c.fuelStart!=null?+c.fuelStart:null),
+    fuelEndLb:c.fuelEndLb!=null?+c.fuelEndLb:(c.fuelEnd!=null?+c.fuelEnd:null),
+    fuelBurnedLb:c.fuelBurnedLb!=null?+c.fuelBurnedLb:(c.fuelBurned!=null?+c.fuelBurned:null),
+    fuelAddedLb:c.fuelAddedLb!=null?+c.fuelAddedLb:null };
+  applyPirepFuelToLeg(leg,cap);
+  completeLeg(idx,false,false,cap);
   return true;
 }
 function submitPirepText(){
@@ -4472,7 +4564,7 @@ function pirepCard(){
   return `<div class="card card-pad">
     <div class="eyebrow">MSFS toolbar PIREP</div>
     <div class="sec-title" style="margin:2px 0 8px">Log this leg from the sim</div>
-    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Track the flight with the Skyledger toolbar panel in MSFS, then file the PIREP here to grade the open leg — no live connection needed.</p>
+    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Track the flight with the Skyledger toolbar panel in MSFS, then file the PIREP here to grade the open leg and bill <b>actual fuel burned</b> against your SimBrief plan.</p>
     ${cloud?`<div class="help" style="margin-bottom:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
         <span>Panel pairing code: <b class="mono" style="font-size:14px">${code}</b> — enter it once in the MSFS panel and your PIREPs arrive automatically.</span></div>
       <button class="btn sky sm" style="width:100%;justify-content:center;margin-bottom:12px" onclick="cloudPullPireps(false)">Check for submitted PIREP</button>`:''}
@@ -4538,7 +4630,7 @@ function rCommunity(p){
    BOOT
    ========================================================================= */
 async function boot(){
-  await loadAirportDB();
+  await Promise.all([loadAirportDB(), loadFboDB()]);
   document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>nav(n.dataset.nav));
   applyTheme(localStorage.getItem(THEME_KEY)||'light');
   tickClock(); setInterval(tickClock,1000);
