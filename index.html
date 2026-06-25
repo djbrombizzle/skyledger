@@ -311,6 +311,56 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 .board-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .board-count{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
 
+/* ACARS / MCDU UNIT */
+.acars-dock{position:fixed;bottom:18px;right:18px;z-index:500;font-family:var(--mono)}
+.acars-dock.collapsed .acars-unit{display:none}
+.acars-dock.collapsed .acars-fab{display:flex}
+.acars-dock:not(.collapsed) .acars-fab{display:none}
+.acars-fab{align-items:center;gap:8px;padding:8px 14px;background:var(--acars-bezel,#1a1a1a);color:var(--acars-amber,#ffb000);
+  border:2px solid #333;border-radius:6px;cursor:pointer;font-weight:700;font-size:11px;letter-spacing:.08em;
+  box-shadow:0 4px 20px rgba(0,0,0,.45);position:relative}
+.acars-fab .dot{width:7px;height:7px;border-radius:50%;background:var(--neg);flex:none}
+.acars-fab .dot.live{background:var(--pos);box-shadow:0 0 6px var(--pos)}
+.acars-fab .unread{position:absolute;top:-6px;right:-6px;background:var(--acars-amber,#ffb000);color:#000;
+  font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:grid;place-items:center;padding:0 4px}
+.acars-unit{width:400px;max-width:calc(100vw - 36px);background:var(--acars-bezel,#1a1a1a);border:3px solid #2a2a2a;
+  border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.55);position:relative;padding:10px}
+.acars-unit::before,.acars-unit::after,.acars-screw-tl,.acars-screw-tr,.acars-screw-bl,.acars-screw-br{
+  content:"";position:absolute;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#555,#222);
+  border:1px solid #111;z-index:2}
+.acars-screw-tl{top:6px;left:6px}.acars-screw-tr{top:6px;right:6px}
+.acars-screw-bl{bottom:6px;left:6px}.acars-screw-br{bottom:6px;right:6px}
+.acars-fnrow{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin-bottom:6px}
+.acars-key{background:var(--acars-key,#2a2a2a);color:var(--acars-key-label,#c8c8c8);border:1px solid #111;
+  border-radius:3px;padding:5px 2px;font-size:8px;font-weight:700;letter-spacing:.02em;cursor:pointer;
+  box-shadow:inset 0 1px 0 #3a3a3a,0 2px 0 #111;text-align:center;line-height:1.1}
+.acars-key:hover{background:#353535}.acars-key.on{box-shadow:0 0 0 1px var(--acars-amber,#ffb000);color:var(--acars-amber,#ffb000)}
+.acars-key:disabled{opacity:.4;cursor:not-allowed}
+.acars-screen-row{display:grid;grid-template-columns:28px 1fr 28px;gap:4px;align-items:stretch;margin-bottom:6px}
+.acars-lsk-col{display:flex;flex-direction:column;gap:4px;justify-content:space-around}
+.acars-lsk{background:#252525;color:#888;border:1px solid #111;border-radius:3px;padding:8px 2px;font-size:10px;cursor:pointer;
+  box-shadow:inset 0 1px 0 #333,0 1px 0 #000;min-height:36px}
+.acars-lsk:hover{color:var(--acars-amber,#ffb000)}
+.acars-lcd{background:#000;border:2px inset #333;min-height:118px;padding:8px 10px;font-size:11.5px;line-height:1.45;
+  color:var(--acars-amber,#ffb000);position:relative;overflow:hidden}
+.acars-lcd::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.12) 2px,rgba(0,0,0,.12) 4px)}
+.acars-lcd .pg-title{text-align:center;font-weight:700;font-size:12px;letter-spacing:.12em;margin-bottom:8px}
+.acars-lcd .ln{display:flex;justify-content:space-between;gap:8px;margin:3px 0;white-space:nowrap}
+.acars-lcd .ln-l,.acars-lcd .ln-r{overflow:hidden;text-overflow:ellipsis}
+.acars-lcd .ft{margin-top:8px;font-size:9px;opacity:.75;display:flex;justify-content:space-between;border-top:1px solid #331a00;padding-top:4px}
+.acars-lcd .dim{opacity:.55}.acars-lcd .warn{color:#ff8844}
+.acars-ctrlrow{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:6px}
+.acars-kbd{display:grid;gap:3px}
+.acars-kbd-row{display:grid;grid-template-columns:repeat(10,1fr);gap:2px}
+.acars-kbd-row.wide{grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr 1fr}
+.acars-kbd .acars-key{font-size:9px;padding:6px 1px}
+.acars-kbd-pad{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:4px}
+.acars-minimize{position:absolute;top:4px;right:28px;background:none;border:none;color:#666;font-size:14px;cursor:pointer;z-index:3}
+.acars-minimize:hover{color:var(--acars-amber,#ffb000)}
+.acars-syscntrl .acars-lcd{font-size:10px;max-height:200px;overflow-y:auto}
+.acars-syscntrl .acars-lcd .btn{font-size:9px;padding:4px 8px;margin-top:4px}
+
 /* ============ THE JET CARD (signature) ============ */
 .jetcard{background:linear-gradient(135deg,#1f2f47 0%,#16202e 60%,#101822 100%);color:#eaf0f8;
   border-radius:18px;padding:0;box-shadow:0 18px 50px rgba(16,24,34,.4);overflow:hidden;position:relative;
@@ -478,6 +528,10 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
     <a class="nav-item" data-nav="ledger" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>Ledger</a>
     <a class="nav-item" data-nav="map" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15"/></svg>Live Map</a>
     <a class="nav-item" data-nav="settings" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+    <div class="nav-label" data-section="dispatch">Dispatch</div>
+    <a class="nav-item" data-nav="dispatch" data-zone="dispatcher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 018 8c0 3.5-2 6-4 8l-4 4-4-4c-2-2-4-4.5-4-8a8 8 0 018-8z"/><circle cx="12" cy="10" r="2.5"/></svg>Dispatch Board</a>
+    <a class="nav-item" data-nav="dispatchmap" data-zone="dispatcher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15"/></svg>Active Flights</a>
+    <a class="nav-item" data-nav="dispatchmsg" data-zone="dispatcher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Message Center</a>
     <a class="nav-item" data-nav="admin" id="navAdmin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>Admin<span class="badge" id="adminBadge" style="display:none;background:#b03426">★</span></a>
     <div class="rail-foot">
       <span id="acctLine" style="display:none">Signed in as <b id="acctEmail" style="color:#8fa0b8"></b> · <a id="signOutLink">Sign out</a><br></span>
@@ -490,7 +544,6 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
   <header class="top">
     <div><span class="crumb" id="crumb">Dashboard</span> <span class="crumb-sub" id="crumbSub"></span></div>
     <div class="top-spacer"></div>
-    <div class="vat-pill" id="simPill" title="MSFS SimConnect" style="cursor:pointer" onclick="openSimLink()"><span class="dot off" id="simDot"></span><span id="simTxt">Sim Link</span></div>
     <div class="vat-pill" id="vatPill" title="Live VATSIM network status"><span class="dot off" id="vatDot"></span><span id="vatTxt">VATSIM —</span></div>
     <button class="theme-btn" id="themeBtn" title="Toggle dark / light" onclick="toggleTheme()"></button>
     <div class="zulu" id="zulu">--:--:-- <b>Z</b></div>
@@ -506,6 +559,25 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 
   <!-- MAIN -->
   <main class="main"><div class="page" id="page"></div></main>
+</div>
+
+<!-- ACARS MCDU (bottom-right) -->
+<div id="acarsDock" class="acars-dock collapsed" style="display:none">
+  <button type="button" id="acarsToggle" class="acars-fab" onclick="toggleAcars()">
+    <span class="dot off" id="acarsFabDot"></span><span id="acarsFabTxt">ACARS</span><span class="unread" id="acarsUnread" style="display:none">0</span>
+  </button>
+  <div id="acarsUnit" class="acars-unit">
+    <span class="acars-screw-tl"></span><span class="acars-screw-tr"></span><span class="acars-screw-bl"></span><span class="acars-screw-br"></span>
+    <button type="button" class="acars-minimize" onclick="toggleAcars(false)" title="Minimize">−</button>
+    <div class="acars-fnrow" id="acarsFnRow"></div>
+    <div class="acars-screen-row">
+      <div class="acars-lsk-col" id="acarsLskL"></div>
+      <div id="acarsScreen" class="acars-lcd"></div>
+      <div class="acars-lsk-col" id="acarsLskR"></div>
+    </div>
+    <div class="acars-ctrlrow" id="acarsCtrlRow"></div>
+    <div id="acarsKeyboard" class="acars-kbd"></div>
+  </div>
 </div>
 
 <div id="toasts"></div>
@@ -1014,7 +1086,7 @@ function newGame(name,base){
     cash:CFG.startCash, rep:0, flights:0, hours:0, nm:0,
     fleet:[],                       // pilot picks their first aircraft
     board:[], active:null, ledger:[],
-    operator:null, fbos:[], role:'both', lastFbo:0,
+    operator:null, fbos:[], role:'all', lastFbo:0,
     lastBoard:0, vatCallsign:'',
     maxTier:CFG.startTier,          // type rating cap (0 = turboprop only)
     grades:[],                      // per-flight performance grades
@@ -1340,40 +1412,43 @@ function bestAircraftFor(c){
   return cand[0];
 }
 
-const ROLE_LABEL={pilot:'Pilot',operator:'Operator',both:'Pilot + Operator'};
-const ROLE_DESC={pilot:'Fly charters & build ratings',operator:'Run fleet, FBOs & charter ops',both:'Full access to everything'};
-function effectiveRole(){ return (S&&S.role)||'both'; }
+const ROLE_LABEL={pilot:'Pilot',operator:'Operator',dispatcher:'Dispatcher',all:'All'};
+const ROLE_DESC={pilot:'Fly charters & build ratings',operator:'Run fleet, FBOs & charter ops',dispatcher:'Dispatch board & pilot messaging',all:'Full access to everything'};
+function effectiveRole(){ const r=(S&&S.role)||'all'; return r==='both'?'all':r; }
 function navVisible(navKey){
   const r=effectiveRole();
   const el=document.querySelector('.nav-item[data-nav="'+navKey+'"]');
   const zone=el?el.dataset.zone:'shared';
-  if(r==='both') return true;
-  if(r==='pilot') return zone!=='operator';
-  if(r==='operator') return zone!=='pilot';
+  if(r==='all') return true;
+  if(r==='pilot') return zone!=='operator'&&zone!=='dispatcher';
+  if(r==='operator') return zone!=='pilot'&&zone!=='dispatcher';
+  if(r==='dispatcher') return zone!=='pilot'&&zone!=='operator';
   return true;
 }
 function applyRoleNav(){
   const r=effectiveRole();
   const label=$('#navAssetsLabel');
-  if(label) label.textContent=r==='pilot'?'Assets':'Operators';
+  if(label) label.textContent=r==='pilot'?'Assets':(r==='dispatcher'?'Network':'Operators');
   document.querySelectorAll('.nav-item[data-nav]').forEach(el=>{
     el.style.display=navVisible(el.dataset.nav)?'flex':'none';
   });
   document.querySelectorAll('.nav-label[data-section]').forEach(el=>{
     const sec=el.dataset.section;
     let show=true;
-    if(sec==='career') show=r!=='operator';
-    if(sec==='operators') show=r!=='pilot';
+    if(sec==='career') show=r!=='operator'&&r!=='dispatcher';
+    if(sec==='operators') show=r!=='pilot'&&r!=='dispatcher';
+    if(sec==='dispatch') show=r!=='pilot'&&r!=='operator';
     el.style.display=show?'block':'none';
   });
   renderPilotMenu();
+  if(typeof updateAcarsDockVisibility==='function') updateAcarsDockVisibility();
 }
 function renderPilotMenu(){
   const drop=$('#pilotDrop'); if(!drop||!S) return;
   const r=effectiveRole();
   const mk=(k)=>`<button class="pilot-drop-item ${r===k?'on':''}" onclick="setRole('${k}')">
     <span>${r===k?'✓ ':''}${ROLE_LABEL[k]}</span><span class="sub">${ROLE_DESC[k]}</span></button>`;
-  drop.innerHTML=`<div class="pilot-drop-hd">Choose how you play</div>${mk('pilot')}${mk('operator')}${mk('both')}`;
+  drop.innerHTML=`<div class="pilot-drop-hd">Choose how you play</div>${mk('pilot')}${mk('operator')}${mk('dispatcher')}${mk('all')}`;
 }
 function togglePilotMenu(ev){
   ev.stopPropagation();
@@ -1397,11 +1472,19 @@ const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:
   fuel:['Fuel Prices','global Jet-A trends'],spcharter:['Special Charter Ops','post jobs to the board'],
   fboads:['FBO Advertising','sponsor events & drive traffic'],
   ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network'],
-  settings:['Settings','account & preferences'],admin:['Admin Console','manage the network']};
+  settings:['Settings','account & preferences'],admin:['Admin Console','manage the network'],
+  dispatch:['Dispatch Board','active trips'],dispatchmap:['Active Flights','live legs'],
+  dispatchmsg:['Message Center','pilot threads']};
 function nav(v){ if(!navVisible(v)){ showToast('Not available in '+ROLE_LABEL[effectiveRole()]+' mode','bad'); return; } view=v; renderAll(); }
+function defaultViewForRole(){
+  const r=effectiveRole();
+  if(r==='operator') return 'operator';
+  if(r==='dispatcher') return 'dispatch';
+  return 'dash';
+}
 function renderAll(){
   applyRoleNav();
-  if(!navVisible(view)) view=effectiveRole()==='operator'?'operator':'dash';
+  if(!navVisible(view)) view=defaultViewForRole();
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
   $('#crumb').textContent=CRUMB[view][0]; $('#crumbSub').textContent=CRUMB[view][1];
   $('#boardBadge').textContent=S.board.filter(c=>c.expires>Date.now()).length;
@@ -1413,9 +1496,10 @@ function renderAll(){
   const adminNav=$('#navAdmin'); if(adminNav)adminNav.style.display=isAdmin()?'flex':'none';
   renderTop();
   const p=$('#page');
-  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,fuel:rFuel,spcharter:rSpecCharter,fboads:rFboAds,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
-  if(view==='map') setTimeout(initMap,40);
-  if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
+  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,fuel:rFuel,spcharter:rSpecCharter,fboads:rFboAds,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin,dispatch:rDispatch,dispatchmap:rDispatchMap,dispatchmsg:rDispatchMsg}[view])(p);
+  if(view==='map'||view==='dispatchmap') setTimeout(view==='dispatchmap'?initDispatchMap:initMap,40);
+  if(typeof initAcarsDock==='function') initAcarsDock();
+  if(typeof updateAcarsStatus==='function') updateAcarsStatus();
   save();
 }
 /* is the pilot eligible to claim the next type rating? */
@@ -1427,7 +1511,7 @@ function upgradeReady(){
 function renderTop(){
   $('#cashTop').textContent=money(S.cash);
   $('#pilotName').textContent=S.pilot;
-  const roleTag=effectiveRole()==='both'?'':(' · '+ROLE_LABEL[effectiveRole()]);
+  const roleTag=effectiveRole()==='all'?'':(' · '+ROLE_LABEL[effectiveRole()]);
   $('#pilotRank').textContent=rankFor(S.rep).toUpperCase()+roleTag;
   $('#pilotAv').textContent=S.pilot.trim()[0]?.toUpperCase()||'P';
 }
@@ -1881,7 +1965,10 @@ function acceptCharter(){
   S.active={cid:c.id,acId:ac.id,charter:c,legs,started:Date.now(),verifiedAny:false,rental:!!_acc.rental,
     fbo:{dep:depF[depIdx].name,depFuel:depF[depIdx].fuel,arr:arrF[arrIdx].name,arrRamp:rampFeeFor(c.arr,arrF[arrIdx],acm.cls)}};
   S.board=S.board.filter(x=>x.id!==c.id);
-  _acc=null; closeModal(); showToast(S.active.rental?'Rental booked — fly the leg in your sim':'Trip built — fly the open leg in your sim','good'); nav('active');
+  _acc=null; closeModal(); showToast(S.active.rental?'Rental booked — fly the leg in your sim':'Trip built — fly the open leg in your sim','good');
+  if(acarsVisible()&&S.acarsAutoOpen) toggleAcars(true,false);
+  cloudSaveDebounced();
+  nav('active');
 }
 
 /* ---------- ACTIVE TRIP (the Jet Card) ---------- */
@@ -1942,16 +2029,14 @@ function rActive(p){
             <button class="btn brass" style="width:100%;margin-top:14px;justify-content:center" onclick="settleTrip()">Settle trip &amp; collect ${money(c.payout)}</button>`}
         </div>
         <div class="card card-pad">
-          <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Sim Link</div><div class="sec-spacer" style="flex:1"></div>
-            <span class="dot ${simState.connected?'live':'off'}"></span><span class="muted" style="font-size:11px">${simState.connected?'tracking':'offline'}</span></div>
-          <div class="sec-title" style="margin:2px 0 10px">SimConnect tracking</div>
-          ${simState.connected
-            ? `<div id="simLiveBody"></div><p class="muted" style="font-size:11.5px;margin-top:10px">Fly the open leg — touchdown within 6&nbsp;nm of the destination auto-completes it and grades your landing.</p>`
-            : IS_ELECTRON
-              ? `<p class="muted" style="font-size:12.5px;margin-bottom:11px">${simUserDisconnected?'Auto-link paused.':'MSFS auto-link is on — start the sim and load a flight.'} The status pill at the top shows when you're linked.</p>
-                 ${simUserDisconnected?`<button class="btn sky sm" style="width:100%;justify-content:center" onclick="resumeAutoSim()">Resume auto-link</button>`:''}`
-              : `<p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
-                 <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
+          <div class="eyebrow">Flight tracking</div>
+          <div class="sec-title" style="margin:2px 0 10px">ACARS unit</div>
+          <p class="muted" style="font-size:12.5px;margin-bottom:12px">Live SimConnect telemetry, leg auto-complete, and dispatcher messaging are on the <b>ACARS</b> unit in the bottom-right corner.</p>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span class="dot ${simState.connected?'live':'off'}"></span>
+            <span class="muted" style="font-size:12px">${simState.connected?'MSFS linked · '+simState.phase:'Not linked'}</span>
+          </div>
+          <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">${simState.connected?'Open ACARS':'Open ACARS · set up Sim Link'}</button>
         </div>
         ${pirepCard()}
         <div class="card card-pad" id="sbCard">${simbriefCard(c,acm)}</div>
@@ -2108,6 +2193,7 @@ function settleTrip(){
   ac.busy=false; const arrived=c.arr;
   if(ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // rental returned to the market
   S.active=null;
+  cloudSaveDebounced();
   ensureExit(arrived);                        // guarantee a way out of where you just landed
   const oldRank=rankFor(S.rep-rep), newRank=rankFor(S.rep);
   showToast(ferry?`Ferry complete · aircraft now at ${arrived} · +${rep} rep`:`Trip settled · ${money(payout)} · +${rep} rep`,'good');
@@ -2122,7 +2208,7 @@ function abandonTrip(){
   if(ac&&ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // return the rental
   S.rep=Math.max(0,S.rep-30);
   S.ledger.push({t:Date.now(),k:'Trip abandoned',a:0,note:'-30 reputation'});
-  S.active=null; showToast('Trip abandoned · -30 rep','bad'); nav('board');
+  S.active=null; cloudSaveDebounced(); showToast('Trip abandoned · -30 rep','bad'); nav('board');
 }
 
 /* ---------- FLEET ---------- */
@@ -2445,13 +2531,18 @@ function rOperator(p){
 function setRole(r){
   S.role=r; save(); closePilotMenu();
   applyRoleNav();
-  if(!navVisible(view)) nav(r==='operator'?'operator':'dash');
+  if(!navVisible(view)) nav(defaultViewForRole());
   else renderAll();
-  showToast('Playing as '+ROLE_LABEL[r],'good');
+  showToast('Playing as '+ROLE_LABEL[r==='both'?'all':r],'good');
 }
 function operOnlyGate(p,msg){
   if(!S.operator){ p.innerHTML=emptyState('Operator company required','Found your operator company from the Operator Dashboard first.','operator','Open Operator Dashboard'); return true; }
-  if(effectiveRole()==='pilot'){ p.innerHTML=emptyState('Operator mode required','Switch your play style to Operator or Both using your profile menu (top right).'); return true; }
+  if(effectiveRole()==='pilot'||effectiveRole()==='dispatcher'){ p.innerHTML=emptyState('Operator mode required','Switch your play style to Operator or All using your profile menu (top right).'); return true; }
+  return false;
+}
+function dispatchOnlyGate(p){
+  const r=effectiveRole();
+  if(r==='pilot'||r==='operator'){ p.innerHTML=emptyState('Dispatcher mode required','Switch your play style to Dispatcher or All using your profile menu (top right).'); return true; }
   return false;
 }
 function tickGlobalFuel(){
@@ -3426,50 +3517,60 @@ function onTelemetry(d){
       simState.wasAir=!d.onGround;
     }
   } else { simState.phase=d.onGround?(d.gsKt>8?'TAXI':'ON GROUND'):'AIRBORNE'; }
-  updateSimPill(); renderSimLive();
+  if(!simState.monitor) simState.monitor=[];
+  simState.monitor.push({t:Date.now(),phase:simState.phase,gs:d.gsKt,alt:d.altMsl,vs:d.vsFpm});
+  if(simState.monitor.length>24) simState.monitor.shift();
+  if(S&&S.active) cloudSaveActiveTripDebounced();
+  updateAcarsStatus();
 }
-function updateSimPill(force){
-  const dot=$('#simDot'), txt=$('#simTxt'), pill=$('#simPill'); if(!dot)return;
+function acarsTelemetryHtml(){
+  const tl=simState.telem;
+  if(!tl) return '<span class="dim">CONNECTED — AWAIT TELEM</span>';
+  const cap=simState.cap;
+  return `<div class="ln"><span>PHASE</span><span>${simState.phase}</span></div>
+    <div class="ln"><span>GS</span><span>${Math.round(tl.gsKt||0)} KT</span></div>
+    <div class="ln"><span>ALT</span><span>${Math.round(tl.altMsl||0)} FT</span></div>
+    <div class="ln"><span>VS</span><span>${Math.round(tl.vsFpm||0)} FPM</span></div>
+    ${cap&&cap.departed?`<div class="ln warn"><span>CAPTURE</span><span>AIRBORNE</span></div>`:'<div class="ln dim"><span>CAPTURE</span><span>—</span></div>'}`;
+}
+function updateAcarsStatus(force){
+  const dot=$('#acarsFabDot'), txt=$('#acarsFabTxt');
+  if(!dot) return;
   const st=force||(simState.connected?'on':'off');
   dot.style.background='';
-  if(st==='connecting'){dot.className='dot';dot.style.background='var(--warn)';txt.textContent=IS_ELECTRON?'MSFS · linking…':'Sim · linking…';return;}
-  if((st==='waiting'||(st==='off'&&!simState.connected&&IS_ELECTRON&&!simUserDisconnected))){
-    dot.className='dot off'; txt.textContent='MSFS · waiting';
-    if(pill) pill.title='Waiting for MSFS — auto-connecting every few seconds';
+  if(st==='connecting'){ dot.className='dot'; dot.style.background='var(--warn)'; if(txt) txt.textContent='LINK…'; return; }
+  if(st==='waiting'||(st==='off'&&!simState.connected&&IS_ELECTRON&&!simUserDisconnected)){
+    dot.className='dot off'; if(txt) txt.textContent='WAIT';
     return;
   }
   if(st==='off'||!simState.connected){
-    dot.className='dot off';
-    txt.textContent=IS_ELECTRON?'MSFS · offline':'Sim Link';
-    if(pill) pill.title=IS_ELECTRON?'MSFS not detected — start the sim, or click for link settings':'SimConnect flight tracking';
+    dot.className='dot off'; if(txt) txt.textContent='ACARS';
     return;
   }
   dot.className='dot live';
   const tl=simState.telem;
-  txt.textContent=tl?(IS_ELECTRON?'MSFS · ':'Sim · ')+simState.phase+' '+Math.round(tl.gsKt||0)+'kt':(IS_ELECTRON?'MSFS · linked':'Sim · waiting');
-  if(pill) pill.title='Linked to '+(SIM_PROTO_LABEL[(S.simConn&&S.simConn.detected)||'']||'MSFS');
+  if(txt) txt.textContent=tl?simState.phase.slice(0,4):'LINK';
+  const ub=$('#acarsUnread');
+  if(ub){ const n=dispatchState.unread||0; ub.style.display=n>0?'inline':'none'; ub.textContent=n>9?'9+':String(n); }
+  acarsRefreshIfActive();
+}
+function updateSimPill(force){ updateAcarsStatus(force); }
+function acarsRefreshIfActive(){
+  if(!S||!$('#acarsDock')||$('#acarsDock').classList.contains('collapsed')) return;
+  const pg=S.acarsPage||'index';
+  if(['telemetry','monitor','svmsgs','syscntrl','msglog','compose','fltinfo'].includes(pg)) renderAcarsPage(pg);
 }
 function renderSimLive(){
-  const b=$('#simLiveBody'); if(!b)return;
-  const tl=simState.telem;
-  if(!tl){ b.innerHTML='<span class="muted" style="font-size:12.5px">Connected — waiting for a flight in the sim.</span>'; return; }
-  const cap=simState.cap;
-  b.innerHTML=`<span class="phase ${tl.onGround?'':'air'}">${simState.phase}</span>
-    <div class="tel-grid">
-      <div class="tel"><div class="tk">Ground speed</div><div class="tv">${Math.round(tl.gsKt||0)} kt</div></div>
-      <div class="tel"><div class="tk">Altitude</div><div class="tv">${Math.round(tl.altMsl||0).toLocaleString()} ft</div></div>
-      <div class="tel"><div class="tk">Vertical spd</div><div class="tv">${Math.round(tl.vsFpm||0)} fpm</div></div>
-    </div>
-    ${cap&&cap.departed?`<div class="muted" style="font-size:11.5px;margin-top:8px">Airborne logged${cap.overspeed?' · ⚠ overspeed':''}${cap.stall?' · ⚠ stall':''}${cap.overstress?' · ⚠ overstress':''} — land within 6&nbsp;nm of destination to auto-complete the leg.</div>`:''}`;
+  const b=$('#simLiveBody'); if(!b) return;
+  b.innerHTML=acarsTelemetryHtml();
 }
 function openSimLink(){
-  modal(`<div class="modal-head"><div class="eyebrow">${IS_ELECTRON?'MSFS SimConnect':'SimConnect flight tracking'}</div><h2>${IS_ELECTRON?'MSFS Link':'Sim Link'}</h2>
-    <div class="lead">${IS_ELECTRON?'Skyledger links to MSFS automatically when the sim is running. Touchdown auto-completes legs and grades your landings.':'Stream live data from MSFS so legs auto-complete and your landings are graded for type-rating progress.'}</div></div>
-    <div class="modal-body" id="simModalBody"></div>`);
-  renderSimModal();
+  if(!acarsVisible()){ showToast('ACARS hidden in Operator mode','bad'); return; }
+  toggleAcars(true);
+  acarsNav('syscntrl');
 }
-function setSimMode(m){ S.simMode=m; save(); renderSimModal(); }
-function setSimConn(k,v){ if(!S.simConn)S.simConn={}; S.simConn[k]=k==='autoDetect'?!!v:v; save(); renderSimModal(); }
+function setSimMode(m){ S.simMode=m; save(); if(S.acarsPage==='syscntrl') renderAcarsPage('syscntrl'); }
+function setSimConn(k,v){ if(!S.simConn)S.simConn={}; S.simConn[k]=k==='autoDetect'?!!v:v; save(); if(S.acarsPage==='syscntrl') renderAcarsPage('syscntrl'); }
 function simDirectBody(){
   const canDirect=SkySimConnect.available();
   const m=S.simConn||{}, transport=m.transport||'pipe', proto=m.protocol||'SunRise';
@@ -3547,21 +3648,365 @@ function simBridgeBody(){
     <div class="help" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
       <span><b>WebSocket bridge (for plain browsers):</b><br>1. Install Python 3.10+ then run <b class="mono">pip install SimConnect websockets</b><br>2. Run <b class="mono">python skyledger-bridge.py</b><br>3. Start a flight in MSFS, then click <b>Connect</b>. Prefer the built-in client above if you can run this file in Electron/NW.js — it needs no bridge.</span></div>`;
 }
-function renderSimModal(){
-  const b=$('#simModalBody'); if(!b)return;
-  const direct=(S.simMode||(SkySimConnect.available()?'direct':'bridge'))==='direct';
-  b.innerHTML=`
-    ${IS_ELECTRON?'':`<div class="toggle" style="margin-top:4px;width:100%">
-      <button class="${direct?'on':''}" style="flex:1" onclick="setSimMode('direct')">⚡ Built-in SimConnect</button>
-      <button class="${!direct?'on':''}" style="flex:1" onclick="setSimMode('bridge')">🔌 WebSocket bridge</button>
-    </div>`}
-    ${direct?simDirectBody():simBridgeBody()}
-    <div style="margin-top:14px;padding:12px 14px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line)">
-      <div style="display:flex;align-items:center;gap:9px"><span class="dot ${simState.connected?'live':'off'}"></span>
-        <b style="font-size:13px">${simState.connected?('Connected'+(simState.direct?' · '+(SIM_PROTO_LABEL[(S.simConn&&S.simConn.detected)||'']||'MSFS'):' · bridge')):(IS_ELECTRON?'Waiting for MSFS':'Not connected')}</b></div>
-      <div id="simLiveBody" style="margin-top:10px">${simState.connected?'':`<span class="muted" style="font-size:12.5px">${IS_ELECTRON?'Start MSFS and load a flight — auto-link will connect within a few seconds.':(direct?'Start a flight in MSFS, then connect — no extra app needed.':'Start the bridge, then connect.')}</span>`}</div>
+function renderSimModal(){ if(S&&S.acarsPage==='syscntrl') renderAcarsPage('syscntrl'); }
+
+/* =========================================================================
+   ACARS MCDU — cockpit dock (telemetry · sys cntrl · dispatch MSG)
+   ========================================================================= */
+const ACARS_FN=['ACARS','MSG','READ','SEND','EMRG','USER','MENU','CPDLC'];
+let acarsCompose='', acarsLastPage='index', acarsInit=false, acarsScroll=0;
+let dispatchState={messages:[],threads:[],threadId:null,unread:0,channel:null,activePilots:[],selThread:null};
+let _tripCloudTimer=null, _lastCloudPhase='';
+
+function acarsVisible(){
+  const r=effectiveRole();
+  return r==='pilot'||r==='all'||r==='dispatcher';
+}
+function updateAcarsDockVisibility(){
+  const d=$('#acarsDock'); if(d) d.style.display=acarsVisible()?'block':'none';
+}
+function initAcarsDock(){
+  if(acarsInit) return; acarsInit=true;
+  const fn=$('#acarsFnRow');
+  if(fn) fn.innerHTML=ACARS_FN.map(k=>`<button type="button" class="acars-key" onclick="acarsFnKey('${k}')">${k}</button>`).join('');
+  const lskL=$('#acarsLskL'), lskR=$('#acarsLskR');
+  if(lskL) lskL.innerHTML=[1,2,3].map(i=>`<button type="button" class="acars-lsk" onclick="acarsSelectLsk('L',${i})">◂</button>`).join('');
+  if(lskR) lskR.innerHTML=[1,2,3].map(i=>`<button type="button" class="acars-lsk" onclick="acarsSelectLsk('R',${i})">▸</button>`).join('');
+  const ctrl=$('#acarsCtrlRow');
+  if(ctrl) ctrl.innerHTML=`<button type="button" class="acars-key" onclick="acarsCtrl('clear')">CLEAR</button>
+    <button type="button" class="acars-key" onclick="acarsCtrl('up')">▲</button>
+    <button type="button" class="acars-key" onclick="acarsCtrl('enter')">ENTER</button>
+    <button type="button" class="acars-key" onclick="acarsCtrl('space')">SPACE</button>`;
+  buildAcarsKeyboard();
+  updateAcarsDockVisibility();
+  if(S&&S.acarsOpen) toggleAcars(true,false);
+  else renderAcarsPage(S&&S.acarsPage||'index');
+}
+function buildAcarsKeyboard(){
+  const kbd=$('#acarsKeyboard'); if(!kbd) return;
+  const rows=['1234567890'.split(''),'QWERTYUIOP'.split(''),'ASDFGHJKL'.split(''),['DEL','Z','X','C','V','B','N','M','+/-','RET']];
+  kbd.innerHTML=rows.map((row,ri)=>{
+    const pad=ri===3?`<div class="acars-kbd-pad">
+      <button type="button" class="acars-key" onclick="acarsKey('UP')">▲</button>
+      <button type="button" class="acars-key" onclick="acarsKey('LEFT')">◂</button>
+      <button type="button" class="acars-key" onclick="acarsKey('DOWN')">▼</button>
+      <button type="button" class="acars-key" onclick="acarsKey('RIGHT')">▸</button></div>`:'';
+    return `<div class="acars-kbd-row${ri===3?' wide':''}">${row.map(ch=>`<button type="button" class="acars-key" onclick="acarsKey('${ch}')">${ch}</button>`).join('')}${pad}</div>`;
+  }).join('');
+}
+function toggleAcars(open,doSave){
+  if(!acarsVisible()) return;
+  const dock=$('#acarsDock'); if(!dock) return;
+  const expand=open===undefined?!dock.classList.contains('collapsed'):!!open;
+  dock.classList.toggle('collapsed',!expand);
+  if(S){ S.acarsOpen=expand; if(doSave!==false) save(); }
+  if(expand) renderAcarsPage(S.acarsPage||'index');
+}
+function acarsNav(page){
+  if(!S) return;
+  if(page!=='index'&&S.acarsPage&&S.acarsPage!=='index') acarsLastPage=S.acarsPage;
+  S.acarsPage=page; save();
+  renderAcarsPage(page);
+}
+function acarsFnKey(k){
+  if(k==='ACARS') return acarsNav('index');
+  if(k==='MSG') return acarsNav('compose');
+  if(k==='READ') return markDispatchRead();
+  if(k==='SEND') return sendDispatchMsg();
+  if(k==='EMRG'||k==='CPDLC') return showToast(k+' — not available in v1','bad');
+  if(k==='USER') return acarsNav('fltinfo');
+  if(k==='MENU') return acarsNav(S.acarsPage==='index'?acarsLastPage:'index');
+}
+function acarsSelectLsk(side,idx){
+  const pg=S&&S.acarsPage||'index';
+  if(pg==='index'){
+    const map={L1:'fltinfo',L2:'telemetry',L3:'svmsgs',R1:'msglog',R2:'monitor',R3:'syscntrl'};
+    const t=map[side+idx]; if(t) acarsNav(t);
+    return;
+  }
+  if(side==='L'&&idx===1) acarsNav('index');
+  if(pg==='msglog'&&side==='R'&&idx===1) acarsNav('compose');
+}
+function acarsCtrl(cmd){
+  if(cmd==='clear'){ acarsCompose=''; if(S.acarsPage==='compose') renderAcarsPage('compose'); return; }
+  if(cmd==='space') return acarsKey(' ');
+  if(cmd==='enter') return sendDispatchMsg();
+  if(cmd==='up'){ acarsScroll=Math.max(0,acarsScroll-1); if(S.acarsPage==='msglog') renderAcarsPage('msglog'); }
+}
+function acarsKey(ch){
+  if(S.acarsPage!=='compose') return;
+  if(ch==='DEL'){ acarsCompose=acarsCompose.slice(0,-1); renderAcarsPage('compose'); return; }
+  if(ch==='RET'||ch==='↵') return sendDispatchMsg();
+  if(['UP','DOWN','LEFT','RIGHT'].includes(ch)) return;
+  if(ch==='+/-') ch=ch==='+'?'-':'+';
+  if(acarsCompose.length<120){ acarsCompose+=ch===' '?' ':ch; renderAcarsPage('compose'); }
+}
+function acarsLinkFooter(){
+  const linked=simState.connected;
+  const msgs=(dispatchState.unread||0)>0?`MSG ${dispatchState.unread}`:'';
+  return `<div class="ft"><span>PG ${(S.acarsPage||'index').slice(0,3).toUpperCase()}</span><span>${linked?'LINK':''}${msgs?' · '+msgs:''}</span></div>`;
+}
+function renderAcarsPage(pageId){
+  const scr=$('#acarsScreen'); if(!scr) return;
+  const unit=$('#acarsUnit');
+  if(unit) unit.classList.toggle('acars-syscntrl',pageId==='syscntrl');
+  let html='';
+  if(pageId==='index'){
+    html=`<div class="pg-title">ACARS INDEX</div>
+      <div class="ln"><span class="ln-l">&lt; FLT INFO</span><span class="ln-r">MSG LOG &gt;</span></div>
+      <div class="ln"><span class="ln-l">&lt; TELEMETRY</span><span class="ln-r">MONITOR &gt;</span></div>
+      <div class="ln"><span class="ln-l">&lt; SVC MSGS</span><span class="ln-r">SYS CNTRL &gt;</span></div>${acarsLinkFooter()}`;
+  } else if(pageId==='fltinfo'){
+    const t=S&&S.active, c=t&&t.charter, ac=t&&S.fleet.find(f=>f.id===t.aircraftId);
+    const leg=t&&t.legs.find(l=>!l.done);
+    html=`<div class="pg-title">FLT INFO</div>
+      <div class="ln"><span class="ln-l">&lt; INDEX</span><span></span></div>
+      ${c?`<div class="ln"><span>ROUTE</span><span>${c.dep}→${c.arr}</span></div>
+        <div class="ln"><span>CLIENT</span><span>${(c.client||'').slice(0,14).toUpperCase()}</span></div>
+        <div class="ln"><span>TAIL</span><span>${ac?ac.tail:'—'}</span></div>
+        <div class="ln"><span>LEG</span><span>${leg?leg.from+'→'+leg.to:'DONE'}</span></div>`
+        :'<div class="ln dim"><span>NO ACTIVE</span><span>TRIP</span></div>'}
+      ${acarsLinkFooter()}`;
+  } else if(pageId==='telemetry'){
+    html=`<div class="pg-title">TELEMETRY</div>
+      <div class="ln"><span class="ln-l">&lt; INDEX</span><span></span></div>
+      ${acarsTelemetryHtml()}${acarsLinkFooter()}`;
+  } else if(pageId==='monitor'){
+    const buf=simState.monitor||[];
+    const lines=buf.slice(-5).reverse().map(s=>`<div class="ln dim"><span>${new Date(s.t).toISOString().slice(11,16)}Z</span><span>${s.phase} ${Math.round(s.gs||0)}</span></div>`).join('');
+    html=`<div class="pg-title">MONITOR</div>
+      <div class="ln"><span class="ln-l">&lt; INDEX</span><span></span></div>
+      ${lines||'<div class="ln dim"><span>NO DATA</span><span>—</span></div>'}${acarsLinkFooter()}`;
+  } else if(pageId==='svmsgs'){
+    const lines=[
+      simState.connected?(IS_ELECTRON?'MSFS LINKED':'SIM LINKED'):(IS_ELECTRON?'WAITING FOR MSFS':'SIM OFFLINE'),
+      S&&S.active?'LEG AUTO-CPLT ON TD 6NM':'NO ACTIVE LEG',
+      vatData?'VATSIM '+((vatData.pilots||[]).length)+' ONLINE':'VATSIM —'
+    ];
+    html=`<div class="pg-title">SVC MSGS</div>
+      <div class="ln"><span class="ln-l">&lt; INDEX</span><span></span></div>
+      ${lines.map((l,i)=>`<div class="ln"><span>${i+1}</span><span>${l}</span></div>`).join('')}${acarsLinkFooter()}`;
+  } else if(pageId==='syscntrl'){
+    const direct=(S.simMode||(SkySimConnect.available()?'direct':'bridge'))==='direct';
+    html=`<div class="pg-title">SYS CNTRL</div>
+      <div class="ln"><span class="ln-l">&lt; INDEX</span><span class="dim">${simState.connected?'LINKED':'OFF'}</span></div>
+      ${IS_ELECTRON?'':`<div class="ln dim"><span>MODE</span><span>${direct?'DIRECT':'BRIDGE'}</span></div>
+        <div style="margin:6px 0"><button class="acars-key" style="width:48%;margin-right:2%" onclick="setSimMode('direct')">DIRECT</button>
+        <button class="acars-key" style="width:48%" onclick="setSimMode('bridge')">BRIDGE</button></div>`}
+      <div style="font-size:9.5px;line-height:1.5;margin-top:4px">${direct?simDirectBodyAcars():simBridgeBodyAcars()}</div>${acarsLinkFooter()}`;
+  } else if(pageId==='msglog'){
+    const msgs=dispatchState.messages||[];
+    const slice=msgs.slice(Math.max(0,msgs.length-4-acarsScroll),msgs.length-acarsScroll);
+    html=`<div class="pg-title">MSG LOG</div>
+      <div class="ln"><span class="ln-l">&lt; INDEX</span><span class="ln-r">NEW MSG &gt;</span></div>
+      ${slice.length?slice.map(m=>{
+        const z=new Date(m.created_at).toISOString().slice(11,16)+'Z';
+        const who=(m.from_role||'').toUpperCase().slice(0,8);
+        return `<div class="ln dim"><span>${z} ${who}</span></div><div class="ln"><span></span><span>${(m.body||'').slice(0,22)}</span></div>`;
+      }).join(''):'<div class="ln dim"><span>NO MSGS</span><span>—</span></div>'}
+      ${acarsLinkFooter()}`;
+  } else if(pageId==='compose'){
+    html=`<div class="pg-title">COMPOSE MSG</div>
+      <div class="ln"><span class="ln-l">&lt; MSG LOG</span><span class="ln-r">SEND &gt;</span></div>
+      <div class="ln" style="min-height:36px;align-items:flex-start"><span>TO DSP</span><span style="white-space:normal;word-break:break-all">${acarsCompose||'_'}</span></div>
+      <div class="ln dim"><span>${cloudEnabled()&&AUTH.user?'ENTER OR SEND':'OFFLINE'}</span><span></span></div>${acarsLinkFooter()}`;
+  }
+  scr.innerHTML=html;
+  document.querySelectorAll('.acars-fnrow .acars-key').forEach(btn=>{
+    const k=btn.textContent;
+    btn.classList.toggle('on',(pageId==='index'&&k==='ACARS')||(pageId==='compose'&&k==='MSG')||(pageId==='msglog'&&k==='MSG'));
+  });
+}
+function simDirectBodyAcars(){
+  const canDirect=SkySimConnect.available();
+  const m=S.simConn||{}, autoOn=IS_ELECTRON&&m.autoDetect!==false;
+  if(IS_ELECTRON){
+    return `${autoOn?'AUTO ON':'AUTO OFF'}${m.detected?' · '+SIM_PROTO_LABEL[m.detected]:''}
+      <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+        ${simState.connected?`<button class="acars-key" onclick="disconnectSim(true)">DISC</button>`
+          :simUserDisconnected?`<button class="acars-key" onclick="resumeAutoSim()">RESUME</button><button class="acars-key" onclick="connectSimDirect()">CONNECT</button>`
+          :`<button class="acars-key" onclick="connectSimDirect()">CONNECT</button>`}
+        <button class="acars-key" onclick="setSimConn('autoDetect',${!autoOn});simUserDisconnected=false;startSimAutoLink()">AUTO ${autoOn?'OFF':'ON'}</button>
+      </div>`;
+  }
+  return `${canDirect?'BUILTIN OK':'NEED ELECTRON'}
+    <div style="margin-top:6px"><button class="acars-key" onclick="connectSimDirect()" ${canDirect?'':'disabled'}>CONNECT MSFS</button>
+    ${simState.connected?`<button class="acars-key" onclick="disconnectSim(true)">DISC</button>`:''}</div>`;
+}
+function simBridgeBodyAcars(){
+  return `WS ${(S.simUrl||CFG.simUrlDefault).slice(0,28)}
+    <div style="margin-top:6px;display:flex;gap:4px">
+      ${simState.connected?`<button class="acars-key" onclick="disconnectSim(true)">DISC</button>`
+        :`<button class="acars-key" onclick="connectSim(prompt('Bridge URL',S.simUrl||'${CFG.simUrlDefault}')||S.simUrl)">CONNECT</button>`}
     </div>`;
-  renderSimLive();
+}
+function buildActiveTripSnapshot(){
+  if(!S||!S.active) return null;
+  const t=S.active, c=t.charter, leg=t.legs.find(l=>!l.done), ac=S.fleet.find(f=>f.id===t.aircraftId);
+  return {dep:c.dep,arr:c.arr,leg:leg?leg.from+'→'+leg.to:null,tail:ac?ac.tail:null,phase:simState.phase||'—',updated_at:new Date().toISOString()};
+}
+function pilotThreadId(uid){ uid=uid||(AUTH.user&&AUTH.user.id); return uid?'pilot:'+uid:null; }
+function markDispatchRead(){
+  dispatchState.unread=0; updateAcarsStatus();
+  if(S.acarsPage==='msglog'||S.acarsPage==='index') renderAcarsPage(S.acarsPage);
+  showToast('Messages marked read','good');
+}
+async function loadDispatchMessages(threadId){
+  const sb=getSB(); if(!sb||!threadId) return;
+  try{
+    const {data}=await sb.from('dispatch_messages').select('*').eq('thread_id',threadId).order('created_at',{ascending:true}).limit(100);
+    dispatchState.messages=data||[];
+    if(S&&S.acarsPage==='msglog') renderAcarsPage('msglog');
+  }catch(e){}
+}
+async function loadDispatchThreads(){
+  const sb=getSB(); if(!sb) return;
+  try{
+    const {data}=await sb.from('profiles').select('id,pilot,base,active_trip,updated_at').not('active_trip','is',null).order('updated_at',{ascending:false}).limit(50);
+    dispatchState.activePilots=data||[];
+    const threads=(data||[]).map(p=>({thread_id:pilotThreadId(p.id),pilot:p.pilot,base:p.base,trip:p.active_trip}));
+    dispatchState.threads=threads;
+    if(view==='dispatch'||view==='dispatchmap'||view==='dispatchmsg') renderAll();
+  }catch(e){}
+}
+function startDispatchChat(){
+  const sb=getSB(); if(!sb||!AUTH.user) return;
+  const r=effectiveRole();
+  if(r==='dispatcher'||r==='all'){
+    if(!dispatchState.channel){
+      dispatchState.channel=sb.channel('dispatch-pool-'+AUTH.user.id)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'dispatch_messages'},payload=>{
+          const m=payload.new;
+          if(m.from_user_id!==AUTH.user.id) dispatchState.unread++;
+          if(dispatchState.selThread===m.thread_id){
+            dispatchState.messages.push(m);
+            if(view==='dispatchmsg') rDispatchMsg($('#page'));
+          }
+          updateAcarsStatus();
+        })
+        .subscribe();
+    }
+    loadDispatchThreads();
+    return;
+  }
+  const tid=pilotThreadId();
+  if(!tid) return;
+  dispatchState.threadId=tid;
+  if(dispatchState.channel) return;
+  dispatchState.channel=sb.channel('dispatch-pilot-'+AUTH.user.id)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'dispatch_messages',filter:'thread_id=eq.'+tid},payload=>{
+      const m=payload.new;
+      dispatchState.messages.push(m);
+      if(m.from_user_id!==AUTH.user.id) dispatchState.unread++;
+      updateAcarsStatus();
+      if(S&&['msglog','compose'].includes(S.acarsPage)) renderAcarsPage(S.acarsPage);
+    })
+    .subscribe((status)=>{ if(status==='SUBSCRIBED') loadDispatchMessages(tid); });
+  loadDispatchMessages(tid);
+}
+async function sendDispatchMsg(body){
+  const sb=getSB(); if(!sb||!AUTH.user) return showToast('Sign in for messaging','bad');
+  body=(body||acarsCompose||'').trim();
+  if(!body) return;
+  let tid=dispatchState.threadId||pilotThreadId();
+  if(effectiveRole()==='dispatcher'||effectiveRole()==='all'){
+    tid=dispatchState.selThread||tid;
+    if(!tid) return showToast('Select a pilot thread first','bad');
+  }
+  if(!tid) return;
+  const fromRole=(effectiveRole()==='dispatcher'||(effectiveRole()==='all'&&view==='dispatchmsg'))?'dispatcher':'pilot';
+  const now=Date.now();
+  if(sendDispatchMsg._last&&now-sendDispatchMsg._last<800) return;
+  sendDispatchMsg._last=now;
+  try{
+    await sb.from('dispatch_messages').insert({thread_id:tid,from_user_id:AUTH.user.id,from_role:fromRole,body});
+    acarsCompose='';
+    await loadDispatchMessages(tid);
+    if(S.acarsPage==='compose') acarsNav('msglog');
+    else if(S.acarsPage==='msglog') renderAcarsPage('msglog');
+    if(view==='dispatchmsg') rDispatchMsg($('#page'));
+    showToast('Message sent','good');
+  }catch(e){ showToast('Send failed — check Supabase setup','bad'); }
+}
+function cloudSaveActiveTripDebounced(){
+  if(!cloudEnabled()||!AUTH.user||!S) return;
+  const ph=simState.phase||'';
+  if(ph===_lastCloudPhase) return;
+  _lastCloudPhase=ph;
+  clearTimeout(_tripCloudTimer);
+  _tripCloudTimer=setTimeout(()=>{ cloudSaveNow(); },2000);
+}
+
+/* ---------- DISPATCH CONSOLE PAGES ---------- */
+function rDispatch(p){
+  if(dispatchOnlyGate(p)) return;
+  loadDispatchThreads();
+  const rows=dispatchState.activePilots||[];
+  p.innerHTML=`
+    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>Live pilots on active trips — synced from cloud profiles. Refresh pulls the latest <b>active_trip</b> snapshots.</span></div>
+    <div class="card card-pad">
+      <div class="sec-head"><div class="sec-title">Active trips</div><div class="sec-spacer"></div>
+        <button class="btn ghost sm" onclick="loadDispatchThreads()">Refresh</button></div>
+      ${cloudEnabled()?`<table class="led"><thead><tr><th>Pilot</th><th>Route</th><th>Leg</th><th>Tail</th><th>Phase</th><th>Updated</th></tr></thead>
+        <tbody>${rows.length?rows.map(x=>{
+          const t=x.active_trip||{};
+          return `<tr style="cursor:pointer" onclick="dispatchState.selThread='${pilotThreadId(x.id)}';nav('dispatchmsg')">
+            <td style="font-weight:600">${x.pilot||'Pilot'}</td><td class="mono">${t.dep||'—'}→${t.arr||'—'}</td>
+            <td class="mono muted">${t.leg||'—'}</td><td class="mono">${t.tail||'—'}</td>
+            <td><span class="tag ${t.phase==='AIRBORNE'?'ok':'muted-t'}">${t.phase||'—'}</span></td>
+            <td class="muted" style="font-size:11px">${t.updated_at?ago(t.updated_at):'—'}</td></tr>`;
+        }).join(''):'<tr><td colspan="6" class="muted" style="padding:24px;text-align:center">No active trips on the network.</td></tr>'}</tbody></table>`
+        :`<div class="muted" style="font-size:13px;padding:12px 0">Cloud not configured — dispatch board needs Supabase.</div>`}
+    </div>`;
+}
+function rDispatchMap(p){
+  if(dispatchOnlyGate(p)) return;
+  loadDispatchThreads();
+  p.innerHTML=`<div class="bar"><div class="sec-title">Active flight map</div><div class="sec-spacer"></div>
+    <button class="btn ghost sm" onclick="loadDispatchThreads();initDispatchMap()">Refresh</button></div><div id="dispatchMap" style="height:540px;border-radius:var(--radius);border:1px solid var(--line)"></div>`;
+}
+let DISPATCH_MAP=null;
+function initDispatchMap(){
+  const el=$('#dispatchMap'); if(!el) return;
+  if(DISPATCH_MAP){ DISPATCH_MAP.remove(); DISPATCH_MAP=null; }
+  DISPATCH_MAP=L.map('dispatchMap',{zoomControl:true,attributionControl:false}).setView([39,-70],3);
+  const tileSet=document.documentElement.dataset.theme==='dark'?'dark_all':'light_all';
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${tileSet}/{z}/{x}/{y}{r}.png`,{maxZoom:11,subdomains:'abcd'}).addTo(DISPATCH_MAP);
+  (dispatchState.activePilots||[]).forEach(x=>{
+    const t=x.active_trip||{}; if(!t.dep||!t.arr) return;
+    const a=APTBY[t.dep], b=APTBY[t.arr]; if(!a||!b) return;
+    L.marker([a.lat,a.lon],{icon:divIcon('dep',t.dep)}).addTo(DISPATCH_MAP).bindPopup(`<b>${x.pilot}</b><br>${t.dep}→${t.arr}<br>${t.phase||''}`);
+    L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color:'var(--sky)',weight:2,dashArray:'6 8',opacity:.7}).addTo(DISPATCH_MAP);
+  });
+}
+function rDispatchMsg(p){
+  if(dispatchOnlyGate(p)) return;
+  loadDispatchThreads();
+  const threads=dispatchState.threads||[];
+  const sel=dispatchState.selThread;
+  if(sel&&!dispatchState.threadId){ dispatchState.threadId=sel; loadDispatchMessages(sel); }
+  const msgs=dispatchState.messages||[];
+  p.innerHTML=`
+    <div class="split" style="grid-template-columns:280px 1fr;align-items:start">
+      <div class="card card-pad">
+        <div class="sec-head"><div class="sec-title">Threads</div></div>
+        ${threads.length?threads.map(th=>`<button class="pilot-drop-item ${sel===th.thread_id?'on':''}" style="width:100%;margin-bottom:4px" onclick="dispatchState.selThread='${th.thread_id}';dispatchState.threadId='${th.thread_id}';loadDispatchMessages('${th.thread_id}').then(()=>rDispatchMsg($('#page')))">
+          <span>${th.pilot||'Pilot'}</span><span class="sub mono">${th.trip&&th.trip.dep?th.trip.dep+'→'+th.trip.arr:'active'}</span></button>`).join('')
+          :'<div class="muted" style="font-size:12.5px">No pilot threads — pilots with active trips appear here.</div>'}
+      </div>
+      <div class="card card-pad">
+        <div class="sec-head"><div class="sec-title">Messages</div><div class="sec-spacer"></div>
+          <button class="btn ghost sm" onclick="markDispatchRead()">Mark read</button></div>
+        <div style="min-height:200px;max-height:360px;overflow-y:auto;margin-bottom:12px;background:#000;border-radius:8px;padding:12px;font-family:var(--mono);font-size:12px;color:#ffb000">
+          ${msgs.length?msgs.map(m=>`<div style="margin-bottom:10px"><div style="opacity:.6;font-size:10px">${new Date(m.created_at).toISOString().slice(11,19)}Z · ${(m.from_role||'').toUpperCase()}</div><div>${(m.body||'').replace(/</g,'&lt;')}</div></div>`).join('')
+            :'<div style="opacity:.5">Select a thread or wait for pilot traffic.</div>'}
+        </div>
+        <div class="form-row" style="margin-top:0"><label>Reply</label>
+          <input class="field" id="dspReply" placeholder="Type dispatch message…" style="width:100%" onkeydown="if(event.key==='Enter'){dispatchState.selThread=dispatchState.selThread||dispatchState.threadId;sendDispatchMsg(this.value);this.value='';}"></div>
+        <button class="btn sky sm" style="margin-top:10px" onclick="sendDispatchMsg($('#dspReply').value);$('#dspReply').value=''">Send</button>
+      </div>
+    </div>`;
 }
 
 /* =========================================================================
@@ -3978,9 +4423,10 @@ function onboard(){
       <div class="form-row"><label>Pilot name</label><input class="field" id="obName" placeholder="Your name or handle" value="${S?.pilot||pendingPilotName||''}" style="width:100%"></div>
       <div class="form-row"><label>Home base</label><select class="field" id="obBase" style="width:100%">${aptOpts}</select></div>
       <div class="form-row"><label>How do you want to play?</label><select class="field" id="obRole" style="width:100%">
-        <option value="both">Pilot &amp; Operator — fly and run a company (recommended)</option>
+        <option value="all">All — fly, operate &amp; dispatch (recommended)</option>
         <option value="pilot">Pilot — fly charters in the sim</option>
         <option value="operator">Operator — own jets &amp; FBOs, route work to real pilots</option>
+        <option value="dispatcher">Dispatcher — dispatch board &amp; pilot messaging</option>
       </select></div>
       <div class="pnl" style="margin-top:16px">
         <div class="pnl-row"><span>Starting cash</span><span class="num pos">${money(CFG.startCash)}</span></div>
@@ -3995,7 +4441,7 @@ function onboard(){
 function onboardStep2(){
   const name=($('#obName').value||'').trim()||'Captain';
   const base=$('#obBase').value||'KSDF';
-  const role=($('#obRole')&&$('#obRole').value)||'both';
+  const role=($('#obRole')&&$('#obRole').value)||'all';
   newGame(name,base); S.role=role; S.rentStarter=false;
   const opts=AIRCRAFT.filter(a=>a.cls==='turboprop');
   const card=a=>{
@@ -4084,7 +4530,12 @@ function migrateSave(){
   else S.account={realName:S.account.realName||'',company:S.account.company||''};
   if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now()}); }
   if(S.fbo!==undefined)delete S.fbo;
-  if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
+  if(!S.role)S.role='all';
+  if(S.role==='both') S.role='all';
+  if(S.acarsOpen===undefined) S.acarsOpen=false;
+  if(!S.acarsPage) S.acarsPage='index';
+  if(S.acarsAutoOpen===undefined) S.acarsAutoOpen=true;
+  if(S.lastFbo===undefined)S.lastFbo=0;
   if(!S.fboAds)S.fboAds=[];
   if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
   if(S.rentStarter===undefined)S.rentStarter=false;
@@ -4098,6 +4549,9 @@ function resumeGame(){
   if(Date.now()-(S.lastBoard||0)>20*60e3) refreshBoard(false);
   renderAll();
   if(IS_ELECTRON) startSimAutoLink();
+  if(typeof initAcarsDock==='function') initAcarsDock();
+  if(S.active&&S.acarsAutoOpen&&acarsVisible()&&!S.acarsOpen) toggleAcars(true,false);
+  if(cloudEnabled()&&AUTH.user) startDispatchChat();
 }
 function startLocal(){ S=load(); if(S){ resumeGame(); } else { onboard(); } }
 function playOffline(){ hideAuthGate(); startLocal(); }
@@ -4201,7 +4655,8 @@ async function cloudSaveNow(){
   try{
     await sb.from('saves').upsert({user_id:AUTH.user.id,data:S,updated_at:new Date().toISOString()},{onConflict:'user_id'});
     await sb.from('profiles').upsert({id:AUTH.user.id,pilot:S.pilot,rep:Math.round(S.rep||0),cash:Math.round(S.cash||0),
-      flights:S.flights||0,base:S.base||'',pirep_code:S.pirepCode||'',updated_at:new Date().toISOString()},{onConflict:'id'});
+      flights:S.flights||0,base:S.base||'',pirep_code:S.pirepCode||'',play_role:effectiveRole(),
+      active_trip:buildActiveTripSnapshot(),updated_at:new Date().toISOString()},{onConflict:'id'});
   }catch(e){ /* offline / RLS — ignore */ }
 }
 async function cloudActivity(text){
@@ -4218,8 +4673,8 @@ function startRealtime(){
   RT.channel
     .on('presence',{event:'sync'},()=>{ RT.online=[].concat.apply([],Object.values(RT.channel.presenceState())); updateOnlinePill(); if(view==='community')rCommunity($('#page')); })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'activity'},payload=>{ RT.feed.unshift(payload.new); RT.feed=RT.feed.slice(0,50); if(view==='community')rCommunity($('#page')); })
-    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{ loadLeaderboard(); })
-    .subscribe(async (status)=>{ if(status==='SUBSCRIBED'){ try{ await RT.channel.track({pilot:(S&&S.pilot)||'Pilot',rep:(S&&S.rep)||0,base:(S&&S.base)||'',at:Date.now()}); }catch(e){} } });
+    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{ loadLeaderboard(); loadDispatchThreads(); })
+    .subscribe(async (status)=>{ if(status==='SUBSCRIBED'){ try{ await RT.channel.track({pilot:(S&&S.pilot)||'Pilot',rep:(S&&S.rep)||0,base:(S&&S.base)||'',at:Date.now()}); }catch(e){} startDispatchChat(); } });
 }
 async function loadLeaderboard(){ const sb=getSB(); if(!sb)return; try{ const {data}=await sb.from('profiles').select('*').order('rep',{ascending:false}).limit(25); RT.board=data||[]; if(view==='community')rCommunity($('#page')); updateOnlinePill(); }catch(e){} }
 async function loadFeed(){ const sb=getSB(); if(!sb)return; try{ const {data}=await sb.from('activity').select('*').order('created_at',{ascending:false}).limit(50); RT.feed=data||[]; if(view==='community')rCommunity($('#page')); }catch(e){} }
