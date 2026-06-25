@@ -9,7 +9,7 @@
     "start": "electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "dist:win": "electron-builder --win nsis --x64",
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
     "dist:publish": "electron-builder --win nsis --x64 --publish always"
   },
   "dependencies": {
