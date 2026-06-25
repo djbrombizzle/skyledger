@@ -1,33 +1,38 @@
 /* =============================================================================
-   SKYLEDGER DESKTOP SHELL (Electron)
+   SKYLEDGER DESKTOP (Electron)
    -----------------------------------------------------------------------------
-   Runs the Skyledger web app in a window that has local-socket access, so the
-   page's built-in SimConnect client (SkySimConnect) can talk to MSFS directly
-   over its named pipe / IPv4 port. No companion bridge process is required.
+   Bundles index.html and exposes Node's `net` module so SkySimConnect can talk
+   to MSFS over its named pipe / IPv4 port — no bridge or in-game panel needed.
 
-   How it works:
-   - nodeIntegration + contextIsolation:false expose Node's `net` module to the
-     page, which is exactly what SkySimConnect.getNet() looks for.
-   - By default it loads the live GitHub Pages build (always up to date). Point it
-     somewhere else with the SKYLEDGER_URL env var, e.g. a local file for testing:
-       Windows:  set SKYLEDGER_URL=file:///C:/path/to/index.html && npm start
-       macOS/Linux: SKYLEDGER_URL=file:///path/to/index.html npm start
+   Dev:  cd desktop && npm install && npm start
+   Ship: cd desktop && npm run dist
+         → dist/Skyledger-<version>-portable.exe (Windows, single file)
 
-   Usage:
-     1. Install Node.js 18+ from https://nodejs.org
-     2. In this `desktop/` folder:  npm install   (downloads Electron)
-     3. Start MSFS and load a flight.
-     4. Run:  npm start
-     5. In the app: Active Trip (or Type Ratings) -> Sim Link ->
-        "Built-in SimConnect" -> Connect to MSFS.
-
-   Security note: nodeIntegration is enabled, so only load a site you trust
-   (your own Skyledger build). That's the trade-off for giving the page the
-   raw socket it needs to reach SimConnect.
+   Override the loaded page with SKYLEDGER_URL (file:// or https://).
    ============================================================================= */
+const path = require('path');
+const { pathToFileURL } = require('url');
 const { app, BrowserWindow, shell } = require('electron');
 
-const SITE_URL = process.env.SKYLEDGER_URL || 'https://djbrombizzle.github.io/skyledger/';
+const isDev = !app.isPackaged;
+
+function bundledIndexUrl() {
+  const html = isDev
+    ? path.join(__dirname, '..', 'index.html')
+    : path.join(process.resourcesPath, 'app', 'index.html');
+  return pathToFileURL(html).href;
+}
+
+const SITE_URL = process.env.SKYLEDGER_URL || bundledIndexUrl();
+
+function isExternal(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -39,17 +44,23 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      backgroundThrottling: false // keep telemetry flowing when the window isn't focused
+      backgroundThrottling: false
     }
   });
 
   win.setMenuBarVisibility(false);
   win.loadURL(SITE_URL);
 
-  // Open external links (SimBrief, VATSIM, etc.) in the system browser instead of a Node-enabled window.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isExternal(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  win.webContents.on('will-navigate', (ev, url) => {
+    if (isExternal(url)) {
+      ev.preventDefault();
+      shell.openExternal(url);
+    }
   });
 }
 

@@ -773,6 +773,7 @@ function rwAt(ic){ for(const {e,o} of rwLive()){ if(e.apts.includes(ic)) return 
 function rwTargets(){ const out=[]; rwLive().forEach(({e,o})=>e.apts.forEach(ic=>{ if(APTBY[ic]) out.push({ic,e,o}); })); return out; }
 
 /* ---------- HELPERS ---------- */
+const IS_ELECTRON = typeof process!=='undefined' && !!(process.versions&&process.versions.electron);
 const $ = s=>document.querySelector(s);
 function haversine(a,b){
   const A=APTBY[a],B=APTBY[b],R=3440.065,r=Math.PI/180;
@@ -1668,7 +1669,8 @@ function rActive(p){
           <div class="sec-title" style="margin:2px 0 10px">SimConnect tracking</div>
           ${simState.connected
             ? `<div id="simLiveBody"></div><p class="muted" style="font-size:11.5px;margin-top:10px">Fly the open leg — touchdown within 6&nbsp;nm of the destination auto-completes it and grades your landing.</p>`
-            : `<p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
+            : `${IS_ELECTRON?`<div class="help" style="margin-bottom:11px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span><b>Desktop app</b> — built-in SimConnect. Start MSFS, then connect below (no bridge or MSFS toolbar panel).</span></div>`:''}
+               <p class="muted" style="font-size:12.5px;margin-bottom:11px">Connect MSFS for automatic leg tracking and landing-rate grading toward your type ratings.</p>
                <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
         </div>
         ${pirepCard()}
@@ -3680,6 +3682,7 @@ async function cloudPullPireps(quiet){
   }catch(e){}
 }
 function pirepCard(){
+  if(typeof SkySimConnect!=='undefined'&&SkySimConnect.available()) return '';
   const code=S.pirepCode||'', cloud=cloudEnabled()&&AUTH.user;
   return `<div class="card card-pad">
     <div class="eyebrow">MSFS toolbar PIREP</div>
@@ -3787,7 +3790,7 @@ pollLive(true);
 setInterval(()=>pollLive(false), 8*60e3);    // refresh events/weather every 8 min
 
 /* auto-pick up PIREPs submitted from the MSFS toolbar panel while a trip is open */
-setInterval(()=>{ if(S&&S.active&&view==='active'&&cloudEnabled()&&AUTH.user) cloudPullPireps(true); }, 15000);
+setInterval(()=>{ if(S&&S.active&&view==='active'&&cloudEnabled()&&AUTH.user&&!(typeof SkySimConnect!=='undefined'&&SkySimConnect.available())) cloudPullPireps(true); }, 15000);
 
 </script>
 </body>
