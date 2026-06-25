@@ -812,7 +812,7 @@ const SIZE_F={turboprop:0.6,light:1.0,midsize:1.45,supermid:1.9,heavy:2.7,ulr:3.
 const LANDING_BASE={s:35,m:120,i:240};                    // movement/landing fee (port authority)
 function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 const _fboCache={};
-function fbosFor(ic){
+function baseFbos(ic){
   if(_fboCache[ic])return _fboCache[ic];
   const a=APTBY[ic]; if(!a){_fboCache[ic]=[];return [];}
   const h=hashStr(ic), premium=PREMIUM_FIELDS.has(ic);
@@ -829,6 +829,15 @@ function fbosFor(ic){
   }
   if(!out.length) out.push({name:'Airport FBO',rampF:1,premium,fuel:+(regBase*clsF*premF).toFixed(2)});
   _fboCache[ic]=out; return out;
+}
+/* the player's owned FBO at a field (if any) */
+function myFbo(ic){ return (S&&S.fbos||[]).find(f=>f.ic===ic)||null; }
+function ownsFbo(ic){ return !!myFbo(ic); }
+/* FBOs at a field for selection/economy — includes the player's own FBO at its set price */
+function fbosFor(ic){
+  const base=baseFbos(ic), mine=myFbo(ic);
+  if(!mine) return base;
+  return base.concat([{name:(S.operator?S.operator.name:'Your')+' FBO',rampF:mine.rampMult||1,premium:false,fuel:mine.fuel,mine:true}]);
 }
 function rampFeeFor(ic,fbo,acCls){
   const a=APTBY[ic]; const base=RAMP_BASE[a.cls]*(PREMIUM_FIELDS.has(ic)?2.1:1);
@@ -886,7 +895,7 @@ function newGame(name,base){
     cash:CFG.startCash, rep:0, flights:0, hours:0, nm:0,
     fleet:[],                       // pilot picks their first aircraft
     board:[], active:null, ledger:[],
-    operator:null, fbo:null,
+    operator:null, fbos:[], role:'both', lastFbo:0,
     lastBoard:0, vatCallsign:'',
     maxTier:CFG.startTier,          // type rating cap (1 = light + turboprop)
     grades:[],                      // per-flight performance grades
@@ -962,7 +971,64 @@ function economyTick(){
   // REAL-WORLD EVENTS spike demand at their airports (the market reacts, naturally
   // raising fares & charter volume there — no artificial flat bonus)
   rwTargets().forEach(t=>bumpDemand(t.ic, rnd(0.16,0.32)));
+  // PLAYER FBO PRICING moves the market: cheap fuel draws traffic to that field, dear fuel repels it
+  (S.fbos||[]).forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8;
+    const r=f.fuel/base; bumpDemand(f.ic, r<=0.95?0.11 : r<=1.10?0.05 : r<=1.30?-0.03 : -0.09); });
   S.lastEco=now;
+}
+/* ===================== OPERATOR ECONOMICS ===================== */
+const OPER_TIERS=[
+  {key:'taxi',name:'Air Taxi', fleet:0, rep:0,    worth:0,    safety:0,  fbos:1, color:'#7d8ba0', perk:'Found your company · 1 FBO slot'},
+  {key:'reg', name:'Regional', fleet:3, rep:1800, worth:4e6,  safety:0,  fbos:2, color:'#2D6AE3', perk:'2 FBO slots · regional charters'},
+  {key:'nat', name:'National', fleet:7, rep:6000, worth:12e6, safety:74, fbos:4, color:'#1F7A52', perk:'4 FBO slots · premium clients'},
+  {key:'glob',name:'Global',   fleet:14,rep:16000,worth:30e6, safety:80, fbos:7, color:'#B0863B', perk:'7 FBO slots · VVIP & gov contracts'},
+];
+function fleetValue(){ return (S.fleet||[]).filter(f=>f.owned).reduce((s,f)=>s+Math.round((ACBY[f.type]?ACBY[f.type].price:0)*((f.cond||100)/100)),0); }
+function fboValue(){ return (S.fbos||[]).length*1500000; }
+function netWorth(){ return Math.round((S.cash||0)+fleetValue()+fboValue()); }
+function operTierIdx(){ const ss=safetyScore(); const w=netWorth();
+  let idx=0; for(let i=0;i<OPER_TIERS.length;i++){ const t=OPER_TIERS[i];
+    if((S.fleet||[]).length>=t.fleet && S.rep>=t.rep && w>=t.worth && (t.safety===0||(ss!==null&&ss>=t.safety))) idx=i; }
+  return idx; }
+function operTier(){ return OPER_TIERS[operTierIdx()]; }
+function fboSlots(){ return operTier().fbos; }
+/* operating P&L over a window (ms). Splits revenue / operating costs / capital. */
+function plWindow(ms){
+  const since=Date.now()-ms; let rev=0,op=0,cap=0; const capRe=/Acquired|Bought|Purchase|Founded|Upgrade|deposit|FBO at/i;
+  (S.ledger||[]).forEach(e=>{ if(e.t<since)return;
+    if(e.a>0)rev+=e.a; else if(capRe.test(e.k))cap+=-e.a; else op+=-e.a; });
+  return {rev,op,cap,net:rev-op};
+}
+/* daily net for the last n days → sparkline series */
+function plDaily(days){
+  const out=new Array(days).fill(0), day=864e5, today=Math.floor(Date.now()/day);
+  const capRe=/Acquired|Bought|Purchase|Founded|Upgrade|deposit|FBO at/i;
+  (S.ledger||[]).forEach(e=>{ const d=Math.floor(e.t/day), i=days-1-(today-d); if(i<0||i>=days)return;
+    if(e.a>0)out[i]+=e.a; else if(!capRe.test(e.k))out[i]+=e.a; });
+  return out;
+}
+function fleetUtil(){
+  const owned=(S.fleet||[]).filter(f=>f.owned);
+  const flying=owned.filter(f=>f.busy&&!(f.rentedUntil>Date.now())).length;
+  const listed=owned.filter(f=>f.forRent&&!f.busy).length;
+  const idle=owned.filter(f=>!f.busy&&!f.forRent).length;
+  return {total:owned.length,flying,listed,idle,pct:owned.length?Math.round((flying/owned.length)*100):0};
+}
+/* passive FBO margin — fuel sold to the live traffic (real jobs/demand) at each owned field */
+function operatorTick(){
+  if(!S||!S.fbos||!S.fbos.length) return; const now=Date.now();
+  const elapsed=now-(S.lastFbo||0);
+  if(S.lastFbo && elapsed<300000) return;                 // accrue every ~5 min
+  const dtH=Math.min(2,(S.lastFbo?elapsed:300000)/3600e3); S.lastFbo=now;
+  let earn=0;
+  S.fbos.forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8, wholesale=base*0.92;
+    const margin=Math.max(0,f.fuel-wholesale);
+    const sizeMult=a.cls==='i'?1.6:a.cls==='m'?1.0:0.6;
+    const appeal=Math.max(0.3,1.9-f.fuel/base);            // cheaper fuel moves more gallons
+    const gal=Math.round(5000*sizeMult*demandAt(f.ic)*appeal*dtH);
+    const e=Math.round(gal*margin); f.gallons=(f.gallons||0)+gal; f.margin=(f.margin||0)+e; earn+=e; });
+  if(earn>0){ S.cash+=earn; S.ledger.push({t:now,k:'FBO fuel margin',a:earn,note:S.fbos.length+' location(s)',cat:'fbo'});
+    save(); if(view==='operator'||view==='dash'||view==='ledger')renderAll(); }
 }
 /* pick a charter origin weighted by current outbound demand (hot fields spawn more) */
 function weightedOrigin(){
@@ -1756,7 +1822,7 @@ function settleTrip(){
   }
   S.rep+=rep; S.flights++;
   // FBO passive cut if charter originated at your FBO
-  if(!ferry && S.fbo===c.dep){const cut=Math.round(c.payout*0.04);S.cash+=cut;S.ledger.push({t:Date.now(),k:`FBO origin fee ${c.dep}`,a:cut,note:'Your FBO'});}
+  if(!ferry && ownsFbo(c.dep)){const cut=Math.round(c.payout*0.04);S.cash+=cut;S.ledger.push({t:Date.now(),k:`FBO origin fee ${c.dep}`,a:cut,note:'Your FBO'});}
   ac.busy=false; const arrived=c.arr;
   if(ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // rental returned to the market
   S.active=null;
@@ -2022,32 +2088,159 @@ function rOperator(p){
     return;
   }
   const o=S.operator;
+  const ti=operTierIdx(), tier=OPER_TIERS[ti], next=OPER_TIERS[ti+1];
+  const nw=netWorth(), pl7=plWindow(7*864e5), util=fleetUtil(), ss=safetyScore();
+  const spark=plDaily(14), revTail=util.total?Math.round(pl7.rev/util.total):0;
+  const prog = next? Math.max(0,Math.min(1, Math.min((S.fleet||[]).length/next.fleet, S.rep/next.rep, nw/next.worth))) : 1;
+  const roleSeg=(k,lab)=>`<button class="chip ${S.role===k?'on':''}" onclick="setRole('${k}')">${lab}</button>`;
+  const kpi=(lab,val,sub,tone)=>`<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">${lab}</div>
+    <div class="mono" style="font-size:21px;font-weight:700;margin-top:3px;${tone?`color:var(--${tone})`:''}">${val}</div><div class="muted" style="font-size:11.5px;margin-top:2px">${sub}</div></div>`;
   p.innerHTML=`
-    <div class="card card-pad" style="margin-bottom:18px">
-      <div style="display:flex;align-items:center;gap:16px">
+    <div class="card card-pad" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div class="brand-mark" style="width:54px;height:54px;background:${o.color}"><span style="font-family:var(--disp);font-weight:800;color:#fff;font-size:22px">${o.name[0]}</span></div>
-        <div><div class="eyebrow">Operator · founded ${new Date(o.founded).toLocaleDateString()}</div>
-          <div style="font-family:var(--disp);font-weight:700;font-size:22px">${o.name}</div>
-          <div class="muted" style="font-size:13px">${o.callsign} · ${S.fleet.length} aircraft · ${rankFor(S.rep)}</div></div>
+        <div style="flex:1;min-width:200px"><div class="eyebrow">Operator · ${o.callsign} · founded ${new Date(o.founded).toLocaleDateString()}</div>
+          <div style="font-family:var(--disp);font-weight:700;font-size:23px;line-height:1.1">${o.name}</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span class="tag" style="background:${tier.color};color:#fff">${tier.name}</span>
+            <span class="muted" style="font-size:12.5px">${(S.fleet||[]).length} aircraft · ${(S.fbos||[]).length} FBO · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
+        <div style="text-align:right"><div class="muted" style="font-size:11px">Choose how you play</div>
+          <div class="chiprow" style="justify-content:flex-end;margin-top:4px">${roleSeg('pilot','Pilot')}${roleSeg('operator','Operator')}${roleSeg('both','Both')}</div></div>
       </div>
+      ${next?`<div style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span class="muted">Progress to <b>${next.name}</b></span>
+          <span class="muted">fleet ${(S.fleet||[]).length}/${next.fleet} · rep ${S.rep.toLocaleString()}/${next.rep.toLocaleString()} · worth ${money1k(nw)}/${money1k(next.worth)}</span></div>
+        <div style="height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden;margin-top:6px"><div style="height:100%;width:${(prog*100).toFixed(0)}%;background:${next.color}"></div></div>
+        <div class="muted" style="font-size:11.5px;margin-top:5px">Next unlock: ${next.perk}</div></div>`
+        :`<div class="muted" style="font-size:12px;margin-top:12px">★ Global operator — top tier reached. ${tier.perk}.</div>`}
     </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+      ${kpi('Net worth',money1k(nw),`cash ${money1k(S.cash)} · fleet ${money1k(fleetValue())}`)}
+      ${kpi('Net · 7 days',money1k(pl7.net),`rev ${money1k(pl7.rev)} − ops ${money1k(pl7.op)}`,pl7.net>=0?'pos':'neg')}
+      ${kpi('Fleet utilization',util.pct+'%',`${util.flying} flying · ${util.idle} idle`)}
+      ${kpi('FBO network',`${(S.fbos||[]).length} / ${fboSlots()}`,`${money1k((S.fbos||[]).reduce((s,f)=>s+(f.margin||0),0))} earned`)}
+    </div>
+
     <div class="split">
-      <div class="card card-pad">
-        <div class="sec-head"><div><div class="eyebrow">Base of operations</div><div class="sec-title">Fixed Base Operator (FBO)</div></div></div>
-        ${S.fbo?`<div class="help" style="border-style:solid;background:var(--pos-soft);border-color:var(--pos-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
-            <span>You own the FBO at <b class="mono">${S.fbo}</b> — ${APTBY[S.fbo].name}. You earn a <b>4% origin fee</b> on every charter that departs here and pay reduced handling.</span></div>`
-          :`<p class="muted" style="font-size:13px;margin-bottom:14px">Acquire an FBO at a hub to earn a 4% origin fee on charters departing there, plus discounted handling for your own fleet.</p>
-            <div class="form-row" style="margin-top:0"><label>Choose a hub airport</label>
-              <select class="field" id="fboSel" style="width:100%">${HUBS.map(h=>`<option value="${h}">${h} — ${APTBY[h].name}</option>`).join('')}</select></div>
-            <button class="btn brass" style="margin-top:14px;width:100%;justify-content:center" ${S.cash>=1500000?'':'disabled'} onclick="buyFBO()">${S.cash>=1500000?'Acquire FBO · '+money(1500000):'Need $1,500,000'}</button>`}
+      <div>
+        <div class="card card-pad">
+          <div class="sec-head"><div><div class="eyebrow">Business report</div><div class="sec-title">Live P&amp;L · 7 days</div></div>
+            <div style="text-align:right"><div class="mono" style="font-size:20px;font-weight:700;color:var(--${pl7.net>=0?'pos':'neg'})">${money(pl7.net)}</div><div class="muted" style="font-size:11px">net</div></div></div>
+          <div style="margin:6px 0 12px">${opSpark(spark,300,42)}<div class="muted" style="font-size:10.5px;text-align:center">daily net · last 14 days</div></div>
+          <div class="pnl">
+            <div class="pnl-row"><span>Revenue (charters, FBO margin, rentals)</span><span class="num pos">${money(pl7.rev)}</span></div>
+            <div class="pnl-row"><span>Operating costs (fuel, maintenance, lease)</span><span class="num neg">-${money(pl7.op)}</span></div>
+            ${pl7.cap?`<div class="pnl-row"><span>Capital (aircraft, FBOs, upgrades)</span><span class="num neg">-${money(pl7.cap)}</span></div>`:''}
+            <div class="pnl-row tot"><span>Operating net</span><span class="num ${pl7.net>=0?'pos':'neg'}">${money(pl7.net)}</span></div>
+          </div>
+        </div>
+        <div class="card card-pad" style="margin-top:14px">
+          <div class="sec-head"><div><div class="eyebrow">Fleet</div><div class="sec-title">Utilization</div></div>
+            <div style="text-align:right"><div class="mono" style="font-size:18px;font-weight:700">${money1k(revTail)}</div><div class="muted" style="font-size:11px">rev / tail · 7d</div></div></div>
+          ${util.total?`<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--surface-2);margin:4px 0 10px">
+            <div style="width:${util.flying/util.total*100}%;background:var(--pos)" title="Flying"></div>
+            <div style="width:${util.listed/util.total*100}%;background:var(--brass)" title="Listed for rent"></div>
+            <div style="width:${util.idle/util.total*100}%;background:var(--line)" title="Idle"></div></div>
+          <div style="display:flex;gap:16px;font-size:12px"><span><b style="color:var(--pos)">${util.flying}</b> flying</span>
+            <span><b style="color:var(--brass)">${util.listed}</b> listed</span><span><b class="muted">${util.idle}</b> idle</span></div>
+          ${util.idle>=1?`<div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Idle jets earn nothing — list them for rent so real pilots can fly them, or send them on charters.</span></div>`:''}`
+          :`<p class="muted" style="font-size:13px">No owned aircraft yet. Acquire metal in the Marketplace to build utilization.</p>`}
+        </div>
       </div>
-      <div class="card card-pad">
-        <div class="eyebrow">Company stats</div><div class="sec-title" style="margin:2px 0 12px">Performance</div>
-        <div class="mini"><div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg></div><div><div class="t">Charters flown</div></div><div class="amt">${S.flights}</div></div>
-        <div class="mini"><div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg></div><div><div class="t">Block hours</div></div><div class="amt">${Math.round(S.hours)}</div></div>
-        <div class="mini"><div class="mini-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17z"/></svg></div><div><div class="t">Reputation</div></div><div class="amt">${S.rep.toLocaleString()}</div></div>
+      <div>
+        <div class="card card-pad">
+          <div class="sec-head"><div><div class="eyebrow">Network · the economy lever</div><div class="sec-title">FBO fuel pricing</div></div>
+            <button class="btn brass sm" onclick="openBuyFbo()" ${(S.fbos||[]).length>=fboSlots()?'disabled title="No free slots — reach the next tier"':''}>+ Acquire FBO</button></div>
+          ${(S.fbos||[]).length? (S.fbos||[]).map(fboRow).join('')
+            : `<div class="help" style="margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h0M9 16h0M15 12h0M15 16h0"/></svg>
+               <span>Own an FBO to set Jet-A pricing at a field. It's the single biggest lever on SKYLEDGER's economy — cheap fuel draws traffic and spawns more jobs there; dear fuel fattens your margin. You earn on every gallon the field's traffic uplifts.</span></div>`}
+        </div>
+        <div class="card card-pad" style="margin-top:14px">
+          <div class="sec-head"><div><div class="eyebrow">Operations</div><div class="sec-title">Alerts</div></div></div>
+          ${operAlerts().map(a=>`<div class="help" style="margin-top:8px;${a.tone==='good'?'border-color:var(--pos-soft);background:var(--pos-soft)':a.tone==='warn'?'border-color:var(--brass)':''}">
+            <span style="font-size:15px">${a.i}</span><span>${a.t}</span></div>`).join('')}
+        </div>
       </div>
     </div>`;
+}
+function setRole(r){ S.role=r; save(); showToast('Play style: '+({pilot:'Pilot',operator:'Operator',both:'Pilot + Operator'}[r]||r),'good'); renderAll(); }
+function opSpark(arr,w,h){
+  const max=Math.max(1,...arr.map(v=>Math.abs(v))), n=arr.length;
+  const pts=arr.map((v,i)=>`${(i/(n-1)*w).toFixed(1)},${(h/2-(v/max)*(h/2-3)).toFixed(1)}`).join(' ');
+  const last=arr[arr.length-1]||0;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block">
+    <line x1="0" y1="${h/2}" x2="${w}" y2="${h/2}" stroke="var(--line)" stroke-width="1"/>
+    <polyline points="${pts}" fill="none" stroke="${last>=0?'var(--pos)':'var(--neg)'}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function fboRow(f){
+  const a=APTBY[f.ic]; if(!a)return''; const base=FUEL_REGION[a.region]||7.8, wholesale=base*0.92;
+  const margin=Math.max(0,f.fuel-wholesale), dem=demandAt(f.ic);
+  const lo=+(base*0.85).toFixed(2), hi=+(base*1.6).toFixed(2);
+  return `<div class="card" style="padding:13px 15px;margin-bottom:10px;background:var(--surface-2)">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+      <span class="tag ok">★ FBO</span><b class="mono">${f.ic}</b><span class="muted" style="font-size:12px">${a.name}</span>
+      <span class="sec-spacer" style="flex:1"></span><span class="tag ${dem>=1.12?'demand':'muted-t'}">${demandLevel(dem)} traffic</span></div>
+    <label class="muted" style="font-size:11px">Jet-A — your margin <b>${money(margin)}/gal</b> over wholesale</label>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:3px">
+      <input type="range" min="${lo}" max="${hi}" step="0.05" value="${Math.min(hi,Math.max(lo,f.fuel))}" oninput="setFboFuel('${f.ic}',this.value,true)" onchange="setFboFuel('${f.ic}',this.value)" style="flex:1">
+      <b class="mono" id="fboPx-${f.ic}" style="width:62px;text-align:right">$${f.fuel.toFixed(2)}</b></div>
+    <div class="muted" style="font-size:10.5px;margin-top:3px">Cheaper → more traffic &amp; gallons, thinner margin. Dearer → fat margin, less volume.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+      <button class="btn ghost sm" onclick="setFboFuel('${f.ic}',${(+(base*0.95)).toFixed(2)})">Undercut</button>
+      <button class="btn ghost sm" onclick="setFboFuel('${f.ic}',${(+(base*1.25)).toFixed(2)})">Premium</button>
+      <span class="sec-spacer" style="flex:1"></span>
+      <span class="muted mono" style="font-size:11px">${Math.round(f.gallons||0).toLocaleString()} gal · ${money(f.margin||0)}</span>
+      <button class="btn ghost sm" style="color:var(--neg)" onclick="sellFbo('${f.ic}')">Sell</button></div>
+  </div>`;
+}
+function setFboFuel(ic,v,liveOnly){
+  const f=myFbo(ic); if(!f)return; v=Math.max(1,+(+v).toFixed(2));
+  const lbl=$('#fboPx-'+ic); if(lbl)lbl.textContent='$'+v.toFixed(2);
+  if(liveOnly)return;                      // mid-drag: update the label only
+  f.fuel=v; save(); renderAll();
+}
+function sellFbo(ic){
+  if(!confirm('Sell your FBO at '+ic+'? You recover 60% of the purchase price.'))return;
+  S.fbos=(S.fbos||[]).filter(f=>f.ic!==ic);
+  const refund=Math.round(1500000*0.6); S.cash+=refund;
+  S.ledger.push({t:Date.now(),k:`Sold FBO ${ic}`,a:refund,note:'60% recovery'}); save(); showToast('FBO sold',' good'.trim()); renderAll();
+}
+function operAlerts(){
+  const al=[], util=fleetUtil();
+  if(util.idle>=2) al.push({i:'⚠️',t:`${util.idle} owned jets are idle — list them for rent or send them flying.`,tone:'warn'});
+  (S.fbos||[]).forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8;
+    if(f.fuel/base>1.32) al.push({i:'⛽',t:`${f.ic} fuel is priced high — fat margin, but traffic is turning away.`,tone:'warn'});
+    if(demandAt(f.ic)>=1.3) al.push({i:'📈',t:`${f.ic} is hot (${demandLevel(demandAt(f.ic))} traffic) — fuel volume is up.`,tone:'good'}); });
+  const ti=operTierIdx(), n=OPER_TIERS[ti+1];
+  if(n && (S.fleet||[]).length>=n.fleet && S.rep>=n.rep && netWorth()>=n.worth)
+    al.push({i:'⭐',t:`You qualify for ${n.name} status — unlocks ${n.fbos} FBO slots and ${n.perk.toLowerCase()}.`,tone:'good'});
+  const ss=safetyScore(); if(ss!==null&&ss<70) al.push({i:'🛡️',t:`Safety score ${Math.round(ss)} — clean landings protect ratings and (later) cut insurance.`,tone:'warn'});
+  if(!al.length) al.push({i:'✅',t:'All nominal. Acquire FBOs and tune fuel pricing to grow your network and bend the market.',tone:'good'});
+  return al.slice(0,6);
+}
+function openBuyFbo(){
+  const slots=fboSlots(), have=(S.fbos||[]).length;
+  if(have>=slots) return showToast(`${operTier().name} allows ${slots} FBO${slots>1?'s':''} — reach the next tier for more`,'bad');
+  if(S.cash<1500000) return showToast('FBOs cost $1,500,000','bad');
+  modal(`<div class="modal-head"><div class="eyebrow">Expand network · ${have}/${slots} slots used</div><h2>Acquire an FBO</h2>
+    <div class="lead">Own the fuel &amp; ramp at a field and set your own Jet-A price. You earn margin on every gallon the field's traffic uplifts.</div></div>
+    <div class="modal-body">
+      <div class="form-row"><label>Airport ICAO</label><input class="field mono" id="fboIc" placeholder="e.g. KTEB" maxlength="4" value="${esc(S.base)}" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
+      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg><span>Hubs and premium fields see the most traffic. Flat cost of ${money(1500000)}.</span></div>
+      <div style="display:flex;gap:10px;margin-top:18px"><button class="btn ghost" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn brass" style="flex:2" onclick="buyFboAt()">Acquire · ${money(1500000)}</button></div>
+    </div>`);
+}
+function buyFboAt(){
+  const ic=($('#fboIc').value||'').toUpperCase();
+  if(!APTBY[ic])return showToast('Unknown ICAO','bad');
+  if(ownsFbo(ic))return showToast('You already own that FBO','bad');
+  if((S.fbos||[]).length>=fboSlots())return showToast('No FBO slots — reach the next tier','bad');
+  if(S.cash<1500000)return showToast('Not enough cash','bad');
+  S.cash-=1500000; S.fbos.push({ic,fuel:medFuel(ic),rampMult:1.0,gallons:0,margin:0,bought:Date.now()});
+  S.ledger.push({t:Date.now(),k:`Acquired FBO at ${ic}`,a:-1500000,note:APTBY[ic].name});
+  if(typeof cloudActivity==='function')cloudActivity(`opened an FBO at ${ic} ⛽`);
+  save(); closeModal(); showToast(`FBO acquired at ${ic}`,'good'); renderAll();
 }
 function openFound(){
   modal(`<div class="modal-head"><div class="eyebrow">New operator</div><h2>Name your company</h2>
@@ -2072,13 +2265,6 @@ function foundOperator(){
   cloudActivity(`founded operator ${name} 🏢`);
   S.ledger.push({t:Date.now(),k:`Founded ${name}`,a:-250000,note:'Operator formation'});
   closeModal();showToast(`${name} is open for business 🎉`,'good');nav('operator');
-}
-function buyFBO(){
-  const ic=$('#fboSel').value;
-  if(S.cash<1500000)return showToast('Not enough cash','bad');
-  S.cash-=1500000;S.fbo=ic;
-  S.ledger.push({t:Date.now(),k:`Acquired FBO ${ic}`,a:-1500000,note:APTBY[ic].name});
-  showToast(`FBO acquired at ${ic}`,'good');renderAll();
 }
 
 /* ---------- TYPE RATINGS ---------- */
@@ -2323,7 +2509,7 @@ function rAirport(p){
           <span class="tag cls">${clsLabel}</span><span class="tag muted-t">${a.region}</span>
           ${d>=1.12?`<span class="tag demand">📈 ${demandLevel(d)} demand</span>`:''}
           ${rw?`<span class="tag evt-tag">${rw.icon} ${rw.name}</span>`:''}
-          ${S.fbo===ic?'<span class="tag ok">★ Your FBO</span>':''}
+          ${ownsFbo(ic)?'<span class="tag ok">★ Your FBO</span>':''}
         </div>
         <span class="sec-spacer" style="flex:1"></span>
         <div id="aptWx" style="min-width:170px">${wxStrip(ic)}</div>
@@ -2527,8 +2713,8 @@ function initMap(){
     L.marker([a.lat,a.lon],{icon:divIcon('ac',f.tail)}).addTo(MAP)
       .bindPopup(`<b>${f.tail}</b><br>${ACBY[f.type].name}<br>${a.name} (${f.loc})`);
     pts.push([a.lat,a.lon]);});
-  if(S.fbo){const a=APTBY[S.fbo];L.marker([a.lat,a.lon],{icon:divIcon('fbo','FBO '+S.fbo)}).addTo(MAP)
-    .bindPopup(`<b>FBO</b><br>${a.name}`);pts.push([a.lat,a.lon]);}
+  (S.fbos||[]).forEach(fb=>{const a=APTBY[fb.ic];if(!a)return;L.marker([a.lat,a.lon],{icon:divIcon('fbo','FBO '+fb.ic)}).addTo(MAP)
+    .bindPopup(`<b>Your FBO</b><br>${a.name}<br>Jet-A $${fb.fuel.toFixed(2)}/gal`);pts.push([a.lat,a.lon]);});
   if(S.active){const c=S.active.charter,d=APTBY[c.dep],r=APTBY[c.arr];
     L.marker([d.lat,d.lon],{icon:divIcon('dep',c.dep)}).addTo(MAP);
     L.marker([r.lat,r.lon],{icon:divIcon('dep',c.arr)}).addTo(MAP);
@@ -3218,6 +3404,11 @@ function onboard(){
     <div class="modal-body">
       <div class="form-row"><label>Pilot name</label><input class="field" id="obName" placeholder="Your name or handle" value="${S?.pilot||pendingPilotName||''}" style="width:100%"></div>
       <div class="form-row"><label>Home base</label><select class="field" id="obBase" style="width:100%">${aptOpts}</select></div>
+      <div class="form-row"><label>How do you want to play?</label><select class="field" id="obRole" style="width:100%">
+        <option value="both">Pilot &amp; Operator — fly and run a company (recommended)</option>
+        <option value="pilot">Pilot — fly charters in the sim</option>
+        <option value="operator">Operator — own jets &amp; FBOs, route work to real pilots</option>
+      </select></div>
       <div class="pnl" style="margin-top:16px">
         <div class="pnl-row"><span>Starting cash</span><span class="num pos">${money(CFG.startCash)}</span></div>
         <div class="pnl-row"><span>Starting type rating</span><span class="num">${CLASSES[TIERS[CFG.startTier]].label}</span></div>
@@ -3231,7 +3422,8 @@ function onboard(){
 function onboardStep2(){
   const name=($('#obName').value||'').trim()||'Captain';
   const base=$('#obBase').value||'KSDF';
-  newGame(name,base);                 // creates state with empty fleet
+  const role=($('#obRole')&&$('#obRole').value)||'both';
+  newGame(name,base); S.role=role;                 // creates state with empty fleet
   // entry options: turboprop + light (everything at or below starting rating)
   const opts=AIRCRAFT.filter(a=>CLASSES[a.cls].tier<=S.maxTier);
   const card=a=>{
@@ -3305,6 +3497,10 @@ function migrateSave(){
   if(!S.used)S.used=[]; if(S.lastUsed===undefined)S.lastUsed=0;
   if(!S.pirepCode)S.pirepCode=genPirepCode();
   if(!S.account)S.account={realName:'',company:'',phone:'',addr1:'',city:'',region:'',postal:'',country:''};
+  if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now()}); }
+  if(S.fbo!==undefined)delete S.fbo;
+  if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
+  (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
 }
@@ -3572,23 +3768,8 @@ function rentalTick(){
       f.renter=''; changed=true;
     }
   });
-  // start new rentals on idle, listed, owned aircraft
-  S.fleet.forEach(f=>{
-    if(!(f.owned && f.forRent && !f.busy && !f.rentedUntil && f.rentRate>0)) return;
-    const a=ACBY[f.type];
-    // renters compare your rate to the factory lease — over-priced jets sit
-    const ratio=f.rentRate/a.lease;
-    const interest = ratio<=0.6?0.16 : ratio<=0.85?0.12 : ratio<=1.05?0.07 : ratio<=1.3?0.03 : 0.01;
-    const demandF = demandAt(f.loc)>=1.15?1.25:1;          // busy fields rent faster
-    if(Math.random()<interest*demandF){
-      const days=pick([1,1,2,2,3,4]);
-      const net=Math.round(days*f.rentRate*0.90);           // you keep 90% (10% platform fee)
-      f.rentedUntil=now+days*240e3; f.rentDays=days; f.busy=true; f.renter=pick(NPC_RENTERS);
-      S.cash+=net;
-      S.ledger.push({t:now,k:`Rental income ${f.tail}`,a:net,note:`${days}-day dry lease · ${f.renter}`});
-      changed=true;
-    }
-  });
+  // (no bot pilots) listed aircraft are rented by REAL pilots via the board's rent-to-fly
+  operatorTick();                                          // accrue passive FBO fuel margin
   if(changed){ save(); if(view==='fleet'||view==='dash'||view==='ledger') renderAll(); }
 }
 setInterval(rentalTick, 30e3);
