@@ -287,25 +287,27 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 
 /* CHARTER BOARD TABLE */
 .board-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:auto;background:var(--surface);box-shadow:var(--shadow);max-height:calc(100vh - 168px)}
-.board-tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
-.board-tbl th{background:var(--surface-2);padding:5px 7px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
+.board-tbl{width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed;line-height:1.35}
+.board-tbl th{background:var(--surface-2);padding:9px 10px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:2}
 .board-tbl th.sortable{cursor:pointer;user-select:none}
 .board-tbl th.sortable:hover{color:var(--ink)}
-.board-tbl th .sort-i{opacity:.35;font-size:9px;margin-left:2px}
+.board-tbl th .sort-i{opacity:.35;font-size:10px;margin-left:3px}
 .board-tbl th .sort-i.on{opacity:1;color:var(--brass)}
-.board-tbl tr.board-filters th{background:var(--surface);padding:3px 5px;border-bottom:1px solid var(--line);position:sticky;top:24px;z-index:2;font-weight:500;text-transform:none;letter-spacing:0}
-.board-tbl tr.board-filters .field{padding:3px 6px;font-size:11px;border-radius:6px;width:100%;min-width:0}
-.board-tbl td{padding:4px 7px;border-bottom:1px solid var(--line);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
+.board-tbl tr.board-filters th{background:var(--surface);padding:6px 8px;border-bottom:1px solid var(--line);position:sticky;top:36px;z-index:2;font-weight:500;text-transform:none;letter-spacing:0}
+.board-tbl tr.board-filters .field{padding:6px 8px;font-size:13px;border-radius:6px;width:100%;min-width:0}
+.board-tbl td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
 .board-tbl tr.board-row:hover td{background:var(--surface-2)}
 .board-tbl tr.board-row.evt td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
 .board-tbl tr.board-row.repo td:first-child{box-shadow:inset 3px 0 0 var(--muted-2)}
 .board-tbl tr.board-row.dim{opacity:.48}
 .board-tbl .mono{font-family:var(--mono)}
-.board-tbl .amt{text-align:right;font-family:var(--mono);font-weight:600}
-.board-tbl .client{max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.board-tbl .act{text-align:right;white-space:nowrap;width:72px}
-.board-tbl .tag.sm{font-size:9px;padding:1px 5px;line-height:1.35}
-.board-tbl .flags{display:flex;gap:3px;flex-wrap:nowrap}
+.board-tbl .amt{text-align:right;font-family:var(--mono);font-weight:600;font-size:14px}
+.board-tbl .client{max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px}
+.board-tbl .act{text-align:right;white-space:nowrap;width:88px}
+.board-tbl .tag.sm{font-size:11px;padding:3px 7px;line-height:1.35}
+.board-tbl .when{font-size:13px;color:var(--muted)}
+.board-tbl .flags{display:flex;gap:4px;flex-wrap:nowrap;align-items:center}
+.board-tbl .btn.sm{font-size:12px;padding:6px 11px}
 .board-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .board-count{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
 
@@ -1600,9 +1602,9 @@ function rBoard(p){
     <div class="board-wrap">
       <table class="board-tbl">
         <colgroup>
-          <col style="width:62px"><col style="width:62px"><col style="width:54px"><col style="width:72px">
-          <col style="width:18%"><col style="width:48px"><col style="width:36px"><col style="width:72px">
-          <col style="width:68px"><col style="width:58px"><col style="width:76px"><col style="width:72px">
+          <col style="width:68px"><col style="width:68px"><col style="width:60px"><col style="width:80px">
+          <col style="width:18%"><col style="width:52px"><col style="width:42px"><col style="width:80px">
+          <col style="width:76px"><col style="width:64px"><col style="width:84px"><col style="width:88px">
         </colgroup>
         <thead>
           <tr>${th('dep','Dep')}${th('arr','Arr')}${th('cls','Class','54px')}${th('cat','Type','72px')}
@@ -1710,7 +1712,7 @@ function charterRow(c){
     <td class="amt">${c.pax||'—'}</td>
     <td class="amt">${money1k(c.payout)}</td>
     <td class="amt ${e.net!=null?(e.net>=0?'pos':'neg'):''}">${e.net!=null?money1k(e.net):'—'}</td>
-    <td class="mono" style="font-size:11px;color:var(--muted)">${timeLeft(c.expires)}</td>
+    <td class="mono when">${timeLeft(c.expires)}</td>
     <td><span class="tag ${stCls} sm">${e.statusLabel}</span>${flags.length?`<span class="flags">${flags.join('')}</span>`:''}</td>
     <td class="act">${btn}</td></tr>`;
 }
