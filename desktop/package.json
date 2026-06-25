@@ -37,6 +37,10 @@
       {
         "from": "../version.json",
         "to": "app/version.json"
+      },
+      {
+        "from": "../data/airports.json",
+        "to": "app/data/airports.json"
       }
     ],
     "publish": {
