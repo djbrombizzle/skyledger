@@ -774,6 +774,81 @@ function rwTargets(){ const out=[]; rwLive().forEach(({e,o})=>e.apts.forEach(ic=
 
 /* ---------- HELPERS ---------- */
 const IS_ELECTRON = typeof process!=='undefined' && !!(process.versions&&process.versions.electron);
+let SKY_SHELL_VERSION='', SKY_GAME_VERSION='', SKY_UPDATE_STATUS={state:'idle'};
+const GAME_VERSION_URL='https://djbrombizzle.github.io/skyledger/version.json';
+function semverCmp(a,b){
+  const pa=String(a||'0').split('.').map(Number), pb=String(b||'0').split('.').map(Number);
+  for(let i=0;i<3;i++){ const d=(pa[i]||0)-(pb[i]||0); if(d) return d>0?1:-1; }
+  return 0;
+}
+function desktopIpc(){
+  if(!IS_ELECTRON)return null;
+  try{ return require('electron').ipcRenderer; }catch(e){ return null; }
+}
+async function initDesktopShell(){
+  const ipc=desktopIpc(); if(!ipc)return;
+  try{ SKY_SHELL_VERSION=await ipc.invoke('sky-desktop-version'); }catch(e){}
+  ipc.on('sky-update-status',(_ev,data)=>{ SKY_UPDATE_STATUS=data||{}; if(view==='settings')rSettings($('#page')); });
+}
+async function checkGameVersion(){
+  if(!IS_ELECTRON)return;
+  try{
+    const r=await fetch(GAME_VERSION_URL+'?t='+Date.now());
+    if(!r.ok)return;
+    const m=await r.json();
+    SKY_GAME_VERSION=m.version||'';
+    let shell=SKY_SHELL_VERSION;
+    const ipc=desktopIpc();
+    if(!shell&&ipc) shell=await ipc.invoke('sky-desktop-version');
+    if(m.minShell&&shell&&semverCmp(shell,m.minShell)<0)
+      showToast(`Desktop app ${m.minShell}+ required — open Settings → Desktop updates`,'bad');
+  }catch(e){}
+}
+function desktopUpdateLabel(){
+  const s=SKY_UPDATE_STATUS.state||'idle';
+  if(s==='downloading') return `Downloading shell update… ${SKY_UPDATE_STATUS.percent||0}%`;
+  if(s==='ready') return `Shell update ${SKY_UPDATE_STATUS.version||''} ready — restart to install`;
+  if(s==='available') return `Shell update ${SKY_UPDATE_STATUS.version||''} downloading…`;
+  if(s==='current') return 'Desktop shell is up to date';
+  if(s==='error') return SKY_UPDATE_STATUS.message||'Update check failed';
+  if(s==='dev') return 'Running in development mode';
+  return 'Checks on launch · game loads from the web automatically';
+}
+function desktopVersionCard(){
+  if(!IS_ELECTRON)return '';
+  return `<div class="card card-pad" style="margin-top:16px">
+    <div class="sec-head"><div><div class="eyebrow">Desktop</div><div class="sec-title">Updates</div></div></div>
+    <div class="tel-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px">
+      <div class="cell"><div class="k">APP SHELL</div><div class="v mono">${esc(SKY_SHELL_VERSION||'—')}</div></div>
+      <div class="cell"><div class="k">GAME BUILD</div><div class="v mono">${esc(SKY_GAME_VERSION||'live')}</div></div>
+    </div>
+    <div class="help" style="margin-bottom:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      <span>Game content updates from GitHub Pages whenever you launch. The desktop shell updates automatically when a new installer is published.</span></div>
+    <div class="muted" id="skyUpdateMsg" style="font-size:12.5px;margin-bottom:12px">${esc(desktopUpdateLabel())}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn ghost sm" onclick="checkDesktopUpdates()">Check for shell update</button>
+      ${SKY_UPDATE_STATUS.state==='ready'?'<button class="btn brass sm" onclick="restartDesktopUpdate()">Restart &amp; install</button>':''}
+    </div>
+  </div>`;
+}
+async function checkDesktopUpdates(){
+  const ipc=desktopIpc(); if(!ipc)return showToast('Desktop updater unavailable','bad');
+  const el=$('#skyUpdateMsg'); if(el) el.textContent='Checking…';
+  try{
+    const r=await ipc.invoke('sky-check-updates');
+    SKY_UPDATE_STATUS=r||{state:'idle'};
+    if(view==='settings')rSettings($('#page'));
+    else if(el) el.textContent=desktopUpdateLabel();
+    if(r.state==='dev') showToast('Dev build — updater disabled','bad');
+    else if(r.state==='error') showToast(r.message||'Update check failed','bad');
+    else if(r.state==='checking') showToast(r.version?`Checking for ${r.version}…`:'Checking for updates…','good');
+    else showToast('Update check complete','good');
+  }catch(e){ showToast('Update check failed','bad'); }
+}
+function restartDesktopUpdate(){
+  const ipc=desktopIpc(); if(!ipc)return;
+  ipc.invoke('sky-quit-and-install');
+}
 const $ = s=>document.querySelector(s);
 function haversine(a,b){
   const A=APTBY[a],B=APTBY[b],R=3440.065,r=Math.PI/180;
@@ -3194,6 +3269,7 @@ function rSettings(p){
         <div class="form-row"><label>Anon / publishable key</label><input class="field" id="setSupaKey" value="${esc(SUPA.anon)}" style="width:100%"></div>
         <button class="btn ghost sm" onclick="saveSupa()">Save &amp; reload</button>`}
     </div>
+    ${desktopVersionCard()}
     <div class="card card-pad" style="margin-top:16px">
       <div class="sec-head"><div><div class="eyebrow">Data</div><div class="sec-title">Save management</div></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -3757,6 +3833,7 @@ applyTheme(localStorage.getItem(THEME_KEY)||'light');
 tickClock(); setInterval(tickClock,1000);
 { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
 // Multiplayer-aware boot: cloud sign-in gate when Supabase is configured, else local play.
+if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
 if(cloudEnabled()){ initCloud(); } else { startLocal(); }
 /* ---- AIRCRAFT RENTAL: idle owned jets listed for rent get picked up by NPC operators ---- */
 function rentalTick(){
