@@ -503,7 +503,7 @@ const CFG = {
   vatPoll: 60000,           // VATSIM refresh ms
   boardSize: 38,
   minFlyable: 12,           // always keep at least this many charters the current fleet can fly
-  startTier: 1,             // new pilots rated for turboprop (0) + light (1)
+  startTier: 0,             // new pilots start at turboprop only (tier 0)
   manualGrade: 78,          // grade given to legs logged without Sim Link
   simUrlDefault: 'ws://127.0.0.1:2992',
   // ----- dynamic economy (outbound demand per airport) -----
@@ -520,6 +520,7 @@ const TIERS = ['turboprop','light','midsize','supermid','heavy','ulr'];
    qual = clean charters flown in your current top-tier aircraft since last rating.
    score = minimum rolling Pilot Safety Score. Tuned to be a fair challenge, not a grind. */
 const UPGRADE = {
+  1:{from:'Turboprop',   to:'Light Jet',        qual:4, score:70, fee:12000},
   2:{from:'Light Jet',   to:'Midsize',          qual:4, score:72, fee:18000},
   3:{from:'Midsize',     to:'Super-Midsize',    qual:5, score:75, fee:34000},
   4:{from:'Super-Mid',   to:'Heavy Jet',        qual:6, score:78, fee:58000},
@@ -989,7 +990,7 @@ function newGame(name,base){
     board:[], active:null, ledger:[],
     operator:null, fbos:[], role:'both', lastFbo:0,
     lastBoard:0, vatCallsign:'',
-    maxTier:CFG.startTier,          // type rating cap (1 = light + turboprop)
+    maxTier:CFG.startTier,          // type rating cap (0 = turboprop only)
     grades:[],                      // per-flight performance grades
     tierQual:0,                     // clean charters flown at current top tier
     simUrl:CFG.simUrlDefault,
@@ -1408,10 +1409,14 @@ function renderTop(){
 /* ---------- DASHBOARD ---------- */
 function rDash(p){
   const nr=nextRank(S.rep);
-  const flyable=S.board.filter(c=>c.expires>Date.now()&&bestAircraftFor(c)).length;
+  const flyable=S.board.filter(c=>c.expires>Date.now()&&planFor(c)).length;
   const next = !S.fleet.length
-    ? {eb:'GET STARTED',h:'Acquire your first aircraft',
-       p:`You hold a ${CLASSES[TIERS[S.maxTier]].label} type rating. Lease a light jet to start earning with minimal capital, or buy one outright. Then fly clean charters to rate up toward heavier metal.`,
+    ? S.rentStarter
+    ? {eb:'GET STARTED',h:'Rent your first trip',
+       p:`You're rated for ${CLASSES.turboprop.label} only. Open the charter board and rent a turboprop on-site — no lease or purchase required.`,
+       btn:'Browse the charter board',go:'board'}
+    : {eb:'GET STARTED',h:'Choose your first turboprop',
+       p:`You hold a ${CLASSES.turboprop.label} type rating. Lease or buy a turboprop from the marketplace, or rent per trip on the charter board.`,
        btn:'Open marketplace',go:'market'}
     : S.active
     ? {eb:'TRIP IN PROGRESS',h:'You have an active trip',
@@ -3836,7 +3841,7 @@ function onboard(){
       <div class="brand-mark" style="margin:0 auto 14px;width:50px;height:50px"><svg viewBox="0 0 24 24" fill="none"><path d="M2 13.5L21 3l-4 10.5L21 21l-7-3-7 3 1.5-7.5L2 13.5z" fill="#fff"/></svg></div>
       <div class="eyebrow">Welcome to Skyledger · Step 1 of 2</div>
       <h2>Start your business aviation career</h2>
-      <div class="lead">An open, living charter economy for MSFS + VATSIM. Fly real legs, track them through SimConnect, and rate up from light jets to heavy metal.</div></div>
+      <div class="lead">An open, living charter economy for MSFS + VATSIM. Every pilot starts on turboprops and rates up toward heavier jets.</div></div>
     <div class="modal-body">
       <div class="form-row"><label>Pilot name</label><input class="field" id="obName" placeholder="Your name or handle" value="${S?.pilot||pendingPilotName||''}" style="width:100%"></div>
       <div class="form-row"><label>Home base</label><select class="field" id="obBase" style="width:100%">${aptOpts}</select></div>
@@ -3859,9 +3864,8 @@ function onboardStep2(){
   const name=($('#obName').value||'').trim()||'Captain';
   const base=$('#obBase').value||'KSDF';
   const role=($('#obRole')&&$('#obRole').value)||'both';
-  newGame(name,base); S.role=role;                 // creates state with empty fleet
-  // entry options: turboprop + light (everything at or below starting rating)
-  const opts=AIRCRAFT.filter(a=>CLASSES[a.cls].tier<=S.maxTier);
+  newGame(name,base); S.role=role; S.rentStarter=false;
+  const opts=AIRCRAFT.filter(a=>a.cls==='turboprop');
   const card=a=>{
     const dep=a.lease*3, canLease=S.cash>=dep, canBuy=S.cash>=a.price;
     return `<div class="ac-card">
@@ -3880,15 +3884,26 @@ function onboardStep2(){
       </div></div>`;
   };
   modal(`<div class="modal-head"><div class="eyebrow">Step 2 of 2 · ${money(S.cash)} available</div>
-      <h2>Choose your first aircraft</h2>
-      <div class="lead">Lease to start earning with minimal capital, or buy outright. Fly clean charters in it to earn your Midsize rating and unlock heavier jets. Delivered to ${base}.</div></div>
+      <h2>Choose your first turboprop</h2>
+      <div class="lead">All new pilots start with a ${CLASSES.turboprop.label} rating. Lease or buy to keep your own ship, or decline and rent trip-by-trip on the charter board. Delivered to ${base}.</div></div>
     <div class="modal-body">
       <div class="grid-ac" style="grid-template-columns:repeat(2,1fr)">${opts.map(card).join('')}</div>
       <div class="help" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
-        <span>A light jet lease is the classic starter — low deposit, strong charter availability, and it counts toward your Midsize type rating.</span></div>
+        <span>A PC-12 or King Air lease is a classic starter — low deposit, strong regional charter demand, and clean flights count toward your <b>Light Jet</b> type rating.</span></div>
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;text-align:center">
+        <p class="muted" style="font-size:12.5px;margin-bottom:10px">Don't want to lease or buy yet? Rent on-site per trip instead — no aircraft commitment.</p>
+        <button class="btn ghost" onclick="skipFirstAircraft()">Decline — I'll rent instead</button>
+      </div>
     </div>`);
 }
+function skipFirstAircraft(){
+  S.rentStarter=true; save(); refreshBoard(false);
+  closeModal();
+  showToast(`Welcome, ${S.pilot}. Rent a turboprop on the charter board when you're ready.`,'good');
+  nav('board');
+}
 function firstAircraft(id,mode){
+  S.rentStarter=false;
   if(mode==='lease') leaseAircraft(id); else buyAircraft(id,true);
   if(!S.fleet.length) return;          // acquisition failed (e.g. funds) — stay on picker
   refreshBoard(false);                 // seed charters at the new home base
@@ -3940,6 +3955,7 @@ function migrateSave(){
   if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
   if(!S.fboAds)S.fboAds=[];
   if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
+  if(S.rentStarter===undefined)S.rentStarter=false;
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
