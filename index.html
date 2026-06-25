@@ -976,6 +976,38 @@ function legEcon(dep,arr,ac,fuelPrice,arrRamp){
   const intlNav=(APTBY[dep].region!==APTBY[arr].region)?900:0;
   return {dist,block,fuel,fuelPrice:fp,maint,ramp,landing,handling,intlNav,opcost:fuel+maint+handling+intlNav};
 }
+const GAL_TO_LB=6.7;
+function fuelGalToLb(gal){ return gal*GAL_TO_LB; }
+function plannedFuelGal(dep,arr,acm,fuelPrice,arrRamp){ return acm.burn*legEcon(dep,arr,acm,fuelPrice,arrRamp).block; }
+function plannedFuelLb(dep,arr,acm,fuelPrice,arrRamp){ return fuelGalToLb(plannedFuelGal(dep,arr,acm,fuelPrice,arrRamp)); }
+function initTripFuel(t,acm){
+  const rev=t.legs.find(l=>l.kind==='revenue'); if(!rev)return;
+  const depFuel=t.fbo?t.fbo.depFuel:null, arrRamp=t.fbo?t.fbo.arrRamp:null;
+  const plannedLb=plannedFuelLb(rev.from,rev.to,acm,depFuel,arrRamp);
+  t.fuel={plannedLb,simbriefLb:null,tankerLb:S.tankerFuelLb||0,adjCost:0,overburnTotal:0};
+  t.ofpSynced=false;
+}
+function applySimbriefFuelAdj(t){
+  if(!t||!t.fuel||!t.ofp||!t.ofp.fuel)return;
+  const sbLb=+t.ofp.fuel;
+  t.fuel.simbriefLb=sbLb;
+  if(sbLb>t.fuel.plannedLb){
+    const extraGal=(sbLb-t.fuel.plannedLb)/GAL_TO_LB;
+    t.fuel.adjCost=Math.round(extraGal*(t.fbo?t.fbo.depFuel:medFuel(t.charter.dep)));
+  } else t.fuel.adjCost=0;
+  t.ofpSynced=t.ofp.origin===t.charter.dep&&t.ofp.destination===t.charter.arr;
+}
+function settleLegFuel(leg,t,acm){
+  if(!t.fuel||leg.fuelStartLb==null)return 0;
+  const usedLb=Math.max(0,leg.fuelStartLb-(leg.fuelEndLb!=null?leg.fuelEndLb:leg.fuelStartLb)+(leg.fuelAddedLb||0));
+  leg.fuelUsedLb=usedLb;
+  const planned=leg.kind==='revenue'?t.fuel.plannedLb:plannedFuelLb(leg.from,leg.to,acm);
+  const pricePerLb=(t.fbo&&leg.from===t.charter.dep?t.fbo.depFuel:medFuel(leg.from))/GAL_TO_LB;
+  let over=0;
+  if(usedLb>planned){ over=Math.round((usedLb-planned)*pricePerLb*0.5); t.fuel.overburnTotal=(t.fuel.overburnTotal||0)+over; }
+  if(leg.to===t.charter.arr&&leg.fuelEndLb!=null) S.tankerFuelLb=Math.round(leg.fuelEndLb);
+  return over;
+}
 
 /* ---------- CLIENT NAME GENERATOR ---------- */
 const ORGS=['Meridian Capital','Halcyon Group','Vantage Partners','Atlas Holdings','Crestline Equity','Onyx Ventures',
@@ -1009,7 +1041,7 @@ function newGame(name,base){
     fleet:[],                       // pilot picks their first aircraft
     board:[], active:null, ledger:[],
     operator:null, fbos:[], role:'both', lastFbo:0,
-    lastBoard:0, vatCallsign:'',
+    lastBoard:0, vatCallsign:'', tankerFuelLb:0,
     maxTier:CFG.startTier,          // type rating cap (0 = turboprop only)
     grades:[],                      // per-flight performance grades
     tierQual:0,                     // clean charters flown at current top tier
@@ -1430,6 +1462,7 @@ function renderAll(){
   ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,fuel:rFuel,spcharter:rSpecCharter,fboads:rFboAds,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
   if(view==='map') setTimeout(initMap,40);
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
+  if(typeof updatePresenceTrack==='function') updatePresenceTrack();
   save();
 }
 /* is the pilot eligible to claim the next type rating? */
@@ -1492,6 +1525,11 @@ function rDash(p){
      </div>
      <div style="display:flex;flex-direction:column;gap:18px">
        <div class="card card-pad">
+         <div class="sec-head"><div><div class="eyebrow">Live</div><div class="sec-title">Active flights</div></div>
+           <div class="sec-spacer"></div><span class="dot live"></span></div>
+         ${renderActiveFlightsDash()}
+       </div>
+       <div class="card card-pad">
          <div class="eyebrow">VATSIM</div><div class="sec-title" style="margin:2px 0 12px">Network right now</div>
          <div id="vatNet" class="muted" style="font-size:13px">Connecting to live feed…</div>
        </div>
@@ -1516,6 +1554,14 @@ function rDash(p){
    </div>`;
   renderVatNet();
 }
+function renderActiveFlightsDash(){
+  const online=(RT.online||[]).filter(o=>o.activeTrip||o.simLink);
+  if(!online.length) return '<div class="muted" style="font-size:12.5px">No pilots flying with Sim Link right now.</div>';
+  return online.slice(0,8).map(o=>`<div class="mini">
+    <div class="pilot-av" style="width:28px;height:28px;font-size:12px">${((o.pilot||'P').trim()[0]||'P').toUpperCase()}</div>
+    <div><div class="t">${esc(o.pilot||'Pilot')}</div><div class="s">${o.activeTrip?esc(o.activeTrip):'In sim'}${o.simLink?' · <span class="pos">Sim Link</span>':''}${o.phase&&o.phase!=='—'?' · '+esc(o.phase):''}</div></div>
+  </div>`).join('');
+}
 function dashCharterRow(c){
   const ac=bestAircraftFor(c); const ready=ac&&ac.loc===c.dep;
   return `<div class="mini">
@@ -1539,7 +1585,8 @@ function selectedFleetAc(){
 /* aircraft used to evaluate a charter: the board-selected one (if it can fly it), else best idle */
 function acForCharter(c){
   const sel=selectedFleetAc();
-  if(sel) return (ACBY[sel.type].range>=c.dist && CLASSES[ACBY[sel.type].cls].tier>=c.tier && ACBY[sel.type].pax>=(c.pax||0))?sel:null;
+  if(sel){ const a=ACBY[sel.type];
+    return (a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0) && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls))?sel:null; }
   return bestAircraftFor(c);
 }
 function boardStatusKey(c){
@@ -1651,7 +1698,16 @@ function rBoard(p){
       </table>
     </div>`;
 }
-function setBF(k,v){boardFilter[k]=v;rBoard($('#page'));}
+let _boardFilterTimer=null;
+function setBF(k,v){
+  boardFilter[k]=v;
+  if(['q','dep','arr','client'].includes(k)){
+    clearTimeout(_boardFilterTimer);
+    _boardFilterTimer=setTimeout(()=>rBoard($('#page')),180);
+    return;
+  }
+  rBoard($('#page'));
+}
 function wxDot(ic){const w=WX[ic];if(!w)return'';return `<span title="${w.cat} · ${w.raw}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CAT_COLOR[w.cat]};margin-left:5px;vertical-align:middle"></span>`;}
 function wxStrip(ic){
   const w=WX[ic];
@@ -1895,8 +1951,12 @@ function acceptCharter(){
   ac.busy=true;
   S.active={cid:c.id,acId:ac.id,charter:c,legs,started:Date.now(),verifiedAny:false,rental:!!_acc.rental,
     fbo:{dep:depF[depIdx].name,depFuel:depF[depIdx].fuel,arr:arrF[arrIdx].name,arrRamp:rampFeeFor(c.arr,arrF[arrIdx],acm.cls)}};
+  initTripFuel(S.active,acm);
   S.board=S.board.filter(x=>x.id!==c.id);
-  _acc=null; closeModal(); showToast(S.active.rental?'Rental booked — fly the leg in your sim':'Trip built — fly the open leg in your sim','good'); nav('active');
+  _acc=null; closeModal();
+  showToast(S.active.rental?'Rental booked — sync SimBrief on the active trip page':'Trip built — sync your SimBrief OFP before flying','good');
+  nav('active');
+  if(S.simbriefUser) setTimeout(()=>pullOFP(true),120);
 }
 
 /* ---------- ACTIVE TRIP (the Jet Card) ---------- */
@@ -1945,8 +2005,10 @@ function rActive(p){
           <div class="eyebrow">Verify on VATSIM</div>
           <div class="sec-title" style="margin:2px 0 6px">${curLeg?'Confirm your flight':'All legs flown'}</div>
           ${curLeg?`<p class="muted" style="font-size:12.5px;margin-bottom:12px">Fly <b class="mono" style="color:var(--ink)">${curLeg.from} → ${curLeg.to}</b> in MSFS. Connect to VATSIM with your callsign, then verify — we'll match it against the live feed and stamp the card. Online flights earn the bonus.</p>
-            <div class="form-row" style="margin-top:0"><label>Your VATSIM callsign</label>
-              <input class="field" id="csIn" placeholder="e.g. ${ac.tail.replace('-','')}" value="${S.vatCallsign||''}" style="width:100%"></div>
+            ${S.vatCallsign?`<div class="help" style="margin-bottom:12px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+              <span>Using VATSIM callsign <b class="mono">${esc(S.vatCallsign)}</b> from Settings.</span></div>`
+            :`<div class="help" style="margin-bottom:12px;border-color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              <span>Set your VATSIM callsign in <a onclick="nav('settings')" style="color:var(--sky);cursor:pointer">Settings</a> before verifying.</span></div>`}
             <div style="display:flex;gap:9px;margin-top:13px">
               <button class="btn sky" style="flex:1" onclick="verifyLeg(${t.legs.indexOf(curLeg)})">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Verify online</button>
@@ -1969,11 +2031,32 @@ function rActive(p){
                  <button class="btn sky sm" style="width:100%;justify-content:center" onclick="openSimLink()">Set up Sim Link</button>`}
         </div>
         ${pirepCard()}
+        ${t.fuel?`<div class="card card-pad" id="fuelCard">${fuelCard(t,c,acm,curLeg)}</div>`:''}
         <div class="card card-pad" id="sbCard">${simbriefCard(c,acm)}</div>
         <button class="btn danger" onclick="abandonTrip()">Abandon trip (forfeit)</button>
       </div>
     </div>`;
   if(S.simbriefUser && !S.active.ofp) setTimeout(()=>pullOFP(true),50); // auto-pull silently
+}
+function fuelCard(t,c,acm,curLeg){
+  const f=t.fuel, tanker=f.tankerLb||0;
+  const plannedGal=(f.plannedLb/GAL_TO_LB).toFixed(0);
+  const sbGal=f.simbriefLb?Math.round(f.simbriefLb/GAL_TO_LB):null;
+  const legFuel=curLeg&&curLeg.fuelStartLb!=null;
+  const usedLb=curLeg&&curLeg.fuelUsedLb!=null?curLeg.fuelUsedLb:(legFuel&&simState.telem&&simState.telem.fuelLb!=null?Math.max(0,curLeg.fuelStartLb-simState.telem.fuelLb):null);
+  return `<div class="eyebrow">Fuel accounting</div>
+    <div class="sec-title" style="margin:2px 0 10px">Planned vs actual</div>
+    <div class="tel-grid" style="grid-template-columns:1fr 1fr">
+      <div class="tel"><div class="tk">Charter planned</div><div class="tv">${Math.round(f.plannedLb).toLocaleString()} lb</div></div>
+      <div class="tel"><div class="tk">SimBrief block</div><div class="tv">${sbGal?sbGal.toLocaleString()+' gal':'— sync OFP'}</div></div>
+      <div class="tel"><div class="tk">Tanker aboard</div><div class="tv">${tanker?Math.round(tanker).toLocaleString()+' lb':'—'}</div></div>
+      <div class="tel"><div class="tk">Sim fuel now</div><div class="tv">${simState.telem&&simState.telem.fuelLb!=null?Math.round(simState.telem.fuelLb).toLocaleString()+' lb':'—'}</div></div>
+    </div>
+    ${f.adjCost?`<div class="help" style="margin-top:10px;border-color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span>SimBrief fuel exceeds charter plan — <b class="neg">+${money(f.adjCost)}</b> uplift cost applied at settlement.</span></div>`:''}
+    ${!t.ofpSynced?`<div class="help" style="margin-top:10px;border-color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span><b>Sync SimBrief</b> to this charter before flying — pull your OFP below.</span></div>`:''}
+    ${usedLb!=null?`<div class="muted" style="font-size:11.5px;margin-top:8px">Leg burn so far: ${Math.round(usedLb).toLocaleString()} lb${f.overburnTotal?` · overburn charges ${money(f.overburnTotal)}`:''}</div>`:''}`;
 }
 function simbriefCard(c,acm){
   const o=S.active&&S.active.ofp;
@@ -2028,8 +2111,10 @@ async function pullOFP(silent){
       alt:d.general?+d.general.initial_altitude:null, ci:d.general?d.general.costindex:null,
       aircraft:d.aircraft?(d.aircraft.icaocode||d.aircraft.name):'', pulled:Date.now()
     };
+    applySimbriefFuelAdj(S.active);
     if(!silent) showToast('SimBrief OFP loaded','good');
-    save(); if(view==='active'){const el=$('#sbCard');if(el)el.innerHTML=simbriefCard(S.active.charter,ACBY[S.fleet.find(f=>f.id===S.active.acId).type]);}
+    save(); if(view==='active'){const el=$('#sbCard');if(el)el.innerHTML=simbriefCard(S.active.charter,ACBY[S.fleet.find(f=>f.id===S.active.acId).type]);
+      const fc=$('#fuelCard');if(fc)fc.innerHTML=fuelCard(S.active,S.active.charter,ACBY[S.fleet.find(f=>f.id===S.active.acId).type],S.active.legs.find(l=>!l.done));}
   }catch(e){
     if(out) out.innerHTML=`<span class="neg">No OFP found for “${user}”. Generate one at simbrief.com first, and check the ID/username (your Pilot ID is on your SimBrief account page).</span>`;
   }
@@ -2049,10 +2134,10 @@ function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12'
   glob7500:'GL7T',g700:'GLF7',bbj:'B38M'}[acm.id]||'C700';}
 
 async function verifyLeg(idx){
-  const cs=($('#csIn').value||'').trim().toUpperCase();
+  const cs=(S.vatCallsign||'').trim().toUpperCase();
   const out=$('#verifyOut');
-  if(!cs){out.innerHTML='<span class="neg">Enter your VATSIM callsign first.</span>';return;}
-  S.vatCallsign=cs; out.innerHTML='<span class="muted">Checking the live VATSIM feed…</span>';
+  if(!cs){out.innerHTML='<span class="neg">Set your VATSIM callsign in Settings first.</span>';return;}
+  out.innerHTML='<span class="muted">Checking the live VATSIM feed…</span>';
   try{
     const d=await fetchVat();
     const me=d.pilots.find(p=>p.callsign.toUpperCase()===cs);
@@ -2075,7 +2160,15 @@ function completeLeg(idx,verified,atc,capArg){
   const e=(leg.kind==='revenue'&&t.fbo)?legEcon(leg.from,leg.to,acm,t.fbo.depFuel,t.fbo.arrRamp):legEcon(leg.from,leg.to,acm);
   // charge operating costs of the leg now
   let cost=e.opcost;
+  if(leg.kind==='revenue'&&S.tankerFuelLb>0){
+    const plannedGal=acm.burn*e.block, tankerGal=S.tankerFuelLb/GAL_TO_LB, savedGal=Math.min(tankerGal,plannedGal);
+    const saved=Math.round(savedGal*e.fuelPrice);
+    if(saved){ cost-=saved; S.tankerFuelLb=Math.round(Math.max(0,S.tankerFuelLb-savedGal*GAL_TO_LB));
+      S.ledger.push({t:Date.now(),k:`Tanker fuel credit ${leg.from}`,a:saved,note:Math.round(savedGal)+' gal carried'}); }
+  }
   if(!ac.owned) cost+=ac.rental?rentalCost(ac.rentalRate,e.block):Math.round(acm.lease*(e.block/8));
+  const fuelOver=settleLegFuel(leg,t,acm);
+  if(fuelOver){ cost+=fuelOver; S.ledger.push({t:Date.now(),k:`Fuel overburn ${leg.from}→${leg.to}`,a:-fuelOver,note:'50% local fuel rate'}); }
   S.cash-=cost;
   const ferry=!!(t.charter&&t.charter.ferry);
   S.ledger.push({t:Date.now(),k:`${ferry?'Ferry':leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-cost,note:acm.name});
@@ -2106,6 +2199,10 @@ function settleTrip(){
   const ferry=!!c.ferry;
   let payout=ferry?0:c.payout, bonusNote=[];
   if(!ferry && t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
+  if(t.fuel&&t.fuel.adjCost){
+    S.cash-=t.fuel.adjCost;
+    S.ledger.push({t:Date.now(),k:`SimBrief fuel uplift ${c.dep}→${c.arr}`,a:-t.fuel.adjCost,note:'OFP exceeds charter plan'});
+  }
   if(payout){
     S.cash+=payout;
     S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
@@ -3202,6 +3299,7 @@ const SkySimConnect = (function(){
     ['OVERSPEED WARNING','Bool','overspeed'],
     ['STALL WARNING','Bool','stall'],
     ['G FORCE','GForce','gForce'],
+    ['FUEL TOTAL QUANTITY WEIGHT','pounds','fuelLb'],
   ];
   function getNet(){
     try{ if(typeof require==='function') return require('net'); }catch(e){}
@@ -3310,7 +3408,7 @@ const SkySimConnect = (function(){
 })();
 
 let simState={connected:false,direct:false,ws:null,url:null,telem:null,phase:'—',legIdx:-1,cap:null,wasAir:false,lastVs:0,autoBusy:false};
-let simUserDisconnected=false, simAutoTimer=null;
+let simUserDisconnected=false, simAutoTimer=null, _presenceTimer=null;
 const SIM_PROTO_LABEL={SunRise:'MSFS 2024',KittyHawk:'MSFS 2020'};
 function simPipeUnreachable(msg){ return /ENOENT|ECONNREFUSED|EADDRNOTAVAIL|cannot find|does not exist|connect.*failed|pipe.*not/i.test(String(msg||'')); }
 function simProtocolsToTry(){
@@ -3427,8 +3525,14 @@ function onTelemetry(d){
     const idx=t.legs.findIndex(l=>!l.done);
     if(idx>=0){
       const leg=t.legs[idx];
-      if(simState.legIdx!==idx){ simState.legIdx=idx; simState.cap={departed:false,landingFpm:0,overspeed:false,stall:false,overstress:false,maxG:1,crashed:false}; simState.wasAir=false; }
+      if(simState.legIdx!==idx){ simState.legIdx=idx; simState.cap={departed:false,landingFpm:0,overspeed:false,stall:false,overstress:false,maxG:1,crashed:false,lastFuelLb:null}; simState.wasAir=false; }
       const cap=simState.cap;
+      if(typeof d.fuelLb==='number'&&d.fuelLb>0){
+        if(cap.lastFuelLb!=null&&d.fuelLb>cap.lastFuelLb+80) leg.fuelAddedLb=(leg.fuelAddedLb||0)+(d.fuelLb-cap.lastFuelLb);
+        cap.lastFuelLb=d.fuelLb;
+        if(!leg.fuelStartLb&&cap.departed&&!d.onGround) leg.fuelStartLb=d.fuelLb;
+        if(!d.onGround&&d.gsKt>40&&!leg.fuelStartLb) leg.fuelStartLb=d.fuelLb;
+      }
       if(!d.onGround){
         simState.phase='AIRBORNE';
         if(d.gsKt>40) cap.departed=true;
@@ -3439,13 +3543,31 @@ function onTelemetry(d){
       } else {
         simState.phase=d.gsKt>8?'TAXI':'ON GROUND';
         if(simState.wasAir && cap.departed){ cap.landingFpm=Math.abs(simState.lastVs||d.vsFpm||0); }
+        if(typeof d.fuelLb==='number') leg.fuelEndLb=d.fuelLb;
         const dist=distToApt(d.lat,d.lon,leg.to);
         if(cap.departed && d.gsKt<35 && dist<6){ leg.capture=cap; simState.legIdx=-1; completeLeg(idx,false,false,cap); return; }
       }
       simState.wasAir=!d.onGround;
     }
   } else { simState.phase=d.onGround?(d.gsKt>8?'TAXI':'ON GROUND'):'AIRBORNE'; }
-  updateSimPill(); renderSimLive();
+  updateSimPill(); renderSimLive(); updatePresenceTrack();
+  if(view==='active'&&S.active&&(!simState._fuelUi||Date.now()-simState._fuelUi>2500)){
+    simState._fuelUi=Date.now();
+    const fc=$('#fuelCard'), ac=S.fleet.find(f=>f.id===S.active.acId);
+    if(fc&&ac) fc.innerHTML=fuelCard(S.active,S.active.charter,ACBY[ac.type],S.active.legs.find(l=>!l.done));
+  }
+}
+function updatePresenceTrack(){
+  if(!RT.channel||!AUTH.user)return;
+  clearTimeout(_presenceTimer);
+  _presenceTimer=setTimeout(async ()=>{
+    try{
+      const t=S&&S.active;
+      await RT.channel.track({pilot:(S&&S.pilot)||'Pilot',rep:(S&&S.rep)||0,base:(S&&S.base)||'',at:Date.now(),
+        simLink:!!simState.connected,phase:simState.connected?simState.phase:'',
+        activeTrip:t&&t.charter?`${t.charter.dep}→${t.charter.arr}`:''});
+    }catch(e){}
+  },800);
 }
 function updateSimPill(force){
   const dot=$('#simDot'), txt=$('#simTxt'), pill=$('#simPill'); if(!dot)return;
@@ -3477,6 +3599,7 @@ function renderSimLive(){
     <div class="tel-grid">
       <div class="tel"><div class="tk">Ground speed</div><div class="tv">${Math.round(tl.gsKt||0)} kt</div></div>
       <div class="tel"><div class="tk">Altitude</div><div class="tv">${Math.round(tl.altMsl||0).toLocaleString()} ft</div></div>
+      <div class="tel"><div class="tk">Fuel aboard</div><div class="tv">${tl.fuelLb!=null?Math.round(tl.fuelLb).toLocaleString()+' lb':'—'}</div></div>
       <div class="tel"><div class="tk">Vertical spd</div><div class="tv">${Math.round(tl.vsFpm||0)} fpm</div></div>
     </div>
     ${cap&&cap.departed?`<div class="muted" style="font-size:11.5px;margin-top:8px">Airborne logged${cap.overspeed?' · ⚠ overspeed':''}${cap.stall?' · ⚠ stall':''}${cap.overstress?' · ⚠ overstress':''} — land within 6&nbsp;nm of destination to auto-complete the leg.</div>`:''}`;
@@ -3715,6 +3838,7 @@ function rSettings(p){
     <div class="card card-pad">
       <div class="sec-head"><div><div class="eyebrow">Operations</div><div class="sec-title">Game preferences</div></div></div>
       <div class="form-row"><label>Home base (ICAO)</label><input class="field mono" id="setBase" value="${esc(S.base)}" maxlength="4" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
+      <div class="form-row"><label>VATSIM callsign</label><input class="field mono" id="setVat" value="${esc(S.vatCallsign||'')}" placeholder="e.g. DAL123" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
       <div class="form-row"><label>SimBrief username / Pilot ID</label><input class="field" id="setSB" value="${esc(S.simbriefUser||'')}" style="width:100%"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><label style="margin:0;font-size:12px;color:var(--muted)">Appearance</label>
         <button class="btn ghost sm" onclick="toggleTheme()">Toggle dark / light</button></div>
@@ -3825,6 +3949,7 @@ async function changePassword(){
 function savePrefs(){
   const b=($('#setBase').value||'').trim().toUpperCase();
   if(b && APTBY[b]) S.base=b; else if(b) showToast('Unknown ICAO — base unchanged','bad');
+  S.vatCallsign=($('#setVat').value||'').trim().toUpperCase();
   S.simbriefUser=($('#setSB').value||'').trim();
   save(); showToast('Preferences saved','good'); renderAll();
 }
@@ -3864,21 +3989,54 @@ function adminUsers(el){
 function drawUsers(){
   const el=$('#usersTable'); if(!el)return; const q=adminUserQ.toLowerCase();
   const rows=ADMIN_USERS.filter(u=>!q||((u.pilot||'').toLowerCase().includes(q)||(u.base||'').toLowerCase().includes(q)));
-  const cols='grid-template-columns:1.5fr .7fr .6fr .9fr .6fr 1.1fr';
+  const cols='grid-template-columns:1.4fr .6fr .5fr .8fr .5fr 1.6fr';
   el.innerHTML=`
    <div class="bar"><input class="field" placeholder="Search pilots or base…" value="${esc(adminUserQ)}" oninput="adminUserQ=this.value;drawUsers()" style="max-width:260px">
      <div class="sec-spacer" style="flex:1"></div><span class="muted" style="font-size:12px">${rows.length} of ${ADMIN_USERS.length} users</span></div>
    <div class="mkt-table" style="margin-top:10px">
-     <div class="mkt-head" style="${cols}"><div>Pilot</div><div>Base</div><div>Rep</div><div>Cash</div><div>Flights</div><div>Role</div></div>
+     <div class="mkt-head" style="${cols}"><div>Pilot</div><div>Base</div><div>Rep</div><div>Cash</div><div>Flights</div><div>Admin actions (free)</div></div>
      ${rows.map(u=>`<div class="mkt-row" style="${cols}">
         <div class="mname">${esc(u.pilot||'—')}${u.id===(AUTH.user&&AUTH.user.id)?' <span class="tag muted-t">you</span>':''}</div>
         <div class="mono">${esc(u.base||'—')}</div><div class="mono">${u.rep||0}</div>
         <div class="mono">${money1k(u.cash||0)}</div><div class="mono">${u.flights||0}</div>
-        <div class="macts">${u.is_admin?'<span class="tag ok">Admin</span>':''}
-          <button class="btn ghost sm" onclick="setUserAdmin('${u.id}',${u.is_admin?'false':'true'})">${u.is_admin?'Revoke':'Make admin'}</button></div>
+        <div class="macts" style="flex-wrap:wrap;gap:4px">${u.is_admin?'<span class="tag ok">Admin</span>':''}
+          <button class="btn ghost sm" onclick="adminGiveUserCash('${u.id}',100000)">+$100k</button>
+          <button class="btn ghost sm" onclick="adminPromptUserTier('${u.id}')">Type rating</button>
+          <button class="btn ghost sm" onclick="setUserAdmin('${u.id}',${u.is_admin?'false':'true'})">${u.is_admin?'Revoke':'Admin'}</button>
+          ${u.id!==(AUTH.user&&AUTH.user.id)?`<button class="btn danger sm" onclick="adminDeleteUser('${u.id}')">Delete</button>`:''}</div>
      </div>`).join('')||'<div class="mkt-row"><div class="mname muted">No users match</div></div>'}
    </div>
-   <div class="muted" style="font-size:11.5px;margin-top:10px">Promotions write <span class="mono">profiles.is_admin</span>. This needs an <span class="mono">is_admin</span> boolean column and an RLS policy allowing admins to update other rows — otherwise the change is rejected by the database.</div>`;
+   <div class="muted" style="font-size:11.5px;margin-top:10px">Admin grants are free — no charge to your pilot. Deleting a user wipes their cloud save, profile, and activity. Auth accounts may still need removal in the Supabase dashboard.</div>`;
+}
+async function adminGiveUserCash(id,amt){
+  const sb=getSB(); if(!sb)return; const u=ADMIN_USERS.find(x=>x.id===id); if(!u)return;
+  const newCash=Math.max(0,Math.round((u.cash||0)+amt));
+  try{
+    const {error}=await sb.from('profiles').update({cash:newCash}).eq('id',id);
+    if(error)return showToast('Update failed: '+error.message,'bad');
+    const {data}=await sb.from('saves').select('data').eq('user_id',id).maybeSingle();
+    if(data&&data.data){ const s=data.data; s.cash=newCash; await sb.from('saves').upsert({user_id:id,data:s,updated_at:new Date().toISOString()},{onConflict:'user_id'}); }
+    u.cash=newCash; drawUsers(); showToast(`Gave ${money(amt)} to ${u.pilot||'pilot'}`,'good');
+  }catch(e){ showToast('Update failed','bad'); }
+}
+async function adminPromptUserTier(id){
+  const u=ADMIN_USERS.find(x=>x.id===id); if(!u)return;
+  const pick=prompt(`Set max type rating for ${u.pilot||'pilot'} (0=turboprop … 5=ULR):`,'0');
+  if(pick==null)return; const tier=Math.max(0,Math.min(5,Math.round(+pick||0)));
+  const sb=getSB(); if(!sb)return;
+  try{
+    const {data}=await sb.from('saves').select('data').eq('user_id',id).maybeSingle();
+    if(data&&data.data){ const s=data.data; s.maxTier=tier; await sb.from('saves').upsert({user_id:id,data:s,updated_at:new Date().toISOString()},{onConflict:'user_id'}); }
+    showToast(`${u.pilot||'Pilot'} type rating set to ${CLASSES[TIERS[tier]].label}`,'good');
+  }catch(e){ showToast('Could not update save','bad'); }
+}
+async function adminDeleteUser(id){
+  if(id===(AUTH.user&&AUTH.user.id))return showToast('Delete your own account from Settings','bad');
+  const u=ADMIN_USERS.find(x=>x.id===id);
+  if(!confirm(`Permanently delete all data for ${u&&u.pilot||'this pilot'}?`))return;
+  await deleteCloudUserData(id,null);
+  ADMIN_USERS=ADMIN_USERS.filter(u=>u.id!==id);
+  drawUsers(); showToast('User data deleted','good');
 }
 async function setUserAdmin(id,make){
   const sb=getSB(); if(!sb)return;
@@ -3935,8 +4093,26 @@ function adminAircraft(el){
         <div class="macts"><button class="btn ghost sm" onclick="adminGrant('${a.id}')">Grant to fleet</button></div>
      </div>`).join('')}
    </div>
-   <div class="sec-title" style="margin:18px 0 8px">Your fleet (${S.fleet.length})</div>
-   <div class="rows">${S.fleet.map(f=>`<div class="charter"><div class="ch-l"><div class="ch-top"><span class="tail">${esc(f.tail)}</span><span style="font-weight:600">${ACBY[f.type].name}</span><span class="tag ${f.owned?'ok':'muted-t'}">${f.owned?'Owned':'Leased'}</span>${f.busy?'<span class="tag warnt">Busy</span>':''}</div><div class="ch-meta"><span>at <b>${f.loc}</b></span><span>${Math.round(f.cond)}% cond</span></div></div><div class="ch-r"><button class="btn ghost sm" ${f.busy?'disabled':''} onclick="adminRemoveAc('${f.id}')">Remove</button></div></div>`).join('')||'<div class="muted" style="font-size:12.5px">No aircraft.</div>'}</div>`;
+   <div class="sec-title" style="margin:18px 0 8px">Your fleet (${S.fleet.length}) — move &amp; edit free</div>
+   <div class="rows">${S.fleet.map(f=>`<div class="charter"><div class="ch-l"><div class="ch-top"><span class="tail">${esc(f.tail)}</span><span style="font-weight:600">${ACBY[f.type].name}</span><span class="tag ${f.owned?'ok':'muted-t'}">${f.owned?'Owned':'Leased'}</span>${f.busy?'<span class="tag warnt">Busy</span>':''}</div><div class="ch-meta"><span>at <b class="mono">${f.loc}</b></span><span>${Math.round(f.cond)}% cond</span></div></div><div class="ch-r" style="display:flex;gap:6px;flex-wrap:wrap">
+     <button class="btn ghost sm" ${f.busy?'disabled':''} onclick="adminMoveAc('${f.id}')">Move</button>
+     <button class="btn ghost sm" onclick="adminEditAcCond('${f.id}')">Edit</button>
+     <button class="btn ghost sm" ${f.busy?'disabled':''} onclick="adminRemoveAc('${f.id}')">Remove</button></div></div>`).join('')||'<div class="muted" style="font-size:12.5px">No aircraft.</div>'}</div>`;
+}
+function adminMoveAc(fid){
+  const f=S.fleet.find(x=>x.id===fid); if(!f||f.busy)return showToast('Aircraft unavailable','bad');
+  const ic=prompt(`Move ${f.tail} to ICAO (free):`,f.loc||S.base);
+  if(!ic)return; const icao=ic.trim().toUpperCase();
+  if(!APTBY[icao])return showToast('Unknown ICAO','bad');
+  f.loc=icao; save(); showToast(`${f.tail} → ${icao}`,'good'); renderAdminBody();
+}
+function adminEditAcCond(fid){
+  const f=S.fleet.find(x=>x.id===fid); if(!f)return;
+  const c=prompt(`Condition % for ${f.tail} (40–100):`,Math.round(f.cond));
+  if(c==null)return; f.cond=Math.max(40,Math.min(100,Math.round(+c||f.cond)));
+  const t=prompt(`Tail number (leave blank to keep ${f.tail}):`,'');
+  if(t&&t.trim()) f.tail=t.trim().toUpperCase();
+  save(); showToast('Aircraft updated','good'); renderAdminBody();
 }
 function adminSetAc(id,field,val){ const a=ACBY[id]; if(!a)return; a[field]=Math.max(0,Math.round(+val||0));
   const o={}; AIRCRAFT.forEach(x=>o[x.id]={price:x.price,lease:x.lease}); try{localStorage.setItem('sky_admin_catalog',JSON.stringify(o));}catch(e){}
@@ -3951,7 +4127,7 @@ function adminRemoveAc(fid){ const f=S.fleet.find(x=>x.id===fid); if(!f||f.busy)
 function adminEconomy(el){
   el.innerHTML=`
    <div class="card card-pad" style="margin-top:12px">
-     <div class="sec-title" style="margin-bottom:10px">Set values (this pilot)</div>
+     <div class="sec-title" style="margin-bottom:10px">Set values (this pilot) — free, no charge</div>
      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
        <div class="form-row" style="margin:0"><label>Cash</label><input class="field mono" id="ecCash" value="${Math.round(S.cash)}"></div>
        <div class="form-row" style="margin:0"><label>Reputation</label><input class="field mono" id="ecRep" value="${Math.round(S.rep)}"></div>
@@ -4107,6 +4283,9 @@ function migrateSave(){
   if(!S.fboAds)S.fboAds=[];
   if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
   if(S.rentStarter===undefined)S.rentStarter=false;
+  if(S.vatCallsign===undefined)S.vatCallsign='';
+  if(S.tankerFuelLb===undefined)S.tankerFuelLb=0;
+  if(S.active&&!S.active.fuel){ const ac=(S.fleet||[]).find(f=>f.id===S.active.acId); if(ac&&ACBY[ac.type]){ initTripFuel(S.active,ACBY[ac.type]); if(S.active.ofp) applySimbriefFuelAdj(S.active); } }
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
@@ -4235,10 +4414,10 @@ function startRealtime(){
   if(RT.channel) return;
   RT.channel=sb.channel('skyledger-lobby',{config:{presence:{key:AUTH.user.id}}});
   RT.channel
-    .on('presence',{event:'sync'},()=>{ RT.online=[].concat.apply([],Object.values(RT.channel.presenceState())); updateOnlinePill(); if(view==='community')rCommunity($('#page')); })
+    .on('presence',{event:'sync'},()=>{ RT.online=[].concat.apply([],Object.values(RT.channel.presenceState())); updateOnlinePill(); if(view==='dash')rDash($('#page')); if(view==='community')rCommunity($('#page')); })
     .on('postgres_changes',{event:'INSERT',schema:'public',table:'activity'},payload=>{ RT.feed.unshift(payload.new); RT.feed=RT.feed.slice(0,50); if(view==='community')rCommunity($('#page')); })
     .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{ loadLeaderboard(); })
-    .subscribe(async (status)=>{ if(status==='SUBSCRIBED'){ try{ await RT.channel.track({pilot:(S&&S.pilot)||'Pilot',rep:(S&&S.rep)||0,base:(S&&S.base)||'',at:Date.now()}); }catch(e){} } });
+    .subscribe(async (status)=>{ if(status==='SUBSCRIBED') updatePresenceTrack(); });
 }
 async function loadLeaderboard(){ const sb=getSB(); if(!sb)return; try{ const {data}=await sb.from('profiles').select('*').order('rep',{ascending:false}).limit(25); RT.board=data||[]; if(view==='community')rCommunity($('#page')); updateOnlinePill(); }catch(e){} }
 async function loadFeed(){ const sb=getSB(); if(!sb)return; try{ const {data}=await sb.from('activity').select('*').order('created_at',{ascending:false}).limit(50); RT.feed=data||[]; if(view==='community')rCommunity($('#page')); }catch(e){} }
@@ -4342,7 +4521,7 @@ function rCommunity(p){
           <div class="sec-title" style="margin:2px 0 10px">Flying right now</div>
           ${online.length?online.slice(0,20).map(o=>`<div class="mini">
             <div class="pilot-av" style="width:28px;height:28px;font-size:12px">${((o.pilot||'P').trim()[0]||'P').toUpperCase()}</div>
-            <div><div class="t">${o.pilot||'Pilot'}</div><div class="s">${o.base?('based '+o.base):'in the network'}</div></div>
+            <div><div class="t">${o.pilot||'Pilot'}</div><div class="s">${o.activeTrip?o.activeTrip+' · ':''}${o.simLink?'<span class="pos">Sim Link</span> · ':''}${o.base?('based '+o.base):'in the network'}${o.phase&&o.phase!=='—'?' · '+o.phase:''}</div></div>
             <div class="amt mono">${(o.rep||0).toLocaleString()}</div></div>`).join(''):'<div class="muted" style="font-size:12.5px">You\'re the only one online right now.</div>'}
         </div>
         <div class="card card-pad">
