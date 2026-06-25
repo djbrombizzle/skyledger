@@ -1,12 +1,16 @@
 -- ACARS Dispatch: active_trip snapshots, play_role, and real-time messaging
--- Run in Supabase SQL editor (or via migration tooling) on the Skyledger project.
+-- Skyledger project: run once in Supabase SQL editor (or via apply_migration).
+-- Note: if profiles already has a "profiles readable" policy (qual = true),
+-- dispatchers can already read all profiles — the active_trip column is what matters.
 
 -- Profile extensions for dispatch board
-alter table profiles add column if not exists active_trip jsonb;
-alter table profiles add column if not exists play_role text default 'all';
+alter table public.profiles add column if not exists active_trip jsonb;
+alter table public.profiles add column if not exists play_role text default 'all';
+
+update public.profiles set play_role = 'all' where play_role is null;
 
 -- Dispatch messaging
-create table if not exists dispatch_messages (
+create table if not exists public.dispatch_messages (
   id uuid primary key default gen_random_uuid(),
   thread_id text not null,
   from_user_id uuid not null references auth.users(id) on delete cascade,
@@ -15,39 +19,43 @@ create table if not exists dispatch_messages (
   created_at timestamptz not null default now()
 );
 
-create index if not exists dispatch_messages_thread_id_idx on dispatch_messages(thread_id, created_at desc);
-create index if not exists profiles_active_trip_idx on profiles((active_trip is not null)) where active_trip is not null;
+create index if not exists dispatch_messages_thread_id_idx on public.dispatch_messages(thread_id, created_at desc);
+create index if not exists profiles_active_trip_idx on public.profiles((active_trip is not null)) where active_trip is not null;
 
-alter table dispatch_messages enable row level security;
+alter table public.dispatch_messages enable row level security;
 
 -- Pilots read/write their own thread; dispatchers read/write all threads
-create policy "dispatch_messages_select" on dispatch_messages for select using (
+drop policy if exists "dispatch_messages_select" on public.dispatch_messages;
+create policy "dispatch_messages_select" on public.dispatch_messages for select using (
   auth.uid() = from_user_id
   or thread_id = 'pilot:' || auth.uid()::text
   or exists (
-    select 1 from profiles p
+    select 1 from public.profiles p
     where p.id = auth.uid()
       and coalesce(p.play_role, 'all') in ('dispatcher', 'all')
   )
 );
 
-create policy "dispatch_messages_insert" on dispatch_messages for insert with check (
+drop policy if exists "dispatch_messages_insert" on public.dispatch_messages;
+create policy "dispatch_messages_insert" on public.dispatch_messages for insert with check (
   auth.uid() = from_user_id
   and (
     thread_id = 'pilot:' || auth.uid()::text
     or exists (
-      select 1 from profiles p
+      select 1 from public.profiles p
       where p.id = auth.uid()
         and coalesce(p.play_role, 'all') in ('dispatcher', 'all')
     )
   )
 );
 
--- Profiles: users update own row; dispatchers can read active trips
-create policy "profiles_select_active_trips" on profiles for select using (
-  auth.uid() = id
-  or active_trip is not null
-);
-
--- Enable realtime (run once per table in dashboard or via API)
--- alter publication supabase_realtime add table dispatch_messages;
+-- Realtime for live pilot/dispatcher chat (safe to re-run)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'dispatch_messages'
+  ) then
+    alter publication supabase_realtime add table public.dispatch_messages;
+  end if;
+end $$;
