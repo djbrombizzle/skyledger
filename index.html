@@ -433,6 +433,7 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 
 /* TOAST */
 #toasts{position:fixed;bottom:22px;right:22px;z-index:300;display:flex;flex-direction:column;gap:9px}
+body:has(.acars-dock:not(.collapsed)) #toasts{bottom:min(580px,70vh);right:18px}
 .toast{background:var(--navy);color:#fff;padding:13px 17px;border-radius:11px;box-shadow:var(--shadow-lg);
   font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:slideIn .3s;max-width:330px}
 .toast.good{border-left:3px solid var(--pos)} .toast.bad{border-left:3px solid var(--neg)}
