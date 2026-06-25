@@ -16,22 +16,26 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install and build portable exe
+      - name: Set shell version from tag
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        working-directory: desktop
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/desktop-v}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Install and publish NSIS installer
         working-directory: desktop
         run: |
           npm install
-          npm run dist:win
+          npm run dist:publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload portable exe
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: Skyledger-portable-win
-          path: desktop/dist/*.exe
-
-      - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: desktop/dist/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: Skyledger-setup-win
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/latest.yml
