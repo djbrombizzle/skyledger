@@ -984,9 +984,9 @@ function baseFbos(ic){
     const n=a.cls==='s'?(premium?2:1):a.cls==='i'?Math.min(3,pool.length):2;
     const seen=new Set();
     for(let i=0;i<pool.length&&out.length<n;i++){
-      const b=pool[(hashStr(ic)>>(i*5))%pool.length];
-      if(seen.has(b[0]))continue; seen.add(b[0]);
-      out.push({name:b[0],rampF:b[2],premium,fuel:+(regBase*clsF*premF*b[1]*(0.95+(((hashStr(ic)>>(i*7))%18)/100))).toFixed(2)});
+      const b=pool[(hashStr(ic)>>>(i*5))%pool.length];
+      if(!b||seen.has(b[0]))continue; seen.add(b[0]);
+      out.push({name:b[0],rampF:b[2],premium,fuel:+(regBase*clsF*premF*b[1]*(0.95+(((hashStr(ic)>>>(i*7))%18)/100))).toFixed(2)});
     }
   }
   if(!out.length) out.push({name:a.cls==='i'?'Executive Terminal':'Airport FBO',rampF:1,premium,fuel:+(regBase*clsF*premF).toFixed(2)});
