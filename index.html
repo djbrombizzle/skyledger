@@ -1518,10 +1518,10 @@ function economyTick(){
 }
 /* ===================== OPERATOR ECONOMICS (Part 135 / Part 91) ===================== */
 const OPER_TIERS=[
-  {key:'taxi',name:'Air Taxi', fleet:0, rep:0,    worth:0,    safety:0,  pilots:3,  color:'#7d8ba0', perk:'Found your company · hire up to 3 pilots'},
-  {key:'reg', name:'Regional', fleet:3, rep:1800, worth:4e6,  safety:0,  pilots:8,  color:'#2D6AE3', perk:'8 pilot slots · regional contracts'},
-  {key:'nat', name:'National', fleet:7, rep:6000, worth:12e6, safety:74, pilots:18, color:'#1F7A52', perk:'18 pilot slots · premium clients'},
-  {key:'glob',name:'Global',   fleet:14,rep:16000,worth:30e6, safety:80, pilots:35, color:'#B0863B', perk:'35 pilot slots · VVIP & gov contracts'},
+  {key:'taxi',name:'Air Taxi', fleet:0, rep:0,    worth:0,    safety:0,  color:'#7d8ba0', perk:'Found your company · hire pilots freely'},
+  {key:'reg', name:'Regional', fleet:3, rep:1800, worth:4e6,  safety:0,  color:'#2D6AE3', perk:'Regional contracts · company fleet'},
+  {key:'nat', name:'National', fleet:7, rep:6000, worth:12e6, safety:74, color:'#1F7A52', perk:'Premium clients · expanded operations'},
+  {key:'glob',name:'Global',   fleet:14,rep:16000,worth:30e6, safety:80, color:'#B0863B', perk:'VVIP & gov contracts · global reach'},
 ];
 function fleetValue(){ return (S.fleet||[]).filter(f=>f.owned).reduce((s,f)=>s+Math.round((ACBY[f.type]?ACBY[f.type].price:0)*((f.cond||100)/100)),0); }
 function netWorth(){ return Math.round((S.cash||0)+fleetValue()); }
@@ -1531,8 +1531,19 @@ function operTierIdx(){ const ss=safetyScore(); const w=netWorth();
     if(fc>=t.fleet && S.rep>=t.rep && w>=t.worth && (t.safety===0||(ss!==null&&ss>=t.safety))) idx=i; }
   return idx; }
 function operTier(){ return OPER_TIERS[operTierIdx()]; }
-function pilotSlots(){ return operTier().pilots; }
 function certLabel(c){ return c==='91'?'Part 91':'Part 135'; }
+function operCash(){ return Math.round((S.operator&&S.operator.cash)||0); }
+function operCredit(amount,key,note){
+  if(!S.operator||!amount) return;
+  S.operator.cash=operCash()+Math.round(amount);
+  S.ledger.push({t:Date.now(),k:key,a:Math.round(amount),note,cat:'oper'});
+}
+function operCharge(amount,key,note){
+  if(!S.operator) return false;
+  S.operator.cash=operCash()-Math.round(amount);
+  S.ledger.push({t:Date.now(),k:key,a:-Math.round(amount),note,cat:'oper'});
+  return true;
+}
 function normalizeOperator(op){
   if(!op) return null;
   if(!op.id) op.id='op_'+uid();
@@ -1543,6 +1554,7 @@ function normalizeOperator(op){
   if(op.hiring===undefined) op.hiring=false;
   if(op.payRate===undefined) op.payRate=2500;
   if(!op.payNote) op.payNote='Per completed charter';
+  if(op.cash===undefined) op.cash=0;
   return op;
 }
 function operPilotCount(){ return (S.operator&&S.operator.pilots||[]).length; }
@@ -1550,8 +1562,17 @@ function isOnOperatorFleet(f){
   if(!S.operator||!f||!f.opId) return false;
   return f.opId===S.operator.id||(S.operator.cloudId&&f.opId===S.operator.cloudId);
 }
-function operatorFleet(){ return (S.fleet||[]).filter(f=>f.owned&&isOnOperatorFleet(f)); }
+function operatorFleet(){ return (S.fleet||[]).filter(f=>isOnOperatorFleet(f)); }
 function operatorFleetCount(){ return operatorFleet().length; }
+function pilotOnAnotherOperator(userId, exceptOpId){
+  const ops=RT_OPERATORS.length?RT_OPERATORS:(S.operator?[S.operator]:[]);
+  for(const op of ops){
+    const id=op.id||op.cloudId;
+    if(exceptOpId&&(id===exceptOpId||op.cloudId===exceptOpId)) continue;
+    if((op.pilots||[]).some(p=>p.userId===userId)) return op;
+  }
+  return null;
+}
 function isOperatorBase(ic){ return !!(S.operator&&(S.operator.bases||[]).includes(ic)); }
 function isMyOperator(opId){ const o=S.operator; return !!(o&&opId&&(o.id===opId||o.cloudId===opId)); }
 function isEmployedBy(opId){ const e=S&&S.employer; return !!(e&&opId&&(e.operatorId===opId||e.cloudId===opId)); }
@@ -1578,7 +1599,7 @@ function plDaily(days){
   return out;
 }
 function fleetUtil(opOnly){
-  const owned=(S.fleet||[]).filter(f=>f.owned&&(!opOnly||isOnOperatorFleet(f)));
+  const owned=(S.fleet||[]).filter(f=>opOnly?isOnOperatorFleet(f):f.owned);
   const flying=owned.filter(f=>f.busy&&!(f.rentedUntil>Date.now())).length;
   const listed=owned.filter(f=>f.forRent&&!f.busy).length;
   const idle=owned.filter(f=>!f.busy&&!f.forRent).length;
@@ -2680,10 +2701,16 @@ function completeLeg(idx,verified,atc,capArg){
   const fuelCost=chargeLegFuel(leg,t,acm,e);
   cost+=fuelCost;
   if(leg.to===t.charter.arr&&leg.fuelEndLb!=null) S.tankerFuelLb=Math.round(leg.fuelEndLb);
-  S.cash-=cost;
+  const billOp=isOnOperatorFleet(ac);
   const ferry=!!(t.charter&&t.charter.ferry);
-  S.ledger.push({t:Date.now(),k:`${ferry?'Ferry':leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`,a:-(cost-fuelCost),note:acm.name});
-  if(fuelCost) S.ledger.push({t:Date.now(),k:`Fuel burn ${leg.from}→${leg.to}`,a:-fuelCost,note:leg.fuelUsedLb?Math.round(leg.fuelUsedLb)+' lb':'actual'});
+  const legKey=`${ferry?'Ferry':leg.kind==='position'?'Reposition':'Revenue leg'} ${leg.from}→${leg.to}`;
+  if(billOp){
+    operCharge(cost, legKey, acm.name+(fuelCost?` · fuel ${money(fuelCost)}`:''));
+  }else{
+    S.cash-=cost;
+    S.ledger.push({t:Date.now(),k:legKey,a:-(cost-fuelCost),note:acm.name});
+    if(fuelCost) S.ledger.push({t:Date.now(),k:`Fuel burn ${leg.from}→${leg.to}`,a:-fuelCost,note:leg.fuelUsedLb?Math.round(leg.fuelUsedLb)+' lb':'actual'});
+  }
   leg.done=true; leg.verified=leg.verified||!!verified;
   ac.loc=leg.to; ac.hours+=e.block; ac.cond=Math.max(40,ac.cond-rnd(0.4,1.6));
   S.hours+=e.block; S.nm+=e.dist;
@@ -2712,8 +2739,11 @@ function settleTrip(){
   let payout=ferry?0:c.payout, bonusNote=[];
   if(!ferry && t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
   if(payout){
-    S.cash+=payout;
-    S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
+    if(isOnOperatorFleet(ac)) operCredit(payout, `Charter payout ${c.dep}→${c.arr}`, c.client+(bonusNote.length?' · '+bonusNote.join(', '):''));
+    else{
+      S.cash+=payout;
+      S.ledger.push({t:Date.now(),k:`Charter payout ${c.dep}→${c.arr}`,a:payout,note:c.client+(bonusNote.length?' · '+bonusNote.join(', '):'')});
+    }
   }
   // reputation (a no-revenue ferry earns only token rep)
   let rep=ferry?Math.max(1,Math.round(c.dist/120)):Math.round(c.dist/22)+12;
@@ -2764,8 +2794,8 @@ function fleetRow(f){
     : f.busy?'<span class="tag warnt">On trip</span>'
     : f.forRent?`<span class="tag ok">💰 For rent · ${money(f.rentRate)}/day</span>`
     : '<span class="tag ok">Available</span>';
-  const opTag=onOp&&op?`<span class="tag ok" title="Company fleet">🏢 ${esc(op.name)}</span>`:'';
-  const opBtn=op&&f.owned&&!rented?(onOp
+  const opTag=onOp&&op?`<span class="tag ok" title="Company fleet">🏢 ${esc(op.name)}${f.opLease?' · leased':''}</span>`:'';
+  const opBtn=op&&f.owned&&!rented&&!f.opLease?(onOp
     ?`<button class="btn ghost sm" onclick="removeFromOperator('${f.id}')">Remove from company</button>`
     :`<button class="btn brass sm" onclick="assignToOperator('${f.id}')">Add to ${esc(op.name)}</button>`):'';
   return `<div class="fleet-row">
@@ -2795,13 +2825,14 @@ function fleetRow(f){
         ? `<button class="btn ghost sm" onclick="unlistRent('${f.id}')">Stop renting</button>`
         : `<button class="btn ghost sm" onclick="rentModal('${f.id}')">💰 Rent out</button>`):''}
       ${!rented&&f.cond<88?`<button class="btn ghost sm" onclick="maintenance('${f.id}')">Service · ${money1k((100-f.cond)*ACBY[f.type].maint*0.9)}</button>`:''}
-      ${rented?'':(!f.owned?`<button class="btn ghost sm" onclick="returnLease('${f.id}')">Return lease</button>`:`<button class="btn ghost sm" onclick="sellAircraft('${f.id}')">Sell · ${money1k(a.price*0.78*(f.cond/100))}</button>`)}
+      ${f.opLease&&!rented?`<button class="btn ghost sm" onclick="returnLease('${f.id}')">Return company lease</button>`:''}
+      ${!rented&&!f.opLease?(!f.owned?`<button class="btn ghost sm" onclick="returnLease('${f.id}')">Return lease</button>`:`<button class="btn ghost sm" onclick="sellAircraft('${f.id}')">Sell · ${money1k(a.price*0.78*(f.cond/100))}</button>`):''}
     </div>
   </div>`;
 }
 function minsLeft(ts){const m=Math.max(0,Math.round((ts-Date.now())/60e3));return m>=1?m+'m':'<1m';}
 function rentModal(id){
-  const f=S.fleet.find(x=>x.id===id); if(!f||!f.owned)return;
+  const f=S.fleet.find(x=>x.id===id); if(!f||!f.owned||f.opLease)return;
   const a=ACBY[f.type], suggest=f.rentRate||Math.round(a.lease*0.6);
   modal(`
     <div class="modal-head"><div class="eyebrow">Dry-lease your aircraft</div><h2>Rent out ${f.tail}</h2>
@@ -2839,8 +2870,19 @@ function maintenance(id){
 }
 function returnLease(id){
   const f=S.fleet.find(x=>x.id===id);if(f.busy)return showToast('On a trip','bad');
+  if(f.opLease){
+    if(!confirm('Return this company lease? The deposit is refunded to the operator account.'))return;
+    operCredit(f.leaseDeposit||0, `Company lease return ${f.tail}`, 'Deposit refund');
+    S.fleet=S.fleet.filter(x=>x.id!==id);
+    save(); syncOperatorToCloud();
+    showToast('Company lease returned · deposit refunded','good'); renderAll();
+    return;
+  }
   if(!confirm('Return this leased aircraft?'))return;
-  S.fleet=S.fleet.filter(x=>x.id!==id);showToast('Lease returned','good');renderAll();
+  if(f.leaseDeposit) S.cash+=f.leaseDeposit;
+  S.fleet=S.fleet.filter(x=>x.id!==id);
+  if(f.leaseDeposit) S.ledger.push({t:Date.now(),k:`Lease return ${f.tail}`,a:f.leaseDeposit,note:'Deposit refund'});
+  showToast('Lease returned','good');renderAll();
 }
 function sellAircraft(id){
   const f=S.fleet.find(x=>x.id===id);if(f.busy)return showToast('On a trip','bad');
@@ -2924,7 +2966,7 @@ function rMarket(p){
     const list=AIRCRAFT.filter(a=>mktCls==='all'||a.cls===mktCls);
     p.innerHTML=head+`
       <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        <span>Acquire up to your <b>${CLASSES[TIERS[S.maxTier]].label}</b> rating — heavier types unlock in <a onclick="nav('ratings')" style="color:var(--sky);cursor:pointer">Type Ratings</a>. <b>Lease</b> for low capital (a per-flight share comes out of each trip) or <b>buy</b> outright. New aircraft deliver to <b class="mono">${S.base}</b>; once owned you can rename the tail and list it for rent.</span></div>
+        <span>Acquire up to your <b>${CLASSES[TIERS[S.maxTier]].label}</b> rating — heavier types unlock in <a onclick="nav('ratings')" style="color:var(--sky);cursor:pointer">Type Ratings</a>. <b>Personal lease</b> bills your pilot account; <b>Company lease</b> bills your operator operating account and adds the jet to your company fleet. New aircraft deliver to <b class="mono">${S.base}</b> (company leases use your first operating base).</span></div>
       <div class="mkt-table" style="margin-top:14px">
         <div class="mkt-head"><div>Aircraft</div><div>Pax</div><div>Cruise</div><div>Burn</div><div>Range</div><div>Price</div><div></div></div>
         ${list.map(newRow).join('')}
@@ -2939,6 +2981,8 @@ function ratingTag(a){
 }
 function newRow(a){
   const locked=CLASSES[a.cls].tier>S.maxTier;
+  const op=S.operator?normalizeOperator(S.operator):null;
+  const opBtns=op?`<button class="btn brass sm" onclick="leaseAircraftForOperator('${a.id}')" title="Lease from ${esc(op.name)} operating account">Company lease</button>`:'';
   return `<div class="mkt-row ${locked?'locked':''}">
     <div class="mkt-cell mname" data-l="Aircraft">${a.name}
       <span class="tag cls">${CLASSES[a.cls].label}</span>${a.pax>=50?'<span class="tag sports">👥 Team</span>':''}${ratingTag(a)}</div>
@@ -2946,10 +2990,10 @@ function newRow(a){
     <div class="mkt-cell mono" data-l="Cruise">${a.cruise} kt</div>
     <div class="mkt-cell mono" data-l="Burn">${a.burn} gph</div>
     <div class="mkt-cell mono" data-l="Range">${a.range.toLocaleString()} nm</div>
-    <div class="mkt-cell mono" data-l="Price"><b>${money1k(a.price)}</b><div class="mkt-sub">lease ${money(a.lease)}/day</div></div>
+    <div class="mkt-cell mono" data-l="Price"><b>${money1k(a.price)}</b><div class="mkt-sub">lease ${money(a.lease)}/day · dep ${money(a.lease*3)}</div></div>
     <div class="mkt-cell macts" data-l="">${locked
       ? `<button class="btn ghost sm" onclick="nav('ratings')">Rating path</button>`
-      : `<button class="btn ghost sm" onclick="leaseAircraft('${a.id}')">Lease</button><button class="btn brass sm" onclick="buyAircraft('${a.id}')">Buy</button>`}</div>
+      : `${opBtns}<button class="btn ghost sm" onclick="leaseAircraft('${a.id}')">Personal lease</button><button class="btn brass sm" onclick="buyAircraft('${a.id}')">Buy</button>`}</div>
   </div>`;
 }
 function usedRow(u,a){
@@ -2974,9 +3018,20 @@ function leaseAircraft(id){
   if(CLASSES[a.cls].tier>S.maxTier)return showToast(`Requires a ${CLASSES[a.cls].label} type rating`,'bad');
   if(S.cash<dep)return showToast(`Need ${money(dep)} deposit to lease`,'bad');
   S.cash-=dep;
-  S.fleet.push({id:uid(),type:id,tail:genTail(),loc:S.base,owned:false,cond:rnd(82,97),hours:0});
-  S.ledger.push({t:Date.now(),k:`Lease deposit ${a.name}`,a:-dep,note:'3-day deposit'});
+  S.fleet.push({id:uid(),type:id,tail:genTail(),loc:S.base,owned:false,cond:rnd(82,97),hours:0,leaseDeposit:dep});
+  S.ledger.push({t:Date.now(),k:`Lease deposit ${a.name}`,a:-dep,note:'3-day deposit · personal'});
   showToast(`${a.name} leased — delivered to ${S.base}`,'good');renderAll();
+}
+function leaseAircraftForOperator(id){
+  if(!S.operator) return showToast('Found an operator company first','bad');
+  const a=ACBY[id], o=normalizeOperator(S.operator), dep=a.lease*3;
+  const base=(o.bases&&o.bases[0])||S.base;
+  if(CLASSES[a.cls].tier>S.maxTier) return showToast(`Requires a ${CLASSES[a.cls].label} type rating`,'bad');
+  if(operCash()<dep) return showToast(`${o.name} needs ${money(dep)} in its operating account`,'bad');
+  operCharge(dep, `Company lease deposit ${a.name}`, o.name);
+  S.fleet.push({id:uid(),type:id,tail:genTail(),loc:base,owned:false,opLease:true,opId:o.id,leaseDeposit:dep,cond:rnd(82,97),hours:0});
+  save(); syncOperatorToCloud();
+  showToast(`${a.name} leased for ${o.name} — delivered to ${base}`,'good'); renderAll();
 }
 function buyAircraft(id,skipRename){
   const a=ACBY[id];
@@ -3005,12 +3060,13 @@ function buyUsed(lid){
 async function syncOperatorFromCloud(){
   const sb=getSB(); if(!sb||!AUTH.user||!S.operator||!S.operator.cloudId) return;
   try{
-    const {data}=await sb.from('operators').select('applications,pilots,hiring,pay_rate').eq('id',S.operator.cloudId).single();
+    const {data}=await sb.from('operators').select('applications,pilots,hiring,pay_rate,cash').eq('id',S.operator.cloudId).single();
     if(data){
       S.operator.applications=data.applications||[];
       S.operator.pilots=data.pilots||[];
       S.operator.hiring=!!data.hiring;
       if(data.pay_rate!=null) S.operator.payRate=data.pay_rate;
+      if(data.cash!=null) S.operator.cash=data.cash;
       save();
     }
   }catch(e){}
@@ -3040,7 +3096,7 @@ function rOperator(p){
   const spark=plDaily(14), revTail=util.total?Math.round(pl7.rev/util.total):0;
   const opFleet=operatorFleetCount();
   const prog = next? Math.max(0,Math.min(1, Math.min(opFleet/next.fleet, S.rep/next.rep, nw/next.worth))) : 1;
-  const slots=pilotSlots(), pilots=operPilotCount();
+  const pilots=operPilotCount();
   const kpi=(lab,val,sub,tone)=>`<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">${lab}</div>
     <div class="mono" style="font-size:21px;font-weight:700;margin-top:3px;${tone?`color:var(--${tone})`:''}">${val}</div><div class="muted" style="font-size:11.5px;margin-top:2px">${sub}</div></div>`;
   const baseTags=(o.bases||[]).map(ic=>`<span class="tag mono sm">${ic}</span>`).join(' ')||'<span class="muted">No bases set</span>';
@@ -3058,7 +3114,8 @@ function rOperator(p){
         <div style="flex:1;min-width:200px"><div class="eyebrow">Operator · ${o.callsign} · ${certLabel(o.cert)} · founded ${new Date(o.founded).toLocaleDateString()}</div>
           <div style="font-family:var(--disp);font-weight:700;font-size:23px;line-height:1.1">${o.name}</div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap"><span class="tag" style="background:${tier.color};color:#fff">${tier.name}</span>
-            <span class="muted" style="font-size:12.5px">${opFleet} company aircraft · ${pilots}/${slots} pilots · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
+            <span class="muted" style="font-size:12.5px">${opFleet} company aircraft · ${pilots} pilots · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
+        <button class="btn ghost sm" onclick="nav('market')">Lease aircraft</button>
         <button class="btn ghost sm" onclick="nav('spcharter')">Dispatch charter</button>
       </div>
       ${next?`<div style="margin-top:14px">
@@ -3070,10 +3127,10 @@ function rOperator(p){
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
-      ${kpi('Net worth',money1k(nw),`cash ${money1k(S.cash)} · fleet ${money1k(fleetValue())}`)}
+      ${kpi('Operating cash',money1k(operCash()),`company bank account`)}
       ${kpi('Net · 7 days',money1k(pl7.net),`rev ${money1k(pl7.rev)} − ops ${money1k(pl7.op)}`,pl7.net>=0?'pos':'neg')}
       ${kpi('Fleet utilization',util.pct+'%',`${util.flying} flying · ${util.idle} idle`)}
-      ${kpi('Pilot roster',`${pilots} / ${slots}`,`${o.hiring?'Hiring open':'Not hiring'} · ${money(o.payRate)} ${o.payNote}`)}
+      ${kpi('Pilot roster',`${pilots}`,`${o.hiring?'Hiring open':'Not hiring'} · ${money(o.payRate)} ${o.payNote}`)}
     </div>
 
     <div class="split">
@@ -3100,15 +3157,16 @@ function rOperator(p){
             <span><b style="color:var(--brass)">${util.listed}</b> listed</span><span><b class="muted">${util.idle}</b> idle</span></div>
           <button class="btn ghost sm" style="margin-top:10px" onclick="nav('fleet')">Manage fleet</button>
           ${util.idle>=1?`<div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Idle jets earn nothing — list them for rent or dispatch company charters.</span></div>`:''}`
-          :`<p class="muted" style="font-size:13px">No aircraft on your company fleet yet. Buy or lease in the Marketplace, then assign tails from <b>My Fleet</b>.</p>
-            <button class="btn brass sm" style="margin-top:8px" onclick="nav('fleet')">Open My Fleet</button>`}
+          :`<p class="muted" style="font-size:13px">No aircraft on your company fleet yet. Use <b>Company lease</b> in the Marketplace (billed to your operating account) or assign owned tails from <b>My Fleet</b>.</p>
+            <button class="btn brass sm" style="margin-top:8px;margin-right:8px" onclick="nav('market')">Lease aircraft</button>
+            <button class="btn ghost sm" style="margin-top:8px" onclick="nav('fleet')">My Fleet</button>`}
         </div>
         ${opFleet?`<div class="card card-pad" style="margin-top:14px">
           <div class="sec-head"><div><div class="eyebrow">Company metal</div><div class="sec-title">${opFleet} aircraft assigned</div></div>
             <button class="btn ghost sm" onclick="nav('fleet')">Manage</button></div>
           ${operatorFleet().map(f=>`<div class="mini" style="margin-bottom:6px">
             <div class="grade-pill gNA" style="font-size:11px;font-family:var(--mono)">${f.tail.slice(0,4)}</div>
-            <div><div class="t">${f.tail} · ${ACBY[f.type].name}</div><div class="s">@${f.loc} · ${f.busy?'On trip':f.forRent?'Listed for rent':'Available'}</div></div></div>`).join('')}
+            <div><div class="t">${f.tail} · ${ACBY[f.type].name}${f.opLease?' · leased':''}</div><div class="s">@${f.loc} · ${f.busy?'On trip':f.forRent?'Listed for rent':'Available'}</div></div></div>`).join('')}
         </div>`:''}
       </div>
       <div>
@@ -3126,10 +3184,16 @@ function rOperator(p){
           <div class="form-row"><label>Pay rate ($)</label>
             <input class="field mono" id="opPayRate" type="number" value="${o.payRate}" style="width:120px" onchange="setOperatorPayRate(this.value)">
             <span class="muted" style="font-size:12px;margin-left:8px">${o.payNote}</span></div>
+          <div class="form-row"><label>Operating account</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="mono" style="font-size:18px;font-weight:700">${money(operCash())}</span>
+              <input class="field mono" id="opDepAmt" type="number" placeholder="Amount" style="width:120px">
+              <button class="btn ghost sm" onclick="depositToOperator()">Deposit from personal</button></div>
+            <div class="muted" style="font-size:11.5px;margin-top:4px">Company leases, trip costs, and charter revenue use this account.</div></div>
         </div>
         <div class="card card-pad" style="margin-top:14px">
           <div class="sec-head"><div><div class="eyebrow">Crew</div><div class="sec-title">Pilot roster</div></div>
-            <span class="muted" style="font-size:12px">${pilots}/${slots} slots</span></div>
+            <span class="muted" style="font-size:12px">${pilots} pilots · one operator per pilot</span></div>
           ${roster}
         </div>
         ${(o.applications||[]).length?`<div class="card card-pad" style="margin-top:14px">
@@ -3157,14 +3221,40 @@ function setOperatorHiring(on){
   showToast(on?'Now hiring pilots':'Hiring closed','good');
   if(view==='operator') rOperator($('#page'));
 }
+function depositToOperator(){
+  if(!S.operator) return;
+  const amt=Math.round(+($('#opDepAmt').value||0));
+  if(amt<=0) return showToast('Enter an amount','bad');
+  if(S.cash<amt) return showToast('Not enough personal cash','bad');
+  S.cash-=amt;
+  S.ledger.push({t:Date.now(),k:'Transfer to operator',a:-amt,note:S.operator.name});
+  operCredit(amt, 'Capital deposit', 'From personal account');
+  save(); syncOperatorToCloud();
+  showToast(money(amt)+' moved to operating account','good');
+  if(view==='operator') rOperator($('#page'));
+}
 function setOperatorPayRate(v){
   if(!S.operator) return;
   S.operator.payRate=Math.max(0,Math.round(+v||0)); save(); syncOperatorToCloud();
 }
-function hirePilot(appId){
+async function hirePilot(appId){
   const o=normalizeOperator(S.operator), app=(o.applications||[]).find(a=>a.id===appId);
   if(!app) return showToast('Application not found','bad');
-  if(operPilotCount()>=pilotSlots()) return showToast('No pilot slots — reach the next tier','bad');
+  if((o.pilots||[]).some(p=>p.userId===app.userId)) return showToast('Already on your roster','bad');
+  const other=pilotOnAnotherOperator(app.userId, o.cloudId||o.id);
+  if(other) return showToast(app.pilot+' already flies for '+other.name,'bad');
+  if(cloudEnabled()&&AUTH.user){
+    const sb=getSB();
+    if(sb){
+      try{
+        const {data:ops}=await sb.from('operators').select('id,name,pilots');
+        for(const op of ops||[]){
+          if(op.id===(o.cloudId||o.id)) continue;
+          if((op.pilots||[]).some(p=>p.userId===app.userId)) return showToast(app.pilot+' already flies for '+op.name,'bad');
+        }
+      }catch(e){}
+    }
+  }
   o.pilots.push({userId:app.userId,pilot:app.pilot,hiredAt:Date.now()});
   o.applications=o.applications.filter(a=>a.id!==appId);
   save(); syncOperatorToCloud();
@@ -3287,7 +3377,7 @@ async function syncOperatorToCloud(){
   const o=normalizeOperator(S.operator);
   const row={owner_id:AUTH.user.id,name:o.name,callsign:o.callsign,color:o.color,cert:o.cert,
     bases:o.bases,hiring:o.hiring,pay_rate:o.payRate,pay_note:o.payNote,tier:operTier().key,
-    pilots:o.pilots,applications:o.applications,
+    pilots:o.pilots,applications:o.applications,cash:operCash(),
     fleet_count:operatorFleetCount(),
     fleet_roster:operatorFleet().map(f=>({id:f.id,tail:f.tail,type:f.type,loc:f.loc})),
     founded:o.founded?new Date(o.founded).toISOString():null,updated_at:new Date().toISOString()};
@@ -3321,6 +3411,14 @@ async function applyToOperator(cloudId){
   if(!op) return showToast('Operator not found','bad');
   if(!op.hiring) return showToast('This operator is not hiring','bad');
   if(S.employer) return showToast('You are already employed — leave your current operator first','bad');
+  const onRoster=pilotOnAnotherOperator(AUTH.user.id, null);
+  if(onRoster) return showToast('You already fly for '+onRoster.name,'bad');
+  try{
+    const {data:ops}=await sb.from('operators').select('id,name,pilots');
+    for(const x of ops||[]){
+      if((x.pilots||[]).some(p=>p.userId===AUTH.user.id)) return showToast('You already fly for '+x.name,'bad');
+    }
+  }catch(e){}
   if((S.operatorApps||[]).some(a=>a.operatorId===cloudId&&a.status==='pending'))
     return showToast('Application already pending','bad');
   const app={id:uid(),userId:AUTH.user.id,pilot:S.pilot,msg:'Interested in flying for '+op.name,at:Date.now()};
@@ -3411,10 +3509,11 @@ function opSpark(arr,w,h){
 function operAlerts(){
   const al=[], util=fleetUtil(true);
   const unassigned=(S.fleet||[]).filter(f=>f.owned&&!isOnOperatorFleet(f)).length;
+  if(operCash()<50000) al.push({i:'💵',t:`Operating account low (${money(operCash())}) — deposit cash or post company charters.`,tone:'warn'});
   if(unassigned) al.push({i:'✈️',t:`${unassigned} owned aircraft not on your company fleet — assign them from My Fleet.`,tone:'warn'});
   if(util.idle>=2) al.push({i:'⚠️',t:`${util.idle} company jets are idle — dispatch charters or list them for rent.`,tone:'warn'});
-  if(S.operator&&S.operator.hiring&&operPilotCount()<pilotSlots())
-    al.push({i:'👨‍✈️',t:`Hiring open — ${pilotSlots()-operPilotCount()} pilot slot(s) available.`,tone:'good'});
+  if(S.operator&&S.operator.hiring)
+    al.push({i:'👨‍✈️',t:'Hiring open — pilots can apply from the Operators page (one operator per pilot).',tone:'good'});
   const ti=operTierIdx(), n=OPER_TIERS[ti+1];
   if(n && (S.fleet||[]).length>=n.fleet && S.rep>=n.rep && netWorth()>=n.worth)
     al.push({i:'⭐',t:`You qualify for ${n.name} status — ${n.perk.toLowerCase()}.`,tone:'good'});
@@ -3448,7 +3547,7 @@ function foundOperator(){
   if(S.cash<250000)return showToast('Not enough cash','bad');
   S.cash-=250000;
   const bases=APTBY[baseIc]?[baseIc]:(S.base&&APTBY[S.base]?[S.base]:[]);
-  S.operator=normalizeOperator({id:'op_'+uid(),name,callsign:cs,color:window._opColor||'#1B2A41',founded:Date.now(),cert,bases,hiring:false,payRate:2500});
+  S.operator=normalizeOperator({id:'op_'+uid(),name,callsign:cs,color:window._opColor||'#1B2A41',founded:Date.now(),cert,bases,hiring:false,payRate:2500,cash:500000});
   cloudActivity(`founded ${certLabel(cert)} operator ${name} 🏢`);
   S.ledger.push({t:Date.now(),k:`Founded ${name}`,a:-250000,note:certLabel(cert)+' operator formation'});
   syncOperatorToCloud();
