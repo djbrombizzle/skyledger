@@ -313,6 +313,7 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 .hidden{display:none!important}
 .board-map-wrap{margin-top:10px}
 #boardMap{height:calc(100vh - 280px);min-height:520px;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow);z-index:0}
+.board-map-wrap .leaflet-interactive{cursor:pointer}
 
 /* ============ THE JET CARD (signature) ============ */
 .jetcard{background:linear-gradient(135deg,#1f2f47 0%,#16202e 60%,#101822 100%);color:#eaf0f8;
@@ -1773,6 +1774,24 @@ function getFilteredBoardList(){
   const now=Date.now();
   return sortBoardList(applyBoardFilters(S.board.filter(c=>c.expires>now)));
 }
+function getBoardMapList(){
+  const list=getFilteredBoardList(), sel=selectedFleetAc();
+  if(sel) return list.filter(c=>c.dep===sel.loc);
+  return list;
+}
+function boardMapCharterPopup(c){
+  const e=charterRowEcon(c);
+  const st=e.statusLabel||'—';
+  const stCls=e.status==='ready'?'ok':e.status==='rent'?'muted-t':e.status==='repo'?'warnt':'muted-t';
+  return `<div style="min-width:200px">
+    <b class="mono" style="font-size:14px">${c.dep} → ${c.arr}</b><br>
+    <span style="font-size:12px">${esc(c.client)}</span><br>
+    <span style="font-size:12px;color:var(--muted)">${c.dist} nm · ${CAT[c.cat].label} · ${CLASSES[c.cls].label}</span><br>
+    <span style="font-size:12px">Pay <b>${money1k(c.payout)}</b>${e.net!=null?` · Net <b class="${e.net>=0?'pos':'neg'}">${money1k(e.net)}</b>`:''}</span><br>
+    <span class="tag ${stCls} sm" style="margin-top:6px;display:inline-block">${st}</span>
+    <div style="margin-top:10px"><button class="btn brass sm" style="width:100%;justify-content:center" onclick="openAccept('${c.id}')">Open charter</button></div>
+  </div>`;
+}
 function boardRouteColor(c){
   const e=charterRowEcon(c);
   if(!e.plan) return '#7d8ba0';
@@ -1789,25 +1808,35 @@ function initBoardMap(){
   const el=$('#boardMap'); if(!el||boardView!=='map')return;
   if(BOARD_MAP){ BOARD_MAP.remove(); BOARD_MAP=null; }
   BOARD_MAP=createSkyMap(el);
-  const list=getFilteredBoardList(), pts=[], airports=new Set(), seenRoutes=new Set();
+  const sel=selectedFleetAc();
+  const list=getBoardMapList(), pts=[], airports=new Set();
   list.forEach(c=>{
     const dep=APTBY[c.dep], arr=APTBY[c.arr];
     if(!dep||!arr||!dep.lat||!arr.lat) return;
-    const key=c.dep+'→'+c.arr;
-    if(seenRoutes.has(key)) return;
-    seenRoutes.add(key);
     const line=greatCirclePoints(dep.lat,dep.lon,arr.lat,arr.lon);
-    L.polyline(line,{weight:1.5,opacity:0.35,color:boardRouteColor(c)}).addTo(BOARD_MAP);
+    const pl=L.polyline(line,{weight:4,opacity:0.48,color:boardRouteColor(c)}).addTo(BOARD_MAP);
+    pl.bindPopup(boardMapCharterPopup(c));
+    pl.bindTooltip(`<b class="mono">${c.dep}→${c.arr}</b> · ${money1k(c.payout)}`,{sticky:true,direction:'top',opacity:0.92});
+    pl.on('click',()=>pl.openPopup());
     line.forEach(p=>pts.push(p));
     airports.add(c.dep); airports.add(c.arr);
   });
+  if(sel){
+    const home=APTBY[sel.loc];
+    if(home&&home.lat){
+      L.circleMarker([home.lat,home.lon],{radius:9,color:'#B0863B',weight:2.5,fillColor:'#B0863B',fillOpacity:0.25}).addTo(BOARD_MAP)
+        .bindTooltip(`<b>${sel.tail}</b> · ${ACBY[sel.type].name}<br>@${sel.loc} · ${APTBY[sel.loc].name}`,{sticky:true,direction:'top',opacity:0.95});
+      pts.push([home.lat,home.lon]);
+    }
+  }
   airports.forEach(ic=>{
     const a=APTBY[ic]; if(!a||!a.lat) return;
-    const m=L.circleMarker([a.lat,a.lon],{radius:4,color:'#fff',weight:1,fillColor:'#142236',fillOpacity:0.9}).addTo(BOARD_MAP);
+    const isHome=sel&&ic===sel.loc;
+    const m=L.circleMarker([a.lat,a.lon],{radius:isHome?6:4,color:isHome?'#B0863B':'#fff',weight:isHome?2:1,fillColor:isHome?'#B0863B':'#142236',fillOpacity:isHome?0.85:0.9}).addTo(BOARD_MAP);
     bindAirportTooltip(m,ic);
-    pts.push([a.lat,a.lon]);
+    if(!isHome) pts.push([a.lat,a.lon]);
   });
-  if(pts.length) setTimeout(()=>{ if(!BOARD_MAP)return; BOARD_MAP.invalidateSize(); BOARD_MAP.fitBounds(pts,{padding:[40,40],maxZoom:6}); }, 60);
+  if(pts.length) setTimeout(()=>{ if(!BOARD_MAP)return; BOARD_MAP.invalidateSize(); BOARD_MAP.fitBounds(pts,{padding:[40,40],maxZoom:sel?8:6}); }, 60);
   else setTimeout(()=>{ if(!BOARD_MAP)return; BOARD_MAP.invalidateSize(); BOARD_MAP.setView([39,-70],3); }, 60);
 }
 function rBoard(p){
@@ -1834,7 +1863,7 @@ function rBoard(p){
       <button class="btn ghost sm" onclick="doRefresh()">Refresh</button>
     </div>
     <div class="help" style="margin-bottom:10px;padding:8px 12px;font-size:11.5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>${boardView==='map'?'Great-circle routes for filtered charters — <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo.':sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
+      <span>${boardView==='map'?(sel?`Map shows departures from <b class="mono">${sel.loc}</b> only (${list.length} charter${list.length===1?'':'s'}) — click a route for details. <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo.`:'Great-circle routes for filtered charters — click a route for details. <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo.'):sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
     <div id="boardTableWrap" class="board-wrap ${boardView==='table'?'':'hidden'}">
       <table class="board-tbl">
         <colgroup>
