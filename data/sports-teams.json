@@ -1,0 +1,896 @@
+{
+  "nfl": {
+    "ARI": {
+      "hub": "KIWA",
+      "name": "ARI"
+    },
+    "ATL": {
+      "hub": "KFTY",
+      "name": "ATL"
+    },
+    "BAL": {
+      "hub": "KBWI",
+      "name": "BAL"
+    },
+    "BUF": {
+      "hub": "KBUF",
+      "name": "BUF"
+    },
+    "CAR": {
+      "hub": "KCLT",
+      "name": "CAR"
+    },
+    "CHI": {
+      "hub": "KPWK",
+      "name": "CHI"
+    },
+    "CIN": {
+      "hub": "KLUK",
+      "name": "CIN"
+    },
+    "CLE": {
+      "hub": "KBKL",
+      "name": "CLE"
+    },
+    "DAL": {
+      "hub": "KDAL",
+      "name": "DAL"
+    },
+    "DEN": {
+      "hub": "KAPA",
+      "name": "DEN"
+    },
+    "DET": {
+      "hub": "KDET",
+      "name": "DET"
+    },
+    "GB": {
+      "hub": "KGRB",
+      "name": "GB"
+    },
+    "HOU": {
+      "hub": "KHOU",
+      "name": "HOU"
+    },
+    "IND": {
+      "hub": "KIND",
+      "name": "IND"
+    },
+    "JAX": {
+      "hub": "KCRG",
+      "name": "JAX"
+    },
+    "KC": {
+      "hub": "KMKC",
+      "name": "KC"
+    },
+    "LAC": {
+      "hub": "KVNY",
+      "name": "LAC"
+    },
+    "LAR": {
+      "hub": "KVNY",
+      "name": "LAR"
+    },
+    "LV": {
+      "hub": "KVGT",
+      "name": "LV"
+    },
+    "MIA": {
+      "hub": "KOPF",
+      "name": "MIA"
+    },
+    "MIN": {
+      "hub": "KFCM",
+      "name": "MIN"
+    },
+    "NE": {
+      "hub": "KBED",
+      "name": "NE"
+    },
+    "NO": {
+      "hub": "KNEW",
+      "name": "NO"
+    },
+    "NYG": {
+      "hub": "KTEB",
+      "name": "NYG"
+    },
+    "NYJ": {
+      "hub": "KTEB",
+      "name": "NYJ"
+    },
+    "PHI": {
+      "hub": "KPNE",
+      "name": "PHI"
+    },
+    "PIT": {
+      "hub": "KPIT",
+      "name": "PIT"
+    },
+    "SEA": {
+      "hub": "KBFI",
+      "name": "SEA"
+    },
+    "SF": {
+      "hub": "KOAK",
+      "name": "SF"
+    },
+    "TB": {
+      "hub": "KTPA",
+      "name": "TB"
+    },
+    "TEN": {
+      "hub": "KBNA",
+      "name": "TEN"
+    },
+    "WAS": {
+      "hub": "KDCA",
+      "name": "WAS"
+    },
+    "WSH": {
+      "hub": "KDCA",
+      "name": "WSH"
+    }
+  },
+  "nba": {
+    "ATL": {
+      "hub": "KFTY",
+      "name": "ATL"
+    },
+    "BOS": {
+      "hub": "KBED",
+      "name": "BOS"
+    },
+    "BKN": {
+      "hub": "KTEB",
+      "name": "BKN"
+    },
+    "CHA": {
+      "hub": "KCLT",
+      "name": "CHA"
+    },
+    "CHI": {
+      "hub": "KPWK",
+      "name": "CHI"
+    },
+    "CLE": {
+      "hub": "KBKL",
+      "name": "CLE"
+    },
+    "DAL": {
+      "hub": "KDAL",
+      "name": "DAL"
+    },
+    "DEN": {
+      "hub": "KAPA",
+      "name": "DEN"
+    },
+    "DET": {
+      "hub": "KDET",
+      "name": "DET"
+    },
+    "GS": {
+      "hub": "KOAK",
+      "name": "GS"
+    },
+    "GSW": {
+      "hub": "KOAK",
+      "name": "GSW"
+    },
+    "HOU": {
+      "hub": "KHOU",
+      "name": "HOU"
+    },
+    "IND": {
+      "hub": "KIND",
+      "name": "IND"
+    },
+    "LAC": {
+      "hub": "KVNY",
+      "name": "LAC"
+    },
+    "LAL": {
+      "hub": "KVNY",
+      "name": "LAL"
+    },
+    "MEM": {
+      "hub": "KMEM",
+      "name": "MEM"
+    },
+    "MIA": {
+      "hub": "KOPF",
+      "name": "MIA"
+    },
+    "MIL": {
+      "hub": "KMKE",
+      "name": "MIL"
+    },
+    "MIN": {
+      "hub": "KFCM",
+      "name": "MIN"
+    },
+    "NOP": {
+      "hub": "KNEW",
+      "name": "NOP"
+    },
+    "NY": {
+      "hub": "KTEB",
+      "name": "NY"
+    },
+    "NYK": {
+      "hub": "KTEB",
+      "name": "NYK"
+    },
+    "OKC": {
+      "hub": "KOKC",
+      "name": "OKC"
+    },
+    "ORL": {
+      "hub": "KORL",
+      "name": "ORL"
+    },
+    "PHI": {
+      "hub": "KPNE",
+      "name": "PHI"
+    },
+    "PHX": {
+      "hub": "KSDL",
+      "name": "PHX"
+    },
+    "POR": {
+      "hub": "KPDX",
+      "name": "POR"
+    },
+    "SAC": {
+      "hub": "KMCC",
+      "name": "SAC"
+    },
+    "SA": {
+      "hub": "KSAT",
+      "name": "SA"
+    },
+    "SAS": {
+      "hub": "KSAT",
+      "name": "SAS"
+    },
+    "TOR": {
+      "hub": "CYTZ",
+      "name": "TOR"
+    },
+    "UTA": {
+      "hub": "KSLC",
+      "name": "UTA"
+    },
+    "WAS": {
+      "hub": "KDCA",
+      "name": "WAS"
+    },
+    "WSH": {
+      "hub": "KDCA",
+      "name": "WSH"
+    },
+    "NO": {
+      "hub": "KTEB",
+      "name": "New Orleans Pelicans"
+    },
+    "UTAH": {
+      "hub": "KTEB",
+      "name": "Utah Jazz"
+    }
+  },
+  "mlb": {
+    "ARI": {
+      "hub": "KIWA",
+      "name": "ARI"
+    },
+    "ATL": {
+      "hub": "KFTY",
+      "name": "ATL"
+    },
+    "BAL": {
+      "hub": "KBWI",
+      "name": "BAL"
+    },
+    "BOS": {
+      "hub": "KBED",
+      "name": "BOS"
+    },
+    "CHC": {
+      "hub": "KPWK",
+      "name": "CHC"
+    },
+    "CHW": {
+      "hub": "KMDW",
+      "name": "CHW"
+    },
+    "CIN": {
+      "hub": "KLUK",
+      "name": "CIN"
+    },
+    "CLE": {
+      "hub": "KBKL",
+      "name": "CLE"
+    },
+    "COL": {
+      "hub": "KAPA",
+      "name": "COL"
+    },
+    "CWS": {
+      "hub": "KMDW",
+      "name": "CWS"
+    },
+    "DET": {
+      "hub": "KDET",
+      "name": "DET"
+    },
+    "HOU": {
+      "hub": "KHOU",
+      "name": "HOU"
+    },
+    "KC": {
+      "hub": "KMKC",
+      "name": "KC"
+    },
+    "LAA": {
+      "hub": "KSNA",
+      "name": "LAA"
+    },
+    "LAD": {
+      "hub": "KVNY",
+      "name": "LAD"
+    },
+    "MIA": {
+      "hub": "KOPF",
+      "name": "MIA"
+    },
+    "MIL": {
+      "hub": "KMKE",
+      "name": "MIL"
+    },
+    "MIN": {
+      "hub": "KFCM",
+      "name": "MIN"
+    },
+    "NYM": {
+      "hub": "KTEB",
+      "name": "NYM"
+    },
+    "NYY": {
+      "hub": "KTEB",
+      "name": "NYY"
+    },
+    "OAK": {
+      "hub": "KOAK",
+      "name": "OAK"
+    },
+    "PHI": {
+      "hub": "KPNE",
+      "name": "PHI"
+    },
+    "PIT": {
+      "hub": "KPIT",
+      "name": "PIT"
+    },
+    "SD": {
+      "hub": "KMYF",
+      "name": "SD"
+    },
+    "SDP": {
+      "hub": "KMYF",
+      "name": "SDP"
+    },
+    "SEA": {
+      "hub": "KBFI",
+      "name": "SEA"
+    },
+    "SF": {
+      "hub": "KOAK",
+      "name": "SF"
+    },
+    "STL": {
+      "hub": "KSTL",
+      "name": "STL"
+    },
+    "TB": {
+      "hub": "KTPA",
+      "name": "TB"
+    },
+    "TEX": {
+      "hub": "KDAL",
+      "name": "TEX"
+    },
+    "TOR": {
+      "hub": "CYTZ",
+      "name": "TOR"
+    },
+    "WSH": {
+      "hub": "KDCA",
+      "name": "WSH"
+    },
+    "ATH": {
+      "hub": "KTEB",
+      "name": "Athletics"
+    }
+  },
+  "ncaaf": {
+    "ALA": {
+      "hub": "KTCL",
+      "name": "ALA"
+    },
+    "ARK": {
+      "hub": "KXNA",
+      "name": "ARK"
+    },
+    "AUB": {
+      "hub": "KAUO",
+      "name": "AUB"
+    },
+    "CLEM": {
+      "hub": "KCEU",
+      "name": "CLEM"
+    },
+    "FLA": {
+      "hub": "KGNV",
+      "name": "FLA"
+    },
+    "FSU": {
+      "hub": "KTLH",
+      "name": "FSU"
+    },
+    "GA": {
+      "hub": "KAHN",
+      "name": "GA"
+    },
+    "LSU": {
+      "hub": "KBTR",
+      "name": "LSU"
+    },
+    "MIA": {
+      "hub": "KOPF",
+      "name": "MIA"
+    },
+    "MICH": {
+      "hub": "KARB",
+      "name": "MICH"
+    },
+    "ND": {
+      "hub": "KSBM",
+      "name": "ND"
+    },
+    "OSU": {
+      "hub": "KOSU",
+      "name": "OSU"
+    },
+    "OU": {
+      "hub": "KOUN",
+      "name": "OU"
+    },
+    "PSU": {
+      "hub": "KUNV",
+      "name": "PSU"
+    },
+    "TEN": {
+      "hub": "KTYS",
+      "name": "TEN"
+    },
+    "TEX": {
+      "hub": "KAUS",
+      "name": "TEX"
+    },
+    "UGA": {
+      "hub": "KAHN",
+      "name": "UGA"
+    },
+    "USC": {
+      "hub": "KVNY",
+      "name": "USC"
+    },
+    "UTAH": {
+      "hub": "KSLC",
+      "name": "UTAH"
+    },
+    "WASH": {
+      "hub": "KBFI",
+      "name": "WASH"
+    },
+    "WISC": {
+      "hub": "KMSN",
+      "name": "WISC"
+    },
+    "ORE": {
+      "hub": "KEUG",
+      "name": "ORE"
+    },
+    "IOWA": {
+      "hub": "KIOW",
+      "name": "IOWA"
+    },
+    "MSU": {
+      "hub": "KLAN",
+      "name": "MSU"
+    },
+    "NEB": {
+      "hub": "KLNK",
+      "name": "NEB"
+    },
+    "UCLA": {
+      "hub": "KVNY",
+      "name": "UCLA"
+    },
+    "STAN": {
+      "hub": "KSQL",
+      "name": "STAN"
+    },
+    "TEXAM": {
+      "hub": "KCLL",
+      "name": "TEXAM"
+    },
+    "OKST": {
+      "hub": "KSWO",
+      "name": "OKST"
+    },
+    "TCU": {
+      "hub": "KFTW",
+      "name": "TCU"
+    },
+    "BAY": {
+      "hub": "KACT",
+      "name": "BAY"
+    },
+    "TTU": {
+      "hub": "KLBB",
+      "name": "TTU"
+    },
+    "KSU": {
+      "hub": "KMHK",
+      "name": "KSU"
+    },
+    "WVU": {
+      "hub": "KCKB",
+      "name": "WVU"
+    },
+    "LOU": {
+      "hub": "KSDF",
+      "name": "LOU"
+    },
+    "UK": {
+      "hub": "KLEX",
+      "name": "UK"
+    },
+    "UF": {
+      "hub": "KGNV",
+      "name": "UF"
+    },
+    "SC": {
+      "hub": "KCAE",
+      "name": "SC"
+    },
+    "MISS": {
+      "hub": "KMEM",
+      "name": "MISS"
+    },
+    "ARIZ": {
+      "hub": "KTUS",
+      "name": "ARIZ"
+    },
+    "ASU": {
+      "hub": "KIWA",
+      "name": "ASU"
+    },
+    "BYU": {
+      "hub": "KPVU",
+      "name": "BYU"
+    },
+    "CIN": {
+      "hub": "KLUK",
+      "name": "CIN"
+    },
+    "HOU": {
+      "hub": "KHOU",
+      "name": "HOU"
+    },
+    "UCF": {
+      "hub": "KORL",
+      "name": "UCF"
+    },
+    "USF": {
+      "hub": "KTPA",
+      "name": "USF"
+    },
+    "MEM": {
+      "hub": "KMEM",
+      "name": "MEM"
+    },
+    "NAVY": {
+      "hub": "KANP",
+      "name": "NAVY"
+    },
+    "ARMY": {
+      "hub": "KSWF",
+      "name": "ARMY"
+    },
+    "AFA": {
+      "hub": "KCOS",
+      "name": "AFA"
+    }
+  },
+  "ncaab": {
+    "DUKE": {
+      "hub": "KRDU",
+      "name": "DUKE"
+    },
+    "UNC": {
+      "hub": "KRDU",
+      "name": "UNC"
+    },
+    "UK": {
+      "hub": "KLEX",
+      "name": "UK"
+    },
+    "KU": {
+      "hub": "KICT",
+      "name": "KU"
+    },
+    "GONZ": {
+      "hub": "KGEG",
+      "name": "GONZ"
+    },
+    "UCLA": {
+      "hub": "KVNY",
+      "name": "UCLA"
+    },
+    "UCONN": {
+      "hub": "KHFD",
+      "name": "UCONN"
+    },
+    "PUR": {
+      "hub": "KLAF",
+      "name": "PUR"
+    },
+    "HOU": {
+      "hub": "KHOU",
+      "name": "HOU"
+    },
+    "TEN": {
+      "hub": "KTYS",
+      "name": "TEN"
+    },
+    "AUB": {
+      "hub": "KAUO",
+      "name": "AUB"
+    },
+    "ALA": {
+      "hub": "KTCL",
+      "name": "ALA"
+    },
+    "ARIZ": {
+      "hub": "KTUS",
+      "name": "ARIZ"
+    },
+    "BAY": {
+      "hub": "KACT",
+      "name": "BAY"
+    },
+    "CREI": {
+      "hub": "KOMA",
+      "name": "CREI"
+    },
+    "ISU": {
+      "hub": "KDSM",
+      "name": "ISU"
+    },
+    "MARQ": {
+      "hub": "KMKE",
+      "name": "MARQ"
+    },
+    "MSU": {
+      "hub": "KLAN",
+      "name": "MSU"
+    },
+    "OSU": {
+      "hub": "KOSU",
+      "name": "OSU"
+    },
+    "SYR": {
+      "hub": "KSYR",
+      "name": "SYR"
+    },
+    "VILL": {
+      "hub": "KPNE",
+      "name": "VILL"
+    },
+    "XAV": {
+      "hub": "KLUK",
+      "name": "XAV"
+    },
+    "ZAGA": {
+      "hub": "KGEG",
+      "name": "ZAGA"
+    },
+    "IU": {
+      "hub": "KIND",
+      "name": "IU"
+    },
+    "LOU": {
+      "hub": "KSDF",
+      "name": "LOU"
+    },
+    "MICH": {
+      "hub": "KARB",
+      "name": "MICH"
+    },
+    "AMER": {
+      "hub": "KTEB",
+      "name": "American University Eagles"
+    },
+    "ASU": {
+      "hub": "KTEB",
+      "name": "Arizona State Sun Devils"
+    },
+    "ARK": {
+      "hub": "KTEB",
+      "name": "Arkansas Razorbacks"
+    },
+    "BELL": {
+      "hub": "KTEB",
+      "name": "Bellarmine Knights"
+    },
+    "BOIS": {
+      "hub": "KTEB",
+      "name": "Boise State Broncos"
+    },
+    "BRAD": {
+      "hub": "KTEB",
+      "name": "Bradley Braves"
+    },
+    "CP": {
+      "hub": "KTEB",
+      "name": "Cal Poly Mustangs"
+    },
+    "CAL": {
+      "hub": "KTEB",
+      "name": "California Golden Bears"
+    },
+    "COLO": {
+      "hub": "KTEB",
+      "name": "Colorado Buffaloes"
+    },
+    "CSU": {
+      "hub": "KTEB",
+      "name": "Colorado State Rams"
+    },
+    "DEL": {
+      "hub": "KTEB",
+      "name": "Delaware Blue Hens"
+    },
+    "FAMU": {
+      "hub": "KTEB",
+      "name": "Florida A&M Rattlers"
+    },
+    "FLA": {
+      "hub": "KTEB",
+      "name": "Florida Gators"
+    },
+    "FSU": {
+      "hub": "KTEB",
+      "name": "Florida State Seminoles"
+    },
+    "GW": {
+      "hub": "KTEB",
+      "name": "George Washington Revolutionaries"
+    },
+    "GTWN": {
+      "hub": "KTEB",
+      "name": "Georgetown Hoyas"
+    },
+    "UGA": {
+      "hub": "KTEB",
+      "name": "Georgia Bulldogs"
+    },
+    "GT": {
+      "hub": "KTEB",
+      "name": "Georgia Tech Yellow Jackets"
+    },
+    "HAW": {
+      "hub": "KTEB",
+      "name": "Hawai'i Rainbow Warriors"
+    },
+    "HOW": {
+      "hub": "KTEB",
+      "name": "Howard Bison"
+    },
+    "IUIN": {
+      "hub": "KTEB",
+      "name": "IU Indianapolis Jaguars"
+    },
+    "IDHO": {
+      "hub": "KTEB",
+      "name": "Idaho Vandals"
+    },
+    "JXST": {
+      "hub": "KTEB",
+      "name": "Jacksonville State Gamecocks"
+    },
+    "MUR": {
+      "hub": "KTEB",
+      "name": "Murray State Racers"
+    },
+    "NKU": {
+      "hub": "KTEB",
+      "name": "Northern Kentucky Norse"
+    },
+    "NU": {
+      "hub": "KTEB",
+      "name": "Northwestern Wildcats"
+    },
+    "ND": {
+      "hub": "KTEB",
+      "name": "Notre Dame Fighting Irish"
+    },
+    "SAC": {
+      "hub": "KTEB",
+      "name": "Sacramento State Hornets"
+    },
+    "SDSU": {
+      "hub": "KTEB",
+      "name": "San Diego State Aztecs"
+    },
+    "SJSU": {
+      "hub": "KTEB",
+      "name": "San José State Spartans"
+    },
+    "USA": {
+      "hub": "KTEB",
+      "name": "South Alabama Jaguars"
+    },
+    "USF": {
+      "hub": "KTEB",
+      "name": "South Florida Bulls"
+    },
+    "SIU": {
+      "hub": "KTEB",
+      "name": "Southern Illinois Salukis"
+    },
+    "STAN": {
+      "hub": "KTEB",
+      "name": "Stanford Cardinal"
+    },
+    "STET": {
+      "hub": "KTEB",
+      "name": "Stetson Hatters"
+    },
+    "UAB": {
+      "hub": "KTEB",
+      "name": "UAB Blazers"
+    },
+    "UCR": {
+      "hub": "KTEB",
+      "name": "UC Riverside Highlanders"
+    },
+    "UCSD": {
+      "hub": "KTEB",
+      "name": "UC San Diego Tritons"
+    },
+    "CONN": {
+      "hub": "KTEB",
+      "name": "UConn Huskies"
+    },
+    "UIC": {
+      "hub": "KTEB",
+      "name": "UIC Flames"
+    },
+    "USC": {
+      "hub": "KTEB",
+      "name": "USC Trojans"
+    },
+    "WKU": {
+      "hub": "KTEB",
+      "name": "Western Kentucky Hilltoppers"
+    },
+    "YALE": {
+      "hub": "KTEB",
+      "name": "Yale Bulldogs"
+    }
+  }
+}

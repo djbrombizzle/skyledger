@@ -579,6 +579,18 @@ function safetyScore(){ if(!S.grades||!S.grades.length)return null;
 
 /* ============ LIVE DATA LAYER (events · weather · radar) ============ */
 let VATEVENTS=[];              // fetched VATSIM events
+let SPORTS_GAMES=[];           // normalized schedule from ESPN
+let SPORTS_TEAMS={}, SPORTS_VENUES={}, SPORTS_CITIES={};
+const SPORTS_CACHE_KEY='sky_sports_cache_v1', SPORTS_CACHE_TTL=6*3600e3;
+const SPORTS_LEAGUE_META={
+  nfl:{icon:'🏈',dur:3.5,path:'football/nfl'},
+  nba:{icon:'🏀',dur:2.5,path:'basketball/nba'},
+  mlb:{icon:'⚾',dur:3,path:'baseball/mlb'},
+  ncaaf:{icon:'🏈',dur:3.5,path:'football/college-football',qs:'groups=80'},
+  ncaab:{icon:'🏀',dur:2,path:'basketball/mens-college-basketball'},
+  pga:{icon:'⛳',pga:true}
+};
+const SPORTS_MAX_BOARD=40;
 let WX={};                     // icao -> parsed METAR
 let RADAR={host:null,frames:[],idx:0};
 /* CORS-tolerant fetch: direct, then public proxies (matches the rest of the app's pattern) */
@@ -606,6 +618,219 @@ async function fetchEvents(){
     })).filter(e=>e._end>Date.now()).sort((a,b)=>a._start-b._start);
     VATEVENTS=list.slice(0,40);
   }catch(e){ /* leave existing */ }
+}
+function slugifySports(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+function loadSportsCache(){
+  try{ const raw=localStorage.getItem(SPORTS_CACHE_KEY); if(!raw)return false;
+    const o=JSON.parse(raw); if(Date.now()-o.t>SPORTS_CACHE_TTL)return false;
+    SPORTS_GAMES=o.games||[]; return true;
+  }catch(e){ return false; }
+}
+function saveSportsCache(){
+  try{ localStorage.setItem(SPORTS_CACHE_KEY,JSON.stringify({t:Date.now(),games:SPORTS_GAMES})); }catch(e){}
+}
+let _sportsReady=null;
+function loadSportsData(){
+  if(_sportsReady) return _sportsReady;
+  _sportsReady=(async()=>{
+    try{
+      const [tr,tv,tc]=await Promise.all([
+        fetchWithTimeout(skyAsset('data/sports-teams.json'),{cache:'no-store'},10000).then(r=>r.json()),
+        fetchWithTimeout(skyAsset('data/sports-venues.json'),{cache:'no-store'},10000).then(r=>r.json()),
+        fetchWithTimeout(skyAsset('data/sports-cities.json'),{cache:'no-store'},10000).then(r=>r.json()),
+      ]);
+      SPORTS_TEAMS=tr||{}; SPORTS_VENUES=tv||{}; SPORTS_CITIES=tc||{};
+      if(!loadSportsCache()) SPORTS_GAMES=[];
+      console.log('Skyledger sports data loaded');
+    }catch(e){ console.warn('Sports data load failed',e); }
+  })();
+  return _sportsReady;
+}
+function teamHub(league,abbr){
+  if(!abbr||!SPORTS_TEAMS[league])return null;
+  const t=SPORTS_TEAMS[league][abbr];
+  if(!t)return null;
+  return typeof t==='string'?t:t.hub;
+}
+function teamName(league,abbr){
+  if(!abbr||!SPORTS_TEAMS[league])return abbr;
+  const t=SPORTS_TEAMS[league][abbr]; return (t&&t.name)||abbr;
+}
+function nearestAirportByCity(city,state){
+  const cs=`${String(city||'').toLowerCase()}|${String(state||'').toUpperCase()}`;
+  if(SPORTS_CITIES[cs]) return SPORTS_CITIES[cs];
+  return null;
+}
+function resolveVenueIcao(venue,evName){
+  if(venue&&venue.id!=null){
+    const key=String(venue.id);
+    if(SPORTS_VENUES[key]) return SPORTS_VENUES[key].icao;
+    const cs=`${(venue.address?.city||'').toLowerCase()}|${(venue.address?.state||'').toUpperCase()}`;
+    const ic=nearestAirportByCity(venue.address?.city,venue.address?.state);
+    if(ic) return ic;
+    if(!SPORTS_VENUES[key]) console.warn('Sports venue miss',key,venue.fullName||'',cs);
+  }
+  if(evName){
+    const slug=slugifySports(evName);
+    if(SPORTS_VENUES[slug]) return SPORTS_VENUES[slug].icao;
+    const low=evName.toLowerCase();
+    for(const [k,v] of Object.entries(SPORTS_VENUES)){
+      if(k.includes('-')&&low.includes((v.name||'').toLowerCase().slice(0,12))) return v.icao;
+    }
+  }
+  return null;
+}
+function sportsGameWindows(league,gameStart,gameEnd){
+  if(league==='pga'){
+    return { inboundOpen:gameStart-24*3600e3, inboundClose:gameStart-4*3600e3,
+      outboundOpen:gameEnd, outboundClose:gameEnd+24*3600e3 };
+  }
+  return { inboundOpen:gameStart-36*3600e3, inboundClose:gameStart-2*3600e3,
+    outboundOpen:gameEnd, outboundClose:gameEnd+24*3600e3 };
+}
+function parseEspnTeamGame(ev,comp,league,meta){
+  const comps=comp.competitors||[];
+  const home=comps.find(c=>c.homeAway==='home'), away=comps.find(c=>c.homeAway==='away');
+  if(!home||!away) return null;
+  const homeAbbr=home.team?.abbreviation, awayAbbr=away.team?.abbreviation;
+  const venue=comp.venue||ev.venue;
+  const venueIcao=resolveVenueIcao(venue,ev.name);
+  if(!venueIcao||!APTBY[venueIcao]) return null;
+  const gameStart=Date.parse(comp.date||ev.date);
+  if(!gameStart||gameStart<Date.now()-864e5) return null;
+  const gameEnd=gameStart+meta.dur*3600e3;
+  const win=sportsGameWindows(league,gameStart,gameEnd);
+  return { id:String(ev.id), league, name:ev.shortName||ev.name, homeAbbr, awayAbbr, venueIcao,
+    venueName:venue?.fullName||'', gameStart, gameEnd, neutralSite:!!comp.neutralSite,
+    icon:meta.icon, ...win };
+}
+function mlbMarquee(ev,comp){
+  const d=new Date(comp.date||ev.date), dow=d.getUTCDay();
+  if(dow===0||dow===5||dow===6) return true;
+  const bcast=[].concat(comp.broadcasts||[],ev.broadcasts||[]);
+  return bcast.some(b=>{
+    const names=(b.names||[]).join(' ')+(b.market||'')+(b.type||'');
+    return /espn|fox|tbs|tnt|nbc|abc|mlbn|prime|national/i.test(names);
+  });
+}
+function ncaabMarquee(comp){
+  return (comp.competitors||[]).some(c=>{
+    const r=c.curatedRank?.current??c.rank;
+    return r!=null&&r<=25;
+  });
+}
+function parseEspnScoreboard(data,league,meta){
+  const out=[];
+  for(const ev of data.events||[]){
+    const comp=ev.competitions?.[0]; if(!comp) continue;
+    if(league==='mlb'&&!mlbMarquee(ev,comp)) continue;
+    if(league==='ncaab'&&!ncaabMarquee(comp)) continue;
+    const g=parseEspnTeamGame(ev,comp,league,meta); if(g) out.push(g);
+  }
+  return out;
+}
+function parseEspnPga(data,meta){
+  const out=[];
+  for(const ev of data.events||[]){
+    const comp=ev.competitions?.[0]||ev;
+    const gameStart=Date.parse(ev.date||comp.date);
+    const gameEnd=Date.parse(ev.endDate||comp.endDate||ev.date);
+    if(!gameStart||gameEnd<Date.now()-864e5) continue;
+    const venueIcao=resolveVenueIcao(comp.venue||ev.venue,ev.name);
+    if(!venueIcao||!APTBY[venueIcao]) continue;
+    const win=sportsGameWindows('pga',gameStart,gameEnd);
+    out.push({ id:String(ev.id), league:'pga', name:ev.shortName||ev.name,
+      homeAbbr:null, awayAbbr:null, venueIcao, venueName:ev.name,
+      gameStart, gameEnd, neutralSite:false, icon:meta.icon, ...win });
+  }
+  return out;
+}
+async function fetchSportsDay(path,dateStr,qs){
+  const base=`https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard`;
+  const q=[dateStr?`dates=${dateStr}`:'',qs||''].filter(Boolean).join('&');
+  const url=q?`${base}?${q}`:base;
+  return proxiedFetch(url);
+}
+async function fetchSportsSchedules(force){
+  if(!force&&loadSportsCache()) return;
+  await loadSportsData();
+  const games=[], seen=new Set();
+  const days=[];
+  for(let i=0;i<14;i++){ const d=new Date(); d.setDate(d.getDate()+i); days.push(d.toISOString().slice(0,10).replace(/-/g,'')); }
+  for(const [league,meta] of Object.entries(SPORTS_LEAGUE_META)){
+    if(meta.pga){
+      try{
+        const data=await fetchSportsDay('golf/pga','');
+        parseEspnPga(data,meta).forEach(g=>{ if(!seen.has(g.id)){seen.add(g.id);games.push(g);} });
+      }catch(e){ console.warn('PGA fetch failed',e); }
+      continue;
+    }
+    for(const dt of days){
+      try{
+        const data=await fetchSportsDay(meta.path,dt,meta.qs);
+        parseEspnScoreboard(data,league,meta).forEach(g=>{
+          if(!seen.has(g.id)){seen.add(g.id);games.push(g);}
+        });
+      }catch(e){ /* skip day */ }
+    }
+  }
+  games.sort((a,b)=>a.gameStart-b.gameStart);
+  SPORTS_GAMES=games;
+  saveSportsCache();
+}
+function sportsTeamsForGame(g){
+  if(g.league==='pga') return ['tour'];
+  if(g.neutralSite) return [g.homeAbbr,g.awayAbbr].filter(Boolean);
+  return g.awayAbbr?[g.awayAbbr]:[];
+}
+function sportsOnBoard(gameId,leg,team){
+  return (S.board||[]).some(c=>c.sportsEvent&&c.sportsEvent.gameId===gameId&&c.sportsEvent.leg===leg&&c.sportsEvent.team===team);
+}
+function sportsCharterTargets(){
+  const now=Date.now(), out=[];
+  for(const g of SPORTS_GAMES){
+    if(g.outboundClose<=now||g.inboundOpen>now+14*864e5) continue;
+    for(const team of sportsTeamsForGame(g)){
+      if(now>=g.inboundOpen&&now<g.inboundClose) out.push({game:g,leg:'inbound',team});
+      if(now>=g.outboundOpen&&now<g.outboundClose) out.push({game:g,leg:'outbound',team});
+    }
+  }
+  return out;
+}
+function sportsDemandGames(){
+  const now=Date.now();
+  return SPORTS_GAMES.filter(g=>g.venueIcao&&g.gameStart-7*864e5<=now&&g.gameEnd+864e5>=now);
+}
+function genSportsCharter(game,leg,teamAbbr){
+  let hub, client, teamLabel;
+  if(game.league==='pga'){
+    hub='KTEB'; teamLabel='PGA Tour';
+    client=`PGA Tour — ${game.name}`;
+  }else{
+    hub=teamHub(game.league,teamAbbr);
+    teamLabel=teamName(game.league,teamAbbr);
+    const opp=leg==='inbound'?`@ ${game.name.split(' at ').pop()||game.venueName||game.name}`:`depart ${game.venueName||game.venueIcao}`;
+    client=`${teamLabel} — ${opp}`;
+  }
+  const venue=game.venueIcao;
+  if(!hub||!venue||!APTBY[hub]||!APTBY[venue]) return null;
+  const dep=leg==='inbound'?hub:venue, arr=leg==='inbound'?venue:hub;
+  const dist=Math.round(haversine(dep,arr));
+  if(dist<50) return null;
+  const acmRef=ACBY.bbj||AIRCRAFT.find(a=>a.cls==='ulr')||AIRCRAFT[0];
+  const block=dist/acmRef.cruise+CFG.taxiPad;
+  const mktD=demandAt(venue);
+  const demand=mktD*1.15;
+  const payout=Math.round(CLASSES.ulr.hourly*Math.max(block,1.0)*CAT.sports.mult*demand/50)*50;
+  const expires=leg==='inbound'?game.inboundClose:game.outboundClose;
+  const open=leg==='inbound'?game.inboundOpen:game.outboundOpen;
+  if(Date.now()<open||Date.now()>=expires) return null;
+  const legLabel=leg==='inbound'?(game.league==='pga'?'Tour arrival':'Team inbound'):(game.league==='pga'?'Tour departure':'Post-game outbound');
+  return { id:uid(), dep, arr, dist, cls:'ulr', tier:5, cat:'sports', pax:Math.round(rnd(50,84)),
+    payout, demand, mktD:+mktD.toFixed(2), client, expires,
+    surge:mktD>=1.35, hot:mktD>=1.2,
+    sportsEvent:{ league:game.league, gameId:game.id, team:teamAbbr, leg, legLabel,
+      gameStart:game.gameStart, name:game.name, icon:game.icon, venueIcao:venue, windowClose:expires } };
 }
 /* event airports that exist in our network and are live/soon -> used to seed charters */
 function eventTargets(){
@@ -649,6 +874,7 @@ function wxAround(){ // airports we care about
   if(S.active){s.add(S.active.charter.dep);s.add(S.active.charter.arr);}
   S.board.slice(0,14).forEach(c=>{s.add(c.dep);s.add(c.arr);});
   eventTargets().forEach(t=>s.add(t.icao));
+  sportsDemandGames().forEach(g=>s.add(g.venueIcao));
   (S.wxWatch||[]).forEach(ic=>s.add(ic));
   return [...s];
 }
@@ -1243,6 +1469,7 @@ function economyTick(){
   // REAL-WORLD EVENTS spike demand at their airports (the market reacts, naturally
   // raising fares & charter volume there — no artificial flat bonus)
   rwTargets().forEach(t=>bumpDemand(t.ic, rnd(0.16,0.32)));
+  sportsDemandGames().forEach(g=>{ if(APTBY[g.venueIcao]) bumpDemand(g.venueIcao, rnd(0.2,0.35)); });
   // PLAYER FBO PRICING moves the market: cheap fuel draws traffic to that field, dear fuel repels it
   (S.fbos||[]).forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8;
     const r=f.fuel/base; bumpDemand(f.ic, r<=0.95?0.11 : r<=1.10?0.05 : r<=1.30?-0.03 : -0.09); });
@@ -1481,6 +1708,15 @@ function refreshBoard(full){
     if(S.board.filter(c=>c.rwEvent&&c.rwEvent.name===t.e.name).length>=5) return;
     S.board.push(genCharter(t.ic));                  // out of the event field
     S.board.push(genCharter(null,{arrTo:t.ic}));     // into the event field
+  });
+  // 2b) sports schedule — paired inbound/outbound team charters
+  const sportsN=S.board.filter(c=>c.sportsEvent).length;
+  let sportsAdded=0;
+  sportsCharterTargets().forEach(t=>{
+    if(sportsN+sportsAdded>=SPORTS_MAX_BOARD) return;
+    if(sportsOnBoard(t.game.id,t.leg,t.team)) return;
+    const c=genSportsCharter(t.game,t.leg,t.team);
+    if(c){ S.board.push(c); sportsAdded++; }
   });
   // 3) general market (any tier — includes aspirational charters above your rating)
   while(S.board.length<CFG.boardSize) S.board.push(genCharter());
@@ -1738,6 +1974,7 @@ function applyBoardFilters(list){
     });
   }
   if(boardFilter.flags==='event') list=list.filter(c=>c.rwEvent);
+  else if(boardFilter.flags==='sports') list=list.filter(c=>c.sportsEvent);
   else if(boardFilter.flags==='repo') list=list.filter(c=>c.repo);
   else if(boardFilter.flags==='surge') list=list.filter(c=>c.surge);
   if(boardFilter.q){const q=boardFilter.q.toUpperCase();list=list.filter(c=>c.dep.includes(q)||c.arr.includes(q)||APTBY[c.dep].name.toUpperCase().includes(q)||APTBY[c.arr].name.toUpperCase().includes(q));}
@@ -1787,6 +2024,7 @@ function boardMapCharterPopup(c){
     <b class="mono" style="font-size:14px">${c.dep} → ${c.arr}</b><br>
     <span style="font-size:12px">${esc(c.client)}</span><br>
     <span style="font-size:12px;color:var(--muted)">${c.dist} nm · ${CAT[c.cat].label} · ${CLASSES[c.cls].label}</span><br>
+    ${c.sportsEvent?`<span style="font-size:12px">${c.sportsEvent.icon} ${esc(c.sportsEvent.legLabel)} · ${new Date(c.sportsEvent.gameStart).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><br>`:''}
     <span style="font-size:12px">Pay <b>${money1k(c.payout)}</b>${e.net!=null?` · Net <b class="${e.net>=0?'pos':'neg'}">${money1k(e.net)}</b>`:''}</span><br>
     <span class="tag ${stCls} sm" style="margin-top:6px;display:inline-block">${st}</span>
     <div style="margin-top:10px"><button class="btn brass sm" style="width:100%;justify-content:center" onclick="openAccept('${c.id}')">Open charter</button></div>
@@ -1794,6 +2032,13 @@ function boardMapCharterPopup(c){
 }
 function boardRouteColor(c){
   const e=charterRowEcon(c);
+  if(c.sportsEvent){
+    if(!e.plan) return '#9b7ec8';
+    if(e.status==='ready') return '#7B3FE4';
+    if(e.status==='rent') return '#6a2fd4';
+    if(e.status==='repo') return '#8b5cf6';
+    return '#9b7ec8';
+  }
   if(!e.plan) return '#7d8ba0';
   if(e.status==='ready') return '#1F7A52';
   if(e.status==='rent') return '#2D6AE3';
@@ -1863,7 +2108,7 @@ function rBoard(p){
       <button class="btn ghost sm" onclick="doRefresh()">Refresh</button>
     </div>
     <div class="help" style="margin-bottom:10px;padding:8px 12px;font-size:11.5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>${boardView==='map'?(sel?`Map shows departures from <b class="mono">${sel.loc}</b> only (${list.length} charter${list.length===1?'':'s'}) — click a route for details. <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo.`:'Great-circle routes for filtered charters — click a route for details. <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo.'):sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
+      <span>${boardView==='map'?(sel?`Map shows departures from <b class="mono">${sel.loc}</b> only (${list.length} charter${list.length===1?'':'s'}) — click a route for details. <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo, <span style="color:#7B3FE4">purple</span> sports.`:'Great-circle routes for filtered charters — click a route for details. <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo, <span style="color:#7B3FE4">purple</span> sports.'):sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
     <div id="boardTableWrap" class="board-wrap ${boardView==='table'?'':'hidden'}">
       <table class="board-tbl">
         <colgroup>
@@ -1893,6 +2138,7 @@ function rBoard(p){
             <th><select class="field" onchange="setBF('flags',this.value)">
               <option value="all" ${f.flags==='all'?'selected':''}>—</option>
               <option value="event" ${f.flags==='event'?'selected':''}>Events</option>
+              <option value="sports" ${f.flags==='sports'?'selected':''}>Sports</option>
               <option value="surge" ${f.flags==='surge'?'selected':''}>Surge</option>
               <option value="repo" ${f.flags==='repo'?'selected':''}>Ferry</option>
             </select></th>
@@ -1975,6 +2221,7 @@ function charterRow(c){
   const e=charterRowEcon(c);
   const flags=[];
   if(c.rwEvent) flags.push(`<span class="tag evt-tag sm" title="${esc(c.rwEvent.name)}">${c.rwEvent.icon}</span>`);
+  if(c.sportsEvent) flags.push(`<span class="tag evt-tag sm" title="${esc(c.sportsEvent.name)}">${c.sportsEvent.icon} ${c.sportsEvent.leg==='inbound'?'↓':'↑'}</span>`);
   if(c.surge) flags.push('<span class="tag warnt sm">⚡</span>');
   const stCls=e.status==='ready'?'ok':e.status==='rent'?'muted-t':e.status==='repo'?'warnt':'muted-t';
   let btn;
@@ -1983,7 +2230,7 @@ function charterRow(c){
       :e.plan.ready?`<button class="btn brass sm" onclick="openAccept('${c.id}')">Go</button>`
       :`<button class="btn brass sm" onclick="openAccept('${c.id}')">Repo</button>`;
   } else btn='<button class="btn ghost sm" disabled>—</button>';
-  return `<tr class="board-row ${c.rwEvent?'evt':''} ${c.repo?'repo':''} ${!e.plan?'dim':''}">
+  return `<tr class="board-row ${c.rwEvent?'evt':''} ${c.sportsEvent?'evt':''} ${c.repo?'repo':''} ${!e.plan?'dim':''}">
     <td class="mono" style="font-weight:600">${c.dep}${wxDot(c.dep)}</td>
     <td class="mono" style="font-weight:600">${c.arr}${wxDot(c.arr)}</td>
     <td><span class="tag cls sm">${CLS_SHORT[c.cls]||CLASSES[c.cls].label}</span></td>
@@ -2018,11 +2265,12 @@ function charterCard(c){
       : (c.pax>=20?`Need a high-capacity jet — ${c.pax} seats`:'No suitable aircraft');
     right = `<div class="ready-line">${why}</div><button class="btn ghost" disabled>Unavailable</button>`;
   }
-  return `<div class="charter ${c.rwEvent?'evt':''} ${c.repo?'repo':''}">
+  return `<div class="charter ${c.rwEvent?'evt':''} ${c.sportsEvent?'evt':''} ${c.repo?'repo':''}">
     <div class="ch-l">
       <div class="ch-top">
         <div class="route"><span class="icao">${c.dep}${wxDot(c.dep)}</span><span class="arr">✈</span><span class="icao">${c.arr}${wxDot(c.arr)}</span></div>
         ${c.rwEvent?`<span class="tag evt-tag" title="${c.rwEvent.name} at ${evIc}">${c.rwEvent.icon} ${c.rwEvent.name.length>24?c.rwEvent.name.slice(0,22)+'…':c.rwEvent.name}</span>`:''}
+        ${c.sportsEvent?`<span class="tag evt-tag" title="${esc(c.sportsEvent.name)}">${c.sportsEvent.icon} ${esc(c.sportsEvent.legLabel)}</span>`:''}
         ${c.repo?'<span class="tag muted-t">↩ Reposition</span>':`<span class="tag ${c.cat}">${CAT[c.cat].label}</span>`}
         <span class="tag cls">${CLASSES[c.cls].label}</span>
         ${plan&&plan.rental?'<span class="tag muted-t">🔑 rental available</span>':''}
@@ -2036,7 +2284,7 @@ function charterCard(c){
         ${c.pax?`<span><b>${c.pax}</b> pax</span>`:'<span>cargo</span>'}
         <span>expires <b>${timeLeft(c.expires)}</b></span>
       </div>
-      <div class="ch-client"><span class="who">${c.client}</span>${c.rwEvent?` · ${c.rwEvent.icon} ${c.rwEvent.name} demand`:c.repo?' · discounted ferry to reposition your jet':' — '+cat2blurb[c.cat]}</div>
+      <div class="ch-client"><span class="who">${c.client}</span>${c.sportsEvent?` · ${c.sportsEvent.icon} ${c.sportsEvent.legLabel} — ${new Date(c.sportsEvent.gameStart).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:c.rwEvent?` · ${c.rwEvent.icon} ${c.rwEvent.name} demand`:c.repo?' · discounted ferry to reposition your jet':' — '+cat2blurb[c.cat]}</div>
     </div>
     <div class="ch-r">
       <div><div class="payout">${money(c.payout)}</div><small>${c.repo?'ferry value':'charter value'}</small></div>
@@ -2076,7 +2324,7 @@ function openAccept(cid, keep){
   fetchWx([c.dep,c.arr]).then(()=>{const el=$('#accWx');if(el)el.innerHTML=wxStrip(c.dep)+wxStrip(c.arr);});
   modal(`
     <div class="modal-head">
-      <div class="eyebrow">${c.rwEvent?c.rwEvent.icon+' '+c.rwEvent.name.toUpperCase()+' · ':''}${c.repo?'REPOSITION · ':CAT[c.cat].label+' · '}${CLASSES[c.cls].label}</div>
+      <div class="eyebrow">${c.sportsEvent?c.sportsEvent.icon+' '+c.sportsEvent.legLabel.toUpperCase()+' · ':c.rwEvent?c.rwEvent.icon+' '+c.rwEvent.name.toUpperCase()+' · ':''}${c.repo?'REPOSITION · ':CAT[c.cat].label+' · '}${CLASSES[c.cls].label}</div>
       <h2>${c.dep} → ${c.arr}</h2>
       <div class="lead">${c.client} · ${c.dist.toLocaleString()} nm · ${c.pax?c.pax+' pax':'cargo'} · ${APTBY[c.dep].name} to ${APTBY[c.arr].name}</div>
     </div>
@@ -2099,6 +2347,8 @@ function openAccept(cid, keep){
       <div class="help" style="margin-top:12px;border-style:solid;border-color:var(--pos-soft);background:var(--pos-soft)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         <span><b>Way out of ${c.arr}:</b> ${outs.length} onward charter${outs.length===1?'':'s'} currently departing${nearHub?` · closest reposition ${nearHub} <b class="mono">${ferryNm}nm</b>`:''}. You won't be stranded.</span></div>
+      ${c.sportsEvent?`<div class="help" style="margin-top:12px;border-color:var(--brass);border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
+        <span><b>${c.sportsEvent.icon} ${esc(c.sportsEvent.name)}</b> · ${esc(c.sportsEvent.legLabel)} · Game ${new Date(c.sportsEvent.gameStart).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} · Window closes ${new Date(c.sportsEvent.windowClose).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>`:''}
       ${c.rwEvent?`<div class="help" style="margin-top:12px;border-color:var(--brass);border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
         <span><b>${c.rwEvent.icon} ${c.rwEvent.name}</b> is driving heavy traffic at ${c.rwEvent.type==='sports'||c.rwEvent.type==='vvip'?'this field':'these fields'} — fares here are elevated by real demand.</span></div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
@@ -2415,6 +2665,7 @@ function settleTrip(){
     if(t.legs.find(l=>l.kind==='revenue').verified)rep=Math.round(rep*1.5);
     if(c.cat==='medevac'||c.cat==='vvip')rep+=25;
     if(c.rwEvent)rep+=15;                       // small prestige for working a real-world event
+    if(c.sportsEvent)rep+=12;                   // team charter prestige
   }
   S.rep+=rep; S.flights++;
   // FBO passive cut if charter originated at your FBO
@@ -3102,6 +3353,24 @@ function claimRating(){
 /* ---------- EVENTS (real-world events drive the market; VATSIM is informational) ---------- */
 function rEvents(p){
   const liveRW=rwLive(), upRW=rwUpcoming(45);
+  const leagueLabel={nfl:'NFL',nba:'NBA',mlb:'MLB',ncaaf:'NCAA Football',ncaab:'NCAA Basketball',pga:'PGA Tour'};
+  const sportsUp=SPORTS_GAMES.filter(g=>g.gameStart>Date.now()&&g.inboundOpen<=Date.now()+14*864e5).slice(0,40);
+  const sportsByLeague={};
+  sportsUp.forEach(g=>{ if(!sportsByLeague[g.league])sportsByLeague[g.league]=[]; sportsByLeague[g.league].push(g); });
+  const sportsCard=g=>{
+    const boardN=S.board.filter(c=>c.sportsEvent&&c.sportsEvent.gameId===g.id&&c.expires>Date.now()).length;
+    const when=`<span class="tag muted-t">${timeUntil(g.gameStart)}</span>`;
+    const dr=new Date(g.gameStart).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="card card-pad" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:6px">${when}
+        <span style="font-weight:600;font-size:13.5px">${g.icon} ${esc(g.name)}</span>
+        <span class="tag cls mono">${g.venueIcao}</span>
+        <span class="sec-spacer" style="flex:1"></span><span class="muted mono" style="font-size:12px">${dr}</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn brass sm" onclick="findSportsCharters('${g.id}')">${boardN?boardN+' charter'+(boardN>1?'s':''):'Find on board'} →</button>
+        <span class="muted" style="font-size:11.5px">Inbound day-before · outbound after final</span></div>
+    </div>`;
+  };
   const rwCard=(x,live)=>{
     const apts=x.e.apts.filter(a=>APTBY[a]);
     const boardN=S.board.filter(c=>c.rwEvent&&c.rwEvent.name===x.e.name&&c.expires>Date.now()).length;
@@ -3140,6 +3409,12 @@ function rEvents(p){
     ${liveRW.length?`<div class="eyebrow" style="color:var(--pos);margin:6px 0">Live now</div>${liveRW.map(x=>rwCard(x,true)).join('')}`:'<div class="muted" style="font-size:13px;margin:8px 0 14px">No major event is in its window right now — the market is running on normal demand. Upcoming events below.</div>'}
     ${upRW.length?`<div class="eyebrow" style="margin:14px 0 6px">Coming up (next 45 days)</div>${upRW.slice(0,8).map(x=>rwCard(x,false)).join('')}`:''}
 
+    <div class="sec-head" style="margin-top:22px"><div><div class="eyebrow" style="color:var(--brass)">Schedule-driven</div><div class="sec-title">Sports schedules</div></div></div>
+    <div class="help" style="margin:8px 0 14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>Team charters from live ESPN schedules — <b>inbound</b> the day before kickoff, <b>outbound</b> after the game. Filter the board with <b>Sports</b> or use Find on board below.</span></div>
+    ${sportsUp.length?Object.keys(SPORTS_LEAGUE_META).map(lk=>sportsByLeague[lk]?.length?`<div class="eyebrow" style="margin:10px 0 4px">${leagueLabel[lk]||lk}</div>${sportsByLeague[lk].slice(0,6).map(sportsCard).join('')}`:'').join('')
+      :'<div class="muted" style="font-size:12.5px">Loading sports schedules from ESPN…</div>'}
+
     <div class="sec-head" style="margin-top:22px"><div><div class="eyebrow">Informational</div><div class="sec-title">Live on the VATSIM network</div></div></div>
     <div class="help" style="margin:8px 0 14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
       <span>Where the controllers and traffic are tonight. Charters touching a live VATSIM event field carry a small <b>📍</b> note on the board — handy if you want ATC service, but they don't change fares.</span></div>
@@ -3151,6 +3426,10 @@ function timeUntil(ts){const d=ts-Date.now();if(d<0)return'now';const h=Math.flo
 function findEventCharters(name){
   if(!S.board.some(c=>c.rwEvent&&c.rwEvent.name===name)) refreshBoard(false);
   boardFilter.flags='event'; boardFilter.cat='all'; boardFilter.aircraft='all'; nav('board');
+}
+function findSportsCharters(gameId){
+  if(!S.board.some(c=>c.sportsEvent&&c.sportsEvent.gameId===gameId)) refreshBoard(false);
+  boardFilter.flags='sports'; boardFilter.cat='all'; boardFilter.aircraft='all'; nav('board');
 }
 
 /* ---------- WEATHER ---------- */
@@ -4777,7 +5056,7 @@ async function boot(){
     tickClock(); setInterval(tickClock,1000);
     { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
     if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
-    loadAirportDB().then(()=>{ if(S){ refreshBoard(false); renderAll(); } }).catch(()=>{});
+    loadAirportDB().then(()=>{ loadSportsData().then(()=>fetchSportsSchedules().catch(()=>{})).finally(()=>{ if(S){ refreshBoard(false); renderAll(); } }); }).catch(()=>{});
     loadFboDB();
     if(cloudEnabled()){ initCloud(); } else { startLocal(); }
     pollVat(); setInterval(pollVat,CFG.vatPoll);
@@ -4812,6 +5091,7 @@ setInterval(rentalTick, 30e3);
 /* live data: VATSIM net, events, weather, radar */
 async function pollLive(first){
   await fetchEvents();
+  try{ await fetchSportsSchedules(); }catch(e){}
   if(S){ refreshBoard(false); }
   if(S) await fetchWx(wxAround());
   if(first) await fetchRadar();
