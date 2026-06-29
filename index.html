@@ -310,6 +310,9 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 .board-tbl .btn.sm{font-size:12px;padding:6px 11px}
 .board-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .board-count{font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.hidden{display:none!important}
+.board-map-wrap{margin-top:10px}
+#boardMap{height:calc(100vh - 280px);min-height:520px;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow);z-index:0}
 
 /* ============ THE JET CARD (signature) ============ */
 .jetcard{background:linear-gradient(135deg,#1f2f47 0%,#16202e 60%,#101822 100%);color:#eaf0f8;
@@ -352,6 +355,8 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
 
 /* MAP */
 #map{height:540px;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow);z-index:0}
+.page.map-page{max-width:none}
+.map-page #map{height:calc(100vh - 150px);min-height:720px;width:100%}
 .leaflet-container{font-family:var(--body);background:#e9e6df}
 .mk{font-family:var(--mono);font-weight:700;font-size:10px;color:#fff;background:var(--navy);
   padding:2px 6px;border-radius:5px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap}
@@ -905,6 +910,39 @@ function haversine(a,b){
   const dLa=(B.lat-A.lat)*r,dLo=(B.lon-A.lon)*r;
   const x=Math.sin(dLa/2)**2+Math.cos(A.lat*r)*Math.cos(B.lat*r)*Math.sin(dLo/2)**2;
   return Math.round(R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+}
+function greatCirclePoints(lat1,lon1,lat2,lon2,steps){
+  steps=steps||64; const r=Math.PI/180, toDeg=x=>x/r;
+  const φ1=lat1*r, λ1=lon1*r, φ2=lat2*r, λ2=lon2*r;
+  const Δλ=λ2-λ1;
+  const sinσ=Math.sqrt(Math.sin((φ2-φ1)/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2);
+  const σ=2*Math.asin(Math.min(1,sinσ));
+  if(σ<1e-9) return [[lat1,lon1],[lat2,lon2]];
+  const out=[];
+  for(let i=0;i<=steps;i++){
+    const f=i/steps, t=Math.sin((1-f)*σ)/Math.sin(σ), u=Math.sin(f*σ)/Math.sin(σ);
+    const x=t*Math.cos(φ1)*Math.cos(λ1)+u*Math.cos(φ2)*Math.cos(λ2);
+    const y=t*Math.cos(φ1)*Math.sin(λ1)+u*Math.cos(φ2)*Math.sin(λ2);
+    const z=t*Math.sin(φ1)+u*Math.sin(φ2);
+    out.push([toDeg(Math.atan2(z,Math.sqrt(x*x+y*y))), toDeg(Math.atan2(y,x))]);
+  }
+  return out;
+}
+function demandColor(d){
+  if(d>=1.35) return {fill:'#C73E3A',stroke:'#9E2F2C'};
+  if(d>=1.12) return {fill:'#D4A017',stroke:'#A67C00'};
+  return {fill:'#1F9D55',stroke:'#1F7A52'};
+}
+function createSkyMap(el,opts){
+  opts=opts||{};
+  const map=L.map(el,{zoomControl:true,attributionControl:false}).setView(opts.center||[39,-70],opts.zoom||3);
+  const tileSet=document.documentElement.dataset.theme==='dark'?'dark_all':'light_all';
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${tileSet}/{z}/{x}/{y}{r}.png`,{maxZoom:11,subdomains:'abcd'}).addTo(map);
+  return map;
+}
+function bindAirportTooltip(layer,ic,extra){
+  const a=APTBY[ic]; if(!a)return;
+  layer.bindTooltip(`<b>${ic}</b> · ${a.name}${extra?'<br>'+extra:''}`,{sticky:true,direction:'top',opacity:0.95});
 }
 const money = n=>(n<0?'-$':'$')+Math.abs(Math.round(n)).toLocaleString('en-US');
 const money1k = n=>{const a=Math.abs(n);return (n<0?'-$':'$')+(a>=1e6?(a/1e6).toFixed(a>=1e7?0:1)+'M':a>=1e3?(a/1e3).toFixed(0)+'k':Math.round(a))};
@@ -1548,6 +1586,8 @@ function renderAll(){
   const adminNav=$('#navAdmin'); if(adminNav)adminNav.style.display=isAdmin()?'flex':'none';
   renderTop();
   const p=$('#page');
+  if(view!=='map') p.classList.remove('map-page');
+  if(view!=='board'&&BOARD_MAP){ BOARD_MAP.remove(); BOARD_MAP=null; }
   ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,fuel:rFuel,spcharter:rSpecCharter,fboads:rFboAds,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
   if(view==='map') setTimeout(initMap,40);
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
@@ -1663,6 +1703,7 @@ function dashCharterRow(c){
 /* ---------- CHARTER BOARD ---------- */
 let boardFilter={cat:'all',cls:'all',status:'all',flags:'all',q:'',dep:'',arr:'',client:'',aircraft:'all'};
 let boardSort={col:'expires',dir:'asc'};
+let boardView='table', BOARD_MAP=null;
 const CLS_SHORT={turboprop:'TP',light:'Light',midsize:'Mid',supermid:'S-Mid',heavy:'Heavy',ulr:'ULR'};
 function selectedFleetAc(){
   if(boardFilter.aircraft&&boardFilter.aircraft!=='all'){
@@ -1728,10 +1769,51 @@ function sortBoardList(list){
 function boardSortIcon(col){ return boardSort.col!==col?'<span class="sort-i">↕</span>':boardSort.dir==='asc'?'<span class="sort-i on">↑</span>':'<span class="sort-i on">↓</span>'; }
 function setBoardSort(col){ if(boardSort.col===col) boardSort.dir=boardSort.dir==='asc'?'desc':'asc'; else { boardSort.col=col; boardSort.dir='asc'; } rBoard($('#page')); }
 function clearBoardFilters(){ boardFilter={cat:'all',cls:'all',status:'all',flags:'all',q:'',dep:'',arr:'',client:'',aircraft:boardFilter.aircraft||'all'}; rBoard($('#page')); }
+function getFilteredBoardList(){
+  const now=Date.now();
+  return sortBoardList(applyBoardFilters(S.board.filter(c=>c.expires>now)));
+}
+function boardRouteColor(c){
+  const e=charterRowEcon(c);
+  if(!e.plan) return '#7d8ba0';
+  if(e.status==='ready') return '#1F7A52';
+  if(e.status==='rent') return '#2D6AE3';
+  if(e.status==='repo') return '#B0863B';
+  return '#7d8ba0';
+}
+function setBoardView(mode){
+  boardView=mode==='map'?'map':'table';
+  rBoard($('#page'));
+}
+function initBoardMap(){
+  const el=$('#boardMap'); if(!el||boardView!=='map')return;
+  if(BOARD_MAP){ BOARD_MAP.remove(); BOARD_MAP=null; }
+  BOARD_MAP=createSkyMap(el);
+  const list=getFilteredBoardList(), pts=[], airports=new Set(), seenRoutes=new Set();
+  list.forEach(c=>{
+    const dep=APTBY[c.dep], arr=APTBY[c.arr];
+    if(!dep||!arr||!dep.lat||!arr.lat) return;
+    const key=c.dep+'→'+c.arr;
+    if(seenRoutes.has(key)) return;
+    seenRoutes.add(key);
+    const line=greatCirclePoints(dep.lat,dep.lon,arr.lat,arr.lon);
+    L.polyline(line,{weight:1.5,opacity:0.35,color:boardRouteColor(c)}).addTo(BOARD_MAP);
+    line.forEach(p=>pts.push(p));
+    airports.add(c.dep); airports.add(c.arr);
+  });
+  airports.forEach(ic=>{
+    const a=APTBY[ic]; if(!a||!a.lat) return;
+    const m=L.circleMarker([a.lat,a.lon],{radius:4,color:'#fff',weight:1,fillColor:'#142236',fillOpacity:0.9}).addTo(BOARD_MAP);
+    bindAirportTooltip(m,ic);
+    pts.push([a.lat,a.lon]);
+  });
+  if(pts.length) setTimeout(()=>{ if(!BOARD_MAP)return; BOARD_MAP.invalidateSize(); BOARD_MAP.fitBounds(pts,{padding:[40,40],maxZoom:6}); }, 60);
+  else setTimeout(()=>{ if(!BOARD_MAP)return; BOARD_MAP.invalidateSize(); BOARD_MAP.setView([39,-70],3); }, 60);
+}
 function rBoard(p){
   const now=Date.now(), total=S.board.filter(c=>c.expires>now).length;
   const sel=selectedFleetAc();
-  let list=sortBoardList(applyBoardFilters(S.board.filter(c=>c.expires>now)));
+  let list=getFilteredBoardList();
   const idle=S.fleet.filter(f=>!f.busy);
   const f=boardFilter;
   const th=(col,label,w)=>`<th class="sortable" style="${w?'width:'+w:''}" onclick="setBoardSort('${col}')">${label}${boardSortIcon(col)}</th>`;
@@ -1743,13 +1825,17 @@ function rBoard(p){
       </select>`:''}
       <input class="field" id="bq" placeholder="Search route or city…" value="${esc(f.q)}" oninput="setBF('q',this.value)" style="width:160px;font-size:12px">
       <span class="board-count">${list.length} / ${total}</span>
+      <div class="chiprow" style="margin-left:4px">
+        <button class="chip ${boardView==='table'?'on':''}" onclick="setBoardView('table')">Table</button>
+        <button class="chip ${boardView==='map'?'on':''}" onclick="setBoardView('map')">Map</button>
+      </div>
       <div class="sec-spacer" style="flex:1"></div>
       <button class="btn ghost sm" onclick="clearBoardFilters()">Clear filters</button>
       <button class="btn ghost sm" onclick="doRefresh()">Refresh</button>
     </div>
     <div class="help" style="margin-bottom:10px;padding:8px 12px;font-size:11.5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>${sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
-    <div class="board-wrap">
+      <span>${boardView==='map'?'Great-circle routes for filtered charters — <span style="color:#1F7A52">green</span> ready, <span style="color:#2D6AE3">blue</span> rent, <span style="color:#B0863B">amber</span> repo.':sel?`Filtering for <b>${sel.tail}</b> — ready = at departure, repo = positioning leg needed.`:'Click column headers to sort. Filter per column below. Rent on-site if you don\'t own a suitable aircraft.'} Net figures use <b>estimated</b> fuel — actual burn is billed on the active trip after SimBrief sync &amp; PIREP. METAR dots on ICAO codes.</span></div>
+    <div id="boardTableWrap" class="board-wrap ${boardView==='table'?'':'hidden'}">
       <table class="board-tbl">
         <colgroup>
           <col style="width:68px"><col style="width:68px"><col style="width:60px"><col style="width:80px">
@@ -1785,7 +1871,11 @@ function rBoard(p){
         </thead>
         <tbody>${list.length?list.map(charterRow).join(''):`<tr><td colspan="12" style="padding:28px;text-align:center;color:var(--muted)">No charters match — clear filters or refresh the board.</td></tr>`}</tbody>
       </table>
+    </div>
+    <div id="boardMapWrap" class="board-map-wrap ${boardView==='map'?'':'hidden'}">
+      <div id="boardMap"></div>
     </div>`;
+  if(boardView==='map') setTimeout(initBoardMap,40);
 }
 let _boardFilterTimer=null;
 function setBF(k,v){
@@ -3299,14 +3389,18 @@ let MAP=null,mapLayers=[];
 let mapOpt={wx:true,radar:false,events:true,demand:true};
 let radarLayer=null;
 function rMap(p){
+  p.classList.add('map-page');
   p.innerHTML=`<div class="bar">
     <div class="chiprow">
       <button class="chip ${mapOpt.wx?'on':''}" onclick="mapToggle('wx')">METAR</button>
       <button class="chip ${mapOpt.radar?'on':''}" onclick="mapToggle('radar')">Radar</button>
-      <button class="chip ${mapOpt.demand?'on':''}" onclick="mapToggle('demand')">Demand 📈</button>
+      <button class="chip ${mapOpt.demand?'on':''}" onclick="mapToggle('demand')">Demand</button>
       <button class="chip ${mapOpt.events?'on':''}" onclick="mapToggle('events')">Events ★</button>
     </div>
     <div class="sec-spacer" style="flex:1"></div>
+    <span class="tag" style="background:#1F9D55;color:#fff;font-size:11px">● Low</span>
+    <span class="tag" style="background:#D4A017;color:#fff;font-size:11px">● Elevated</span>
+    <span class="tag" style="background:#C73E3A;color:#fff;font-size:11px">● Hot</span>
     <span class="tag ac">● fleet</span><span class="tag" style="background:var(--brass);color:#fff">● FBO</span>
     ${S.active?'<span class="tag" style="background:var(--sky);color:#fff">● route</span>':''}
     <span style="font-size:11px;color:var(--muted)">VFR</span><span style="width:9px;height:9px;border-radius:50%;background:${CAT_COLOR.VFR};display:inline-block"></span>
@@ -3323,20 +3417,18 @@ function mapToggle(k){ mapOpt[k]=!mapOpt[k]; if(k==='radar'&&mapOpt.radar&&!RADA
 function initMap(){
   const el=$('#map'); if(!el)return;
   if(MAP){MAP.remove();MAP=null;}
-  MAP=L.map('map',{zoomControl:true,attributionControl:false}).setView([39,-70],3);
-  const tileSet=document.documentElement.dataset.theme==='dark'?'dark_all':'light_all';
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${tileSet}/{z}/{x}/{y}{r}.png`,{maxZoom:11,subdomains:'abcd'}).addTo(MAP);
+  MAP=createSkyMap(el);
   // radar overlay (RainViewer)
   if(mapOpt.radar && RADAR.host && RADAR.frames.length){
     const fr=RADAR.frames[Math.min(RADAR.idx,RADAR.frames.length-1)];
     radarLayer=L.tileLayer(`${RADAR.host}${fr.path}/256/{z}/{x}/{y}/2/1_1.png`,{opacity:0.55,maxZoom:11}).addTo(MAP);
   }
   const pts=[];
-  // outbound-demand heat (size + green intensity by demand index)
+  // outbound-demand dots (green / yellow / red by demand level)
   if(mapOpt.demand){ Object.entries(S.demand||{}).forEach(([ic,d])=>{ const a=APTBY[ic]; if(!a||a.lat===0||d<1.08)return;
-    const t=Math.min(1,(d-1)/1.3);
-    L.circleMarker([a.lat,a.lon],{radius:8+t*16,color:'#1F7A52',weight:1,fillColor:'#1F9D55',fillOpacity:0.12+t*0.33}).addTo(MAP)
-      .bindPopup(`<b>${ic}</b> · outbound demand ${d.toFixed(2)}×<br>${a.name}<br>${demandLevel(d)} — fly the backlog out for premium fares`); }); }
+    const col=demandColor(d);
+    const m=L.circleMarker([a.lat,a.lon],{radius:5,color:col.stroke,weight:1.5,fillColor:col.fill,fillOpacity:0.92}).addTo(MAP);
+    bindAirportTooltip(m,ic,`Outbound demand ${d.toFixed(2)}× · ${demandLevel(d)}`); }); }
   // weather category markers
   if(mapOpt.wx){ Object.values(WX).forEach(w=>{ const a=APTBY[w.icao]; if(!a||a.lat===0)return;
     L.circleMarker([a.lat,a.lon],{radius:6,color:'#fff',weight:1.5,fillColor:CAT_COLOR[w.cat],fillOpacity:.95}).addTo(MAP)
@@ -3355,7 +3447,7 @@ function initMap(){
   if(S.active){const c=S.active.charter,d=APTBY[c.dep],r=APTBY[c.arr];
     L.marker([d.lat,d.lon],{icon:divIcon('dep',c.dep)}).addTo(MAP);
     L.marker([r.lat,r.lon],{icon:divIcon('dep',c.arr)}).addTo(MAP);
-    L.polyline([[d.lat,d.lon],[r.lat,r.lon]],{color:'#2D6AE3',weight:2.5,dashArray:'6 5'}).addTo(MAP);
+    L.polyline(greatCirclePoints(d.lat,d.lon,r.lat,r.lon),{color:'#2D6AE3',weight:2.5,dashArray:'6 5'}).addTo(MAP);
     pts.push([d.lat,d.lon],[r.lat,r.lon]);}
   if(pts.length) MAP.fitBounds(pts,{padding:[50,50],maxZoom:6});
 }
