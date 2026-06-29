@@ -56,6 +56,49 @@ function sportsCharterTargets(games, now = Date.now()) {
   return out;
 }
 
+function buildMlbSeries(chunk) {
+  const first = chunk[0];
+  const last = chunk[chunk.length - 1];
+  const win = sportsGameWindows('mlb', first.gameStart, last.gameEnd);
+  return {
+    ...first,
+    id: `mlb-${first.awayAbbr}-${first.homeAbbr}-${first.venueIcao}-${new Date(first.gameStart).toISOString().slice(0, 10)}`,
+    name: chunk.length > 1 ? `${first.awayAbbr} @ ${first.homeAbbr} (${chunk.length}-game series)` : first.name,
+    gameStart: first.gameStart,
+    gameEnd: last.gameEnd,
+    seriesLen: chunk.length,
+    seriesGameIds: chunk.map(g => g.id),
+    ...win,
+  };
+}
+
+function consolidateMlbSeries(games) {
+  const mlb = [];
+  const rest = [];
+  games.forEach(g => (g.league === 'mlb' ? mlb : rest).push(g));
+  const groups = new Map();
+  mlb.forEach(g => {
+    const k = `${g.awayAbbr}|${g.homeAbbr}|${g.venueIcao}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(g);
+  });
+  const series = [];
+  for (const gs of groups.values()) {
+    gs.sort((a, b) => a.gameStart - b.gameStart);
+    let chunk = [gs[0]];
+    for (let i = 1; i < gs.length; i++) {
+      const gap = gs[i].gameStart - chunk[chunk.length - 1].gameStart;
+      if (gap <= 2.5 * 864e5) chunk.push(gs[i]);
+      else {
+        series.push(buildMlbSeries(chunk));
+        chunk = [gs[i]];
+      }
+    }
+    series.push(buildMlbSeries(chunk));
+  }
+  return rest.concat(series);
+}
+
 let failed = 0;
 function assert(cond, msg) {
   if (!cond) {
@@ -134,6 +177,28 @@ const MAX = 40;
 const board = Array.from({ length: 35 }, (_, i) => ({ sportsEvent: { gameId: 'a' + i } }));
 const canAdd = board.filter(c => c.sportsEvent).length < MAX;
 assert(canAdd, 'board under sports cap can add more');
+
+// --- MLB series consolidation ---
+const day = 864e5;
+const g1 = { id: 'g1', league: 'mlb', awayAbbr: 'WSH', homeAbbr: 'BOS', venueIcao: 'KBOS', neutralSite: false,
+  gameStart: kickoff, gameEnd: kickoff + 3 * 3600e3 };
+const g2 = { ...g1, id: 'g2', gameStart: kickoff + day, gameEnd: kickoff + day + 3 * 3600e3 };
+const g3 = { ...g1, id: 'g3', gameStart: kickoff + 2 * day, gameEnd: kickoff + 2 * day + 3 * 3600e3 };
+const g4 = { ...g1, id: 'g4', gameStart: kickoff + 3 * day, gameEnd: kickoff + 3 * day + 3 * 3600e3 };
+const merged = consolidateMlbSeries([g1, g2, g3, g4]);
+assert(merged.length === 1 && merged[0].seriesLen === 4, '4-game MLB series merges into one');
+assert(merged[0].gameEnd === g4.gameEnd, 'series ends after last game');
+const midSeries = kickoff + 1.5 * day;
+const midTargets = sportsCharterTargets(merged, midSeries);
+assert(!midTargets.some(t => t.leg === 'inbound'), 'no inbound during middle of series');
+assert(!midTargets.some(t => t.leg === 'outbound'), 'no outbound until series ends');
+const afterSeries = g4.gameEnd + 3600e3;
+const endTargets = sportsCharterTargets(merged, afterSeries);
+assert(endTargets.length === 1 && endTargets[0].leg === 'outbound', 'outbound only after last game');
+
+// --- Venue ICAO sanity (no KTEB for Boston) ---
+const fenway = venues['2'];
+if (fenway) assert(fenway.icao === 'KBOS', 'Fenway Park maps to KBOS not KTEB');
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`);

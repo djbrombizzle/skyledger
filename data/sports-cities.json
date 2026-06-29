@@ -23,7 +23,7 @@
   "pittsburgh|PA": "KPIT",
   "buffalo|NY": "KBUF",
   "foxborough|MA": "KBED",
-  "boston|MA": "KBED",
+  "boston|MA": "KBOS",
   "east rutherford|NJ": "KTEB",
   "new orleans|LA": "KNEW",
   "nashville|TN": "KBNA",
@@ -53,5 +53,10 @@
   "brooklyn|NY": "KTEB",
   "new york|NY": "KTEB",
   "oakland|CA": "KOAK",
-  "anaheim|CA": "KSNA"
+  "anaheim|CA": "KSNA",
+  "st. petersburg|FL": "KPIE",
+  "flushing|NY": "KTEB",
+  "bronx|NY": "KTEB",
+  "queens|NY": "KTEB",
+  "miami gardens|FL": "KOPF"
 }

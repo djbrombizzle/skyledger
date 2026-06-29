@@ -1,132 +1,132 @@
 {
   "1": {
-    "icao": "KTEB",
+    "icao": "KBWI",
     "name": "Oriole Park at Camden Yards",
     "city": "Baltimore",
     "state": "Maryland"
   },
   "2": {
-    "icao": "KTEB",
+    "icao": "KBOS",
     "name": "Fenway Park",
     "city": "Boston",
     "state": "Massachusetts"
   },
   "3": {
-    "icao": "KTEB",
+    "icao": "KSNA",
     "name": "Angel Stadium",
     "city": "Anaheim",
     "state": "California"
   },
   "4": {
-    "icao": "KTEB",
+    "icao": "KPWK",
     "name": "Rate Field",
     "city": "Chicago",
     "state": "Illinois"
   },
   "5": {
-    "icao": "KTEB",
+    "icao": "KBKL",
     "name": "Progressive Field",
     "city": "Cleveland",
     "state": "Ohio"
   },
   "7": {
-    "icao": "KTEB",
+    "icao": "KMKC",
     "name": "Kauffman Stadium",
     "city": "Kansas City",
     "state": "Missouri"
   },
   "14": {
-    "icao": "KTEB",
+    "icao": "CYTZ",
     "name": "Rogers Centre",
     "city": "Toronto",
     "state": "Ontario"
   },
   "16": {
-    "icao": "KTEB",
+    "icao": "KPWK",
     "name": "Wrigley Field",
     "city": "Chicago",
     "state": "Illinois"
   },
   "19": {
-    "icao": "KTEB",
+    "icao": "KVNY",
     "name": "Dodger Stadium",
     "city": "Los Angeles",
     "state": "California"
   },
   "27": {
-    "icao": "KTEB",
+    "icao": "KAPA",
     "name": "Coors Field",
     "city": "Denver",
     "state": "Colorado"
   },
   "30": {
-    "icao": "KTEB",
+    "icao": "KSDL",
     "name": "Chase Field",
     "city": "Phoenix",
     "state": "Arizona"
   },
   "31": {
-    "icao": "KTEB",
+    "icao": "KPIE",
     "name": "Tropicana Field",
     "city": "St. Petersburg",
     "state": "Florida"
   },
   "41": {
-    "icao": "KTEB",
+    "icao": "KBFI",
     "name": "T-Mobile Park",
     "city": "Seattle",
     "state": "Washington"
   },
   "43": {
-    "icao": "KTEB",
+    "icao": "KOAK",
     "name": "Oracle Park",
     "city": "San Francisco",
     "state": "California"
   },
   "44": {
-    "icao": "KTEB",
+    "icao": "KHOU",
     "name": "Daikin Park",
     "city": "Houston",
     "state": "Texas"
   },
   "45": {
-    "icao": "KTEB",
+    "icao": "KDET",
     "name": "Comerica Park",
     "city": "Detroit",
     "state": "Michigan"
   },
   "47": {
-    "icao": "KTEB",
+    "icao": "KPIT",
     "name": "PNC Park",
     "city": "Pittsburgh",
     "state": "Pennsylvania"
   },
   "83": {
-    "icao": "KTEB",
+    "icao": "KLUK",
     "name": "Great American Ball Park",
     "city": "Cincinnati",
     "state": "Ohio"
   },
   "84": {
-    "icao": "KTEB",
+    "icao": "KPNE",
     "name": "Citizens Bank Park",
     "city": "Philadelphia",
     "state": "Pennsylvania"
   },
   "85": {
-    "icao": "KTEB",
+    "icao": "KMYF",
     "name": "Petco Park",
     "city": "San Diego",
     "state": "California"
   },
   "87": {
-    "icao": "KTEB",
+    "icao": "KSTL",
     "name": "Busch Stadium",
     "city": "St. Louis",
     "state": "Missouri"
   },
   "89": {
-    "icao": "KTEB",
+    "icao": "KDCA",
     "name": "Nationals Park",
     "city": "Washington",
     "state": "District of Columbia"
@@ -144,19 +144,19 @@
     "state": "New York"
   },
   "210": {
-    "icao": "KTEB",
+    "icao": "KFCM",
     "name": "Target Field",
     "city": "Minneapolis",
     "state": "Minnesota"
   },
   "218": {
-    "icao": "KTEB",
+    "icao": "KFTY",
     "name": "Truist Park",
     "city": "Atlanta",
     "state": "Georgia"
   },
   "231": {
-    "icao": "KTEB",
+    "icao": "KDAL",
     "name": "Globe Life Field",
     "city": "Arlington",
     "state": "Texas"
@@ -198,13 +198,13 @@
     "state": "CO"
   },
   "4223": {
-    "icao": "KTEB",
+    "icao": "KOPF",
     "name": "loanDepot park",
     "city": "Miami",
     "state": "Florida"
   },
   "4242": {
-    "icao": "KTEB",
+    "icao": "KMKE",
     "name": "American Family Field",
     "city": "Milwaukee",
     "state": "Wisconsin"
@@ -342,7 +342,7 @@
     "state": "MN"
   },
   "6529": {
-    "icao": "KMDW",
+    "icao": "KPWK",
     "name": "Soldier Field",
     "city": "Chicago",
     "state": "IL"
@@ -366,7 +366,7 @@
     "state": "OH"
   },
   "7109": {
-    "icao": "KTEB",
+    "icao": "KMCC",
     "name": "Sutter Health Park",
     "city": "Sacramento",
     "state": "California"
