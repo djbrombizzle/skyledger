@@ -18,7 +18,7 @@ const CITY_ICAO = {
   'chicago|IL': 'KPWK', 'detroit|MI': 'KDET', 'minneapolis|MN': 'KFCM', 'green bay|WI': 'KGRB',
   'kansas city|MO': 'KMKC', 'indianapolis|IN': 'KIND', 'cleveland|OH': 'KBKL', 'cincinnati|OH': 'KLUK',
   'baltimore|MD': 'KBWI', 'philadelphia|PA': 'KPNE', 'pittsburgh|PA': 'KPIT', 'buffalo|NY': 'KBUF',
-  'foxborough|MA': 'KBED', 'boston|MA': 'KBED', 'east rutherford|NJ': 'KTEB', 'new orleans|LA': 'KNEW',
+  'foxborough|MA': 'KBED', 'boston|MA': 'KBOS', 'east rutherford|NJ': 'KTEB', 'new orleans|LA': 'KNEW',
   'nashville|TN': 'KBNA', 'jacksonville|FL': 'KCRG', 'charlotte|NC': 'KCLT', 'washington|DC': 'KDCA',
   'landover|MD': 'KDCA', 'arlington|TX': 'KDAL', 'glendale|AZ': 'KIWA', 'santa clara|CA': 'KOAK',
   'inglewood|CA': 'KVNY', 'orchard park|NY': 'KBUF', 'cromwell|CT': 'KHFD', 'augusta|GA': 'KAGS',
@@ -26,7 +26,38 @@ const CITY_ICAO = {
   'oklahoma city|OK': 'KOKC', 'orlando|FL': 'KORL', 'portland|OR': 'KPDX', 'sacramento|CA': 'KMCC',
   'san antonio|TX': 'KSAT', 'st. louis|MO': 'KSTL', 'toronto|ON': 'CYTZ', 'salt lake city|UT': 'KSLC',
   'brooklyn|NY': 'KTEB', 'new york|NY': 'KTEB', 'oakland|CA': 'KOAK', 'anaheim|CA': 'KSNA',
+  'st. petersburg|FL': 'KPIE', 'flushing|NY': 'KTEB', 'bronx|NY': 'KTEB', 'queens|NY': 'KTEB',
+  'miami gardens|FL': 'KOPF',
 };
+
+const US_STATE = {
+  ALABAMA: 'AL', ALASKA: 'AK', ARIZONA: 'AZ', ARKANSAS: 'AR', CALIFORNIA: 'CA', COLORADO: 'CO',
+  CONNECTICUT: 'CT', DELAWARE: 'DE', 'DISTRICT OF COLUMBIA': 'DC', FLORIDA: 'FL', GEORGIA: 'GA',
+  HAWAII: 'HI', IDAHO: 'ID', ILLINOIS: 'IL', INDIANA: 'IN', IOWA: 'IA', KANSAS: 'KS',
+  KENTUCKY: 'KY', LOUISIANA: 'LA', MAINE: 'ME', MARYLAND: 'MD', MASSACHUSETTS: 'MA',
+  MICHIGAN: 'MI', MINNESOTA: 'MN', MISSISSIPPI: 'MS', MISSOURI: 'MO', MONTANA: 'MT',
+  NEBRASKA: 'NE', NEVADA: 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM',
+  'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', OHIO: 'OH', OKLAHOMA: 'OK',
+  OREGON: 'OR', PENNSYLVANIA: 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+  'SOUTH DAKOTA': 'SD', TENNESSEE: 'TN', TEXAS: 'TX', UTAH: 'UT', VERMONT: 'VT',
+  VIRGINIA: 'VA', WASHINGTON: 'WA', 'WEST VIRGINIA': 'WV', WISCONSIN: 'WI', WYOMING: 'WY',
+  ONTARIO: 'ON',
+};
+
+function normState(st) {
+  if (!st) return '';
+  const u = String(st).trim().toUpperCase();
+  if (u.length === 2) return u;
+  return US_STATE[u] || u.slice(0, 2);
+}
+
+function cityKey(city, state) {
+  return `${String(city || '').toLowerCase()}|${normState(state)}`;
+}
+
+function lookupCityIcao(city, state) {
+  return CITY_ICAO[cityKey(city, state)] || null;
+}
 
 const TEAM_HUBS = {
   nfl: {
@@ -160,8 +191,8 @@ async function enrichFromEspn(teams, venues) {
           if (!v?.id) continue;
           const key = String(v.id);
           if (venues[key]) continue;
-          const cs = `${(v.address?.city || '').toLowerCase()}|${(v.address?.state || '').toUpperCase()}`;
-          const icao = CITY_ICAO[cs] || 'KTEB';
+          const icao = lookupCityIcao(v.address?.city, v.address?.state);
+          if (!icao) { console.warn('Venue city miss', key, v.fullName, v.address); continue; }
           venues[key] = { icao, name: v.fullName, city: v.address?.city || '', state: v.address?.state || '' };
         }
       } catch (e) {}
@@ -180,6 +211,10 @@ async function main() {
   }
   const venues = JSON.parse(JSON.stringify(VENUE_ICAO));
   await enrichFromEspn(teams, venues);
+  for (const [id, v] of Object.entries(venues)) {
+    const ic = lookupCityIcao(v.city, v.state);
+    if (ic) v.icao = ic;
+  }
   const errs = validate(teams, venues, apt);
   const outTeams = path.join(root, 'data/sports-teams.json');
   const outVenues = path.join(root, 'data/sports-venues.json');

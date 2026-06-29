@@ -581,7 +581,7 @@ function safetyScore(){ if(!S.grades||!S.grades.length)return null;
 let VATEVENTS=[];              // fetched VATSIM events
 let SPORTS_GAMES=[];           // normalized schedule from ESPN
 let SPORTS_TEAMS={}, SPORTS_VENUES={}, SPORTS_CITIES={};
-const SPORTS_CACHE_KEY='sky_sports_cache_v1', SPORTS_CACHE_TTL=6*3600e3;
+const SPORTS_CACHE_KEY='sky_sports_cache_v2', SPORTS_CACHE_TTL=6*3600e3;
 const SPORTS_LEAGUE_META={
   nfl:{icon:'🏈',dur:3.5,path:'football/nfl'},
   nba:{icon:'🏀',dur:2.5,path:'basketball/nba'},
@@ -656,19 +656,39 @@ function teamName(league,abbr){
   if(!abbr||!SPORTS_TEAMS[league])return abbr;
   const t=SPORTS_TEAMS[league][abbr]; return (t&&t.name)||abbr;
 }
+function normSportsState(st){
+  if(!st) return '';
+  const u=String(st).trim().toUpperCase();
+  if(u.length===2) return u;
+  const MAP={'ALABAMA':'AL','ALASKA':'AK','ARIZONA':'AZ','ARKANSAS':'AR','CALIFORNIA':'CA','COLORADO':'CO',
+    'CONNECTICUT':'CT','DELAWARE':'DE','DISTRICT OF COLUMBIA':'DC','FLORIDA':'FL','GEORGIA':'GA','HAWAII':'HI',
+    'IDAHO':'ID','ILLINOIS':'IL','INDIANA':'IN','IOWA':'IA','KANSAS':'KS','KENTUCKY':'KY','LOUISIANA':'LA',
+    'MAINE':'ME','MARYLAND':'MD','MASSACHUSETTS':'MA','MICHIGAN':'MI','MINNESOTA':'MN','MISSISSIPPI':'MS',
+    'MISSOURI':'MO','MONTANA':'MT','NEBRASKA':'NE','NEVADA':'NV','NEW HAMPSHIRE':'NH','NEW JERSEY':'NJ',
+    'NEW MEXICO':'NM','NEW YORK':'NY','NORTH CAROLINA':'NC','NORTH DAKOTA':'ND','OHIO':'OH','OKLAHOMA':'OK',
+    'OREGON':'OR','PENNSYLVANIA':'PA','RHODE ISLAND':'RI','SOUTH CAROLINA':'SC','SOUTH DAKOTA':'SD',
+    'TENNESSEE':'TN','TEXAS':'TX','UTAH':'UT','VERMONT':'VT','VIRGINIA':'VA','WASHINGTON':'WA',
+    'WEST VIRGINIA':'WV','WISCONSIN':'WI','WYOMING':'WY','ONTARIO':'ON'};
+  return MAP[u]||u.slice(0,2);
+}
+function cityVenueIcao(city,state){
+  const cs=`${String(city||'').toLowerCase()}|${normSportsState(state)}`;
+  return SPORTS_CITIES[cs]||null;
+}
 function nearestAirportByCity(city,state){
-  const cs=`${String(city||'').toLowerCase()}|${String(state||'').toUpperCase()}`;
-  if(SPORTS_CITIES[cs]) return SPORTS_CITIES[cs];
-  return null;
+  return cityVenueIcao(city,state);
 }
 function resolveVenueIcao(venue,evName){
-  if(venue&&venue.id!=null){
-    const key=String(venue.id);
-    if(SPORTS_VENUES[key]) return SPORTS_VENUES[key].icao;
-    const cs=`${(venue.address?.city||'').toLowerCase()}|${(venue.address?.state||'').toUpperCase()}`;
-    const ic=nearestAirportByCity(venue.address?.city,venue.address?.state);
+  if(venue){
+    const ic=cityVenueIcao(venue.address?.city,venue.address?.state);
     if(ic) return ic;
-    if(!SPORTS_VENUES[key]) console.warn('Sports venue miss',key,venue.fullName||'',cs);
+    if(venue.id!=null){
+      const key=String(venue.id), rec=SPORTS_VENUES[key];
+      if(rec&&rec.icao&&rec.icao!=='KTEB') return rec.icao;
+      if(rec) return cityVenueIcao(rec.city,rec.state)||rec.icao;
+    }
+    const cs=`${(venue.address?.city||'').toLowerCase()}|${normSportsState(venue.address?.state)}`;
+    console.warn('Sports venue miss',venue.id,venue.fullName||'',cs);
   }
   if(evName){
     const slug=slugifySports(evName);
@@ -729,6 +749,39 @@ function parseEspnScoreboard(data,league,meta){
   }
   return out;
 }
+function buildMlbSeries(chunk){
+  const first=chunk[0], last=chunk[chunk.length-1];
+  const win=sportsGameWindows('mlb',first.gameStart,last.gameEnd);
+  const away=teamName('mlb',first.awayAbbr)||first.awayAbbr;
+  const home=teamName('mlb',first.homeAbbr)||first.homeAbbr;
+  const label=chunk.length>1?`${away} @ ${home} (${chunk.length}-game series)`:`${away} @ ${home}`;
+  return { ...first,
+    id:`mlb-${first.awayAbbr}-${first.homeAbbr}-${first.venueIcao}-${new Date(first.gameStart).toISOString().slice(0,10)}`,
+    name:label, gameStart:first.gameStart, gameEnd:last.gameEnd,
+    seriesLen:chunk.length, seriesGameIds:chunk.map(g=>g.id), ...win };
+}
+function consolidateMlbSeries(games){
+  const mlb=[], rest=[];
+  games.forEach(g=>(g.league==='mlb'?mlb:rest).push(g));
+  const groups=new Map();
+  mlb.forEach(g=>{
+    const k=`${g.awayAbbr}|${g.homeAbbr}|${g.venueIcao}`;
+    if(!groups.has(k)) groups.set(k,[]);
+    groups.get(k).push(g);
+  });
+  const series=[];
+  for(const gs of groups.values()){
+    gs.sort((a,b)=>a.gameStart-b.gameStart);
+    let chunk=[gs[0]];
+    for(let i=1;i<gs.length;i++){
+      const gap=gs[i].gameStart-chunk[chunk.length-1].gameStart;
+      if(gap<=2.5*864e5) chunk.push(gs[i]);
+      else { series.push(buildMlbSeries(chunk)); chunk=[gs[i]]; }
+    }
+    series.push(buildMlbSeries(chunk));
+  }
+  return rest.concat(series);
+}
 function parseEspnPga(data,meta){
   const out=[];
   for(const ev of data.events||[]){
@@ -775,7 +828,7 @@ async function fetchSportsSchedules(force){
     }
   }
   games.sort((a,b)=>a.gameStart-b.gameStart);
-  SPORTS_GAMES=games;
+  SPORTS_GAMES=consolidateMlbSeries(games);
   saveSportsCache();
 }
 function sportsTeamsForGame(g){
