@@ -473,12 +473,11 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
     <a class="nav-item" data-nav="community" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Community<span class="badge" id="commBadge" style="display:none">0</span></a>
     <div class="nav-label" id="navAssetsLabel" data-section="operators">Operators</div>
     <a class="nav-item" data-nav="operator" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M9 21v-6h2v6M14 11h1M14 15h1M7 11h1M7 15h1"/><path d="M3 21h18"/></svg>Operator Dashboard</a>
-    <a class="nav-item" data-nav="fuel" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 12h0M9 16h0M15 12h0M15 16h0"/></svg>Fuel Prices</a>
-    <a class="nav-item" data-nav="spcharter" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>Special Charter Ops</a>
-    <a class="nav-item" data-nav="fboads" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>FBO Advertising</a>
+    <a class="nav-item" data-nav="spcharter" data-zone="operator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>Charter Dispatch</a>
     <a class="nav-item" data-nav="fleet" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 16l9-12 9 12M5 16h14l-2 4H7l-2-4z"/></svg>My Fleet</a>
     <a class="nav-item" data-nav="market" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-4h16l1 4M4 9v10a1 1 0 001 1h14a1 1 0 001-1V9M3 9h18M9 13h6"/></svg>Marketplace</a>
     <div class="nav-label" data-section="career">Career</div>
+    <a class="nav-item" data-nav="operators" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M9 21v-6h2v6M14 11h1M14 15h1M7 11h1M7 15h1"/><path d="M3 21h18"/></svg>Operators</a>
     <a class="nav-item" data-nav="ratings" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>Type Ratings<span class="badge" id="ratingBadge" style="display:none">!</span></a>
     <div class="nav-label" data-section="records">Records</div>
     <a class="nav-item" data-nav="ledger" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>Ledger</a>
@@ -1326,17 +1325,8 @@ function loadFboDB(){
   })();
   return _fboReady;
 }
-/* the player's owned FBO at a field (if any) */
-function myFbo(ic){ return (S&&S.fbos||[]).find(f=>f.ic===ic)||null; }
-function ownsFbo(ic){ return !!myFbo(ic); }
-/* FBOs at a field for selection/economy — includes the player's own FBO at its set price */
-function fbosFor(ic){
-  const base=baseFbos(ic), mine=myFbo(ic);
-  if(!mine) return base;
-  const opName=(S.operator&&S.operator.name)?S.operator.name:'Your';
-  const mineEntry={name:opName+' FBO',rampF:mine.rampMult||1,premium:false,fuel:mine.fuel,mine:true,providesFuel:true};
-  return [mineEntry].concat(base.filter(f=>!f.mine));
-}
+/* FBOs at a field for fuel/ramp selection on charters (world directory only) */
+function fbosFor(ic){ return baseFbos(ic); }
 function rampFeeFor(ic,fbo,acCls){
   const a=APTBY[ic]; const base=RAMP_BASE[a.cls]*(PREMIUM_FIELDS.has(ic)?2.1:1);
   return Math.round(base*SIZE_F[acCls]*fbo.rampF/5)*5;
@@ -1446,7 +1436,7 @@ function newGame(name,base){
     cash:CFG.startCash, rep:0, flights:0, hours:0, nm:0,
     fleet:[],                       // pilot picks their first aircraft
     board:[], active:null, ledger:[],
-    operator:null, fbos:[], role:'both', lastFbo:0,
+    operator:null, role:'both',
     lastBoard:0, vatCallsign:'', tankerFuelLb:0,
     maxTier:CFG.startTier,          // type rating cap (0 = turboprop only)
     grades:[],                      // per-flight performance grades
@@ -1458,7 +1448,8 @@ function newGame(name,base){
     pirepCode:genPirepCode(),      // pairing code for the MSFS toolbar PIREP panel
     demand:{}, lastEco:0,          // dynamic outbound-demand economy
     used:[], lastUsed:0,           // pre-owned aircraft market
-    account:{realName:'',company:''}  // editable account profile
+    account:{realName:'',company:''},  // editable account profile
+    employer:null, operatorApps:[]
   };
   refreshUsed(); refreshBoard(true); save();
 }
@@ -1523,27 +1514,47 @@ function economyTick(){
   // raising fares & charter volume there — no artificial flat bonus)
   rwTargets().forEach(t=>bumpDemand(t.ic, rnd(0.16,0.32)));
   sportsDemandGames().forEach(g=>{ if(APTBY[g.venueIcao]) bumpDemand(g.venueIcao, rnd(0.2,0.35)); });
-  // PLAYER FBO PRICING moves the market: cheap fuel draws traffic to that field, dear fuel repels it
-  (S.fbos||[]).forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8;
-    const r=f.fuel/base; bumpDemand(f.ic, r<=0.95?0.11 : r<=1.10?0.05 : r<=1.30?-0.03 : -0.09); });
   S.lastEco=now;
 }
-/* ===================== OPERATOR ECONOMICS ===================== */
+/* ===================== OPERATOR ECONOMICS (Part 135 / Part 91) ===================== */
 const OPER_TIERS=[
-  {key:'taxi',name:'Air Taxi', fleet:0, rep:0,    worth:0,    safety:0,  fbos:1, color:'#7d8ba0', perk:'Found your company · 1 FBO slot'},
-  {key:'reg', name:'Regional', fleet:3, rep:1800, worth:4e6,  safety:0,  fbos:2, color:'#2D6AE3', perk:'2 FBO slots · regional charters'},
-  {key:'nat', name:'National', fleet:7, rep:6000, worth:12e6, safety:74, fbos:4, color:'#1F7A52', perk:'4 FBO slots · premium clients'},
-  {key:'glob',name:'Global',   fleet:14,rep:16000,worth:30e6, safety:80, fbos:7, color:'#B0863B', perk:'7 FBO slots · VVIP & gov contracts'},
+  {key:'taxi',name:'Air Taxi', fleet:0, rep:0,    worth:0,    safety:0,  pilots:3,  color:'#7d8ba0', perk:'Found your company · hire up to 3 pilots'},
+  {key:'reg', name:'Regional', fleet:3, rep:1800, worth:4e6,  safety:0,  pilots:8,  color:'#2D6AE3', perk:'8 pilot slots · regional contracts'},
+  {key:'nat', name:'National', fleet:7, rep:6000, worth:12e6, safety:74, pilots:18, color:'#1F7A52', perk:'18 pilot slots · premium clients'},
+  {key:'glob',name:'Global',   fleet:14,rep:16000,worth:30e6, safety:80, pilots:35, color:'#B0863B', perk:'35 pilot slots · VVIP & gov contracts'},
 ];
 function fleetValue(){ return (S.fleet||[]).filter(f=>f.owned).reduce((s,f)=>s+Math.round((ACBY[f.type]?ACBY[f.type].price:0)*((f.cond||100)/100)),0); }
-function fboValue(){ return (S.fbos||[]).length*1500000; }
-function netWorth(){ return Math.round((S.cash||0)+fleetValue()+fboValue()); }
+function netWorth(){ return Math.round((S.cash||0)+fleetValue()); }
 function operTierIdx(){ const ss=safetyScore(); const w=netWorth();
   let idx=0; for(let i=0;i<OPER_TIERS.length;i++){ const t=OPER_TIERS[i];
     if((S.fleet||[]).length>=t.fleet && S.rep>=t.rep && w>=t.worth && (t.safety===0||(ss!==null&&ss>=t.safety))) idx=i; }
   return idx; }
 function operTier(){ return OPER_TIERS[operTierIdx()]; }
-function fboSlots(){ return operTier().fbos; }
+function pilotSlots(){ return operTier().pilots; }
+function certLabel(c){ return c==='91'?'Part 91':'Part 135'; }
+function normalizeOperator(op){
+  if(!op) return null;
+  if(!op.id) op.id='op_'+uid();
+  if(!op.bases) op.bases=[];
+  if(!op.pilots) op.pilots=[];
+  if(!op.applications) op.applications=[];
+  if(!op.cert) op.cert='135';
+  if(op.hiring===undefined) op.hiring=false;
+  if(op.payRate===undefined) op.payRate=2500;
+  if(!op.payNote) op.payNote='Per completed charter';
+  return op;
+}
+function operPilotCount(){ return (S.operator&&S.operator.pilots||[]).length; }
+function isOperatorBase(ic){ return !!(S.operator&&(S.operator.bases||[]).includes(ic)); }
+function isMyOperator(opId){ const o=S.operator; return !!(o&&opId&&(o.id===opId||o.cloudId===opId)); }
+function isEmployedBy(opId){ const e=S&&S.employer; return !!(e&&opId&&(e.operatorId===opId||e.cloudId===opId)); }
+function canSeeCharter(c){
+  if(!c.operatorPosted) return true;
+  if(c.operatorVisibility!=='private') return true;
+  const oid=c.operatorCloudId||c.operatorId;
+  if(isMyOperator(oid)||isEmployedBy(oid)) return true;
+  return false;
+}
 /* operating P&L over a window (ms). Splits revenue / operating costs / capital. */
 function plWindow(ms){
   const since=Date.now()-ms; let rev=0,op=0,cap=0; const capRe=/Acquired|Bought|Purchase|Founded|Upgrade|deposit|FBO at/i;
@@ -1565,22 +1576,6 @@ function fleetUtil(){
   const listed=owned.filter(f=>f.forRent&&!f.busy).length;
   const idle=owned.filter(f=>!f.busy&&!f.forRent).length;
   return {total:owned.length,flying,listed,idle,pct:owned.length?Math.round((flying/owned.length)*100):0};
-}
-/* passive FBO margin — fuel sold to the live traffic (real jobs/demand) at each owned field */
-function operatorTick(){
-  if(!S||!S.fbos||!S.fbos.length) return; const now=Date.now();
-  const elapsed=now-(S.lastFbo||0);
-  if(S.lastFbo && elapsed<300000) return;                 // accrue every ~5 min
-  const dtH=Math.min(2,(S.lastFbo?elapsed:300000)/3600e3); S.lastFbo=now;
-  let earn=0;
-  S.fbos.forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8, wholesale=base*0.92;
-    const margin=Math.max(0,f.fuel-wholesale);
-    const sizeMult=a.cls==='i'?1.6:a.cls==='m'?1.0:0.6;
-    const appeal=Math.max(0.3,1.9-f.fuel/base);            // cheaper fuel moves more gallons
-    const gal=Math.round(5000*sizeMult*demandAt(f.ic)*appeal*dtH);
-    const e=Math.round(gal*margin); f.gallons=(f.gallons||0)+gal; f.margin=(f.margin||0)+e; earn+=e; });
-  if(earn>0){ S.cash+=earn; S.ledger.push({t:now,k:'FBO fuel margin',a:earn,note:S.fbos.length+' location(s)',cat:'fbo'});
-    save(); if(view==='operator'||view==='dash'||view==='ledger')renderAll(); }
 }
 /* pick a charter origin weighted by current outbound demand (hot fields spawn more) */
 function weightedOrigin(){
@@ -1803,7 +1798,7 @@ function bestAircraftFor(c){
 }
 
 const ROLE_LABEL={pilot:'Pilot',operator:'Operator',both:'Pilot + Operator'};
-const ROLE_DESC={pilot:'Fly charters & build ratings',operator:'Run fleet, FBOs & charter ops',both:'Full access to everything'};
+const ROLE_DESC={pilot:'Fly charters & build ratings',operator:'Run fleet, hire pilots & dispatch charters',both:'Full access to everything'};
 function effectiveRole(){ return (S&&S.role)||'both'; }
 function navVisible(navKey){
   const r=effectiveRole();
@@ -1856,8 +1851,8 @@ const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:
   airport:['Airport Explorer','charters · aircraft · fees'],
   community:['Community','live network'],
   fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator Dashboard',''],
-  fuel:['Fuel Prices','global Jet-A trends'],spcharter:['Special Charter Ops','post jobs to the board'],
-  fboads:['FBO Advertising','sponsor events & drive traffic'],
+  spcharter:['Charter Dispatch','post private or public charters'],
+  operators:['Operators','find a flying job'],
   ratings:['Type Ratings','career progression'],ledger:['Ledger',''],map:['Live Map','your network'],
   settings:['Settings','account & preferences'],admin:['Admin Console','manage the network']};
 function nav(v){ if(!navVisible(v)){ showToast('Not available in '+ROLE_LABEL[effectiveRole()]+' mode','bad'); return; } view=v; renderAll(); }
@@ -1867,7 +1862,7 @@ function renderAll(){
   if(!navVisible(view)) view=effectiveRole()==='operator'?'operator':'dash';
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
   $('#crumb').textContent=CRUMB[view][0]; $('#crumbSub').textContent=CRUMB[view][1];
-  $('#boardBadge').textContent=S.board.filter(c=>c.expires>Date.now()).length;
+  $('#boardBadge').textContent=S.board.filter(c=>c.expires>Date.now()&&canSeeCharter(c)).length;
   $('#activeBadge').style.display=S.active?'inline-block':'none';
   $('#ratingBadge').style.display=upgradeReady()?'inline-block':'none';
   const liveEv=rwLive().length;
@@ -1878,7 +1873,7 @@ function renderAll(){
   const p=$('#page');
   if(view!=='map') p.classList.remove('map-page');
   if(view!=='board'&&BOARD_MAP){ BOARD_MAP.remove(); BOARD_MAP=null; }
-  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,fuel:rFuel,spcharter:rSpecCharter,fboads:rFboAds,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
+  ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,spcharter:rSpecCharter,operators:rOperators,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
   if(view==='map') setTimeout(initMap,40);
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
   if(typeof updatePresenceTrack==='function') updatePresenceTrack();
@@ -1940,7 +1935,7 @@ function rDash(p){
      <div class="card card-pad">
        <div class="sec-head"><div><div class="eyebrow">Live Market</div><div class="sec-title">Top charters waiting</div></div>
          <div class="sec-spacer"></div><button class="btn ghost sm" onclick="nav('board')">View all</button></div>
-       ${S.board.slice(0,4).map(c=>dashCharterRow(c)).join('')||'<div class="empty"><h3>Board is refreshing…</h3></div>'}
+       ${S.board.filter(c=>c.expires>Date.now()&&canSeeCharter(c)).slice(0,4).map(c=>dashCharterRow(c)).join('')||'<div class="empty"><h3>Board is refreshing…</h3></div>'}
      </div>
      <div style="display:flex;flex-direction:column;gap:18px">
        <div class="card card-pad">
@@ -2062,7 +2057,7 @@ function setBoardSort(col){ if(boardSort.col===col) boardSort.dir=boardSort.dir=
 function clearBoardFilters(){ boardFilter={cat:'all',cls:'all',status:'all',flags:'all',q:'',dep:'',arr:'',client:'',aircraft:boardFilter.aircraft||'all'}; rBoard($('#page')); }
 function getFilteredBoardList(){
   const now=Date.now();
-  return sortBoardList(applyBoardFilters(S.board.filter(c=>c.expires>now)));
+  return sortBoardList(applyBoardFilters(S.board.filter(c=>c.expires>now&&canSeeCharter(c))));
 }
 function getBoardMapList(){
   const list=getFilteredBoardList(), sel=selectedFleetAc();
@@ -2138,7 +2133,7 @@ function initBoardMap(){
   else setTimeout(()=>{ if(!BOARD_MAP)return; BOARD_MAP.invalidateSize(); BOARD_MAP.setView([39,-70],3); }, 60);
 }
 function rBoard(p){
-  const now=Date.now(), total=S.board.filter(c=>c.expires>now).length;
+  const now=Date.now(), total=S.board.filter(c=>c.expires>now&&canSeeCharter(c)).length;
   const sel=selectedFleetAc();
   let list=getFilteredBoardList();
   const idle=S.fleet.filter(f=>!f.busy);
@@ -2276,6 +2271,7 @@ function charterRow(c){
   if(c.rwEvent) flags.push(`<span class="tag evt-tag sm" title="${esc(c.rwEvent.name)}">${c.rwEvent.icon}</span>`);
   if(c.sportsEvent) flags.push(`<span class="tag evt-tag sm" title="${esc(c.sportsEvent.name)}">${c.sportsEvent.icon} ${c.sportsEvent.leg==='inbound'?'↓':'↑'}</span>`);
   if(c.surge) flags.push('<span class="tag warnt sm">⚡</span>');
+  if(c.operatorPosted) flags.push(`<span class="tag ${c.operatorVisibility==='private'?'muted-t':'ok'} sm" title="${c.operatorName||'Operator'}">${c.operatorVisibility==='private'?'🔒':'🏢'}</span>`);
   const stCls=e.status==='ready'?'ok':e.status==='rent'?'muted-t':e.status==='repo'?'warnt':'muted-t';
   let btn;
   if(e.plan){
@@ -2721,8 +2717,6 @@ function settleTrip(){
     if(c.sportsEvent)rep+=12;                   // team charter prestige
   }
   S.rep+=rep; S.flights++;
-  // FBO passive cut if charter originated at your FBO
-  if(!ferry && ownsFbo(c.dep)){const cut=Math.round(c.payout*0.04);S.cash+=cut;S.ledger.push({t:Date.now(),k:`FBO origin fee ${c.dep}`,a:cut,note:'Your FBO'});}
   ac.busy=false; const arrived=c.arr;
   if(ac.rental) S.fleet=S.fleet.filter(f=>f.id!==ac.id);   // rental returned to the market
   S.active=null;
@@ -2968,7 +2962,20 @@ function buyUsed(lid){
   showToast(`${a.name} acquired at ${u.loc} — ferry it home when ready`,'good'); save(); renderAll(); renameTail(f.id);
 }
 
-/* ---------- OPERATOR ---------- */
+/* ---------- OPERATOR (Part 135 / Part 91) ---------- */
+async function syncOperatorFromCloud(){
+  const sb=getSB(); if(!sb||!AUTH.user||!S.operator||!S.operator.cloudId) return;
+  try{
+    const {data}=await sb.from('operators').select('applications,pilots,hiring,pay_rate').eq('id',S.operator.cloudId).single();
+    if(data){
+      S.operator.applications=data.applications||[];
+      S.operator.pilots=data.pilots||[];
+      S.operator.hiring=!!data.hiring;
+      if(data.pay_rate!=null) S.operator.payRate=data.pay_rate;
+      save();
+    }
+  }catch(e){}
+}
 function rOperator(p){
   const canFound=RANKS.findIndex(r=>r.name===rankFor(S.rep))>=2; // Senior Captain+
   if(!S.operator){
@@ -2977,7 +2984,7 @@ function rOperator(p){
         <div class="brand-mark" style="margin:0 auto 16px;width:48px;height:48px"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 21V8l7-5 7 5v13M3 21h18"/></svg></div>
         <div class="eyebrow">Build your company</div>
         <h2 style="font-family:var(--disp);font-weight:700;font-size:24px;margin:6px 0 8px">Found a charter operator</h2>
-        <p class="muted" style="max-width:440px;margin:0 auto 20px">Go from freelancer to operator. Found a company to brand your fleet, unlock FBO ownership for passive income and home-field discounts, and build a name that clients recognize.</p>
+        <p class="muted" style="max-width:440px;margin:0 auto 20px">Operate like a real Part 135 or Part 91 flight department — build a fleet, hire pilots, and dispatch custom charters to your crew or the public board.</p>
         <div class="pnl" style="text-align:left;max-width:380px;margin:0 auto 20px">
           <div class="pnl-row"><span>Requirement</span><span class="num ${canFound?'pos':'neg'}">Senior Captain rank</span></div>
           <div class="pnl-row"><span>Formation cost</span><span class="num">${money(250000)}</span></div>
@@ -2987,21 +2994,32 @@ function rOperator(p){
       </div>`;
     return;
   }
-  const o=S.operator;
+  const o=normalizeOperator(S.operator);
+  if(cloudEnabled()&&AUTH.user) syncOperatorFromCloud();
   const ti=operTierIdx(), tier=OPER_TIERS[ti], next=OPER_TIERS[ti+1];
   const nw=netWorth(), pl7=plWindow(7*864e5), util=fleetUtil(), ss=safetyScore();
   const spark=plDaily(14), revTail=util.total?Math.round(pl7.rev/util.total):0;
   const prog = next? Math.max(0,Math.min(1, Math.min((S.fleet||[]).length/next.fleet, S.rep/next.rep, nw/next.worth))) : 1;
+  const slots=pilotSlots(), pilots=operPilotCount();
   const kpi=(lab,val,sub,tone)=>`<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">${lab}</div>
     <div class="mono" style="font-size:21px;font-weight:700;margin-top:3px;${tone?`color:var(--${tone})`:''}">${val}</div><div class="muted" style="font-size:11.5px;margin-top:2px">${sub}</div></div>`;
+  const baseTags=(o.bases||[]).map(ic=>`<span class="tag mono sm">${ic}</span>`).join(' ')||'<span class="muted">No bases set</span>';
+  const roster=(o.pilots||[]).map(p=>`<div class="mini" style="margin-bottom:6px"><div class="grade-pill gNA" style="font-size:11px">✈</div>
+    <div><div class="t">${esc(p.pilot)}</div><div class="s">Hired ${new Date(p.hiredAt||Date.now()).toLocaleDateString()}</div></div>
+    <button class="btn ghost sm" onclick="dismissPilot('${p.userId}')">Release</button></div>`).join('')||'<div class="muted" style="font-size:13px">No pilots hired yet — open hiring and review applications.</div>';
+  const apps=(o.applications||[]).map(a=>`<div class="mini" style="margin-bottom:6px"><div class="grade-pill gNA" style="font-size:11px">?</div>
+    <div style="flex:1"><div class="t">${esc(a.pilot)}</div><div class="s">${esc(a.msg||'Application')} · ${new Date(a.at).toLocaleDateString()}</div></div>
+    <button class="btn brass sm" onclick="hirePilot('${a.id}')">Hire</button>
+    <button class="btn ghost sm" onclick="declineApplication('${a.id}')">Decline</button></div>`).join('');
   p.innerHTML=`
     <div class="card card-pad" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div class="brand-mark" style="width:54px;height:54px;background:${o.color}"><span style="font-family:var(--disp);font-weight:800;color:#fff;font-size:22px">${o.name[0]}</span></div>
-        <div style="flex:1;min-width:200px"><div class="eyebrow">Operator · ${o.callsign} · founded ${new Date(o.founded).toLocaleDateString()}</div>
+        <div style="flex:1;min-width:200px"><div class="eyebrow">Operator · ${o.callsign} · ${certLabel(o.cert)} · founded ${new Date(o.founded).toLocaleDateString()}</div>
           <div style="font-family:var(--disp);font-weight:700;font-size:23px;line-height:1.1">${o.name}</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span class="tag" style="background:${tier.color};color:#fff">${tier.name}</span>
-            <span class="muted" style="font-size:12.5px">${(S.fleet||[]).length} aircraft · ${(S.fbos||[]).length} FBO · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap"><span class="tag" style="background:${tier.color};color:#fff">${tier.name}</span>
+            <span class="muted" style="font-size:12.5px">${(S.fleet||[]).filter(f=>f.owned).length} owned · ${pilots}/${slots} pilots · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
+        <button class="btn ghost sm" onclick="nav('spcharter')">Dispatch charter</button>
       </div>
       ${next?`<div style="margin-top:14px">
         <div style="display:flex;justify-content:space-between;font-size:12px"><span class="muted">Progress to <b>${next.name}</b></span>
@@ -3015,7 +3033,7 @@ function rOperator(p){
       ${kpi('Net worth',money1k(nw),`cash ${money1k(S.cash)} · fleet ${money1k(fleetValue())}`)}
       ${kpi('Net · 7 days',money1k(pl7.net),`rev ${money1k(pl7.rev)} − ops ${money1k(pl7.op)}`,pl7.net>=0?'pos':'neg')}
       ${kpi('Fleet utilization',util.pct+'%',`${util.flying} flying · ${util.idle} idle`)}
-      ${kpi('FBO network',`${(S.fbos||[]).length} / ${fboSlots()}`,`${money1k((S.fbos||[]).reduce((s,f)=>s+(f.margin||0),0))} earned`)}
+      ${kpi('Pilot roster',`${pilots} / ${slots}`,`${o.hiring?'Hiring open':'Not hiring'} · ${money(o.payRate)} ${o.payNote}`)}
     </div>
 
     <div class="split">
@@ -3025,9 +3043,9 @@ function rOperator(p){
             <div style="text-align:right"><div class="mono" style="font-size:20px;font-weight:700;color:var(--${pl7.net>=0?'pos':'neg'})">${money(pl7.net)}</div><div class="muted" style="font-size:11px">net</div></div></div>
           <div style="margin:6px 0 12px">${opSpark(spark,300,42)}<div class="muted" style="font-size:10.5px;text-align:center">daily net · last 14 days</div></div>
           <div class="pnl">
-            <div class="pnl-row"><span>Revenue (charters, FBO margin, rentals)</span><span class="num pos">${money(pl7.rev)}</span></div>
+            <div class="pnl-row"><span>Revenue (charters, rentals)</span><span class="num pos">${money(pl7.rev)}</span></div>
             <div class="pnl-row"><span>Operating costs (fuel, maintenance, lease)</span><span class="num neg">-${money(pl7.op)}</span></div>
-            ${pl7.cap?`<div class="pnl-row"><span>Capital (aircraft, FBOs, upgrades)</span><span class="num neg">-${money(pl7.cap)}</span></div>`:''}
+            ${pl7.cap?`<div class="pnl-row"><span>Capital (aircraft, upgrades)</span><span class="num neg">-${money(pl7.cap)}</span></div>`:''}
             <div class="pnl-row tot"><span>Operating net</span><span class="num ${pl7.net>=0?'pos':'neg'}">${money(pl7.net)}</span></div>
           </div>
         </div>
@@ -3040,18 +3058,36 @@ function rOperator(p){
             <div style="width:${util.idle/util.total*100}%;background:var(--line)" title="Idle"></div></div>
           <div style="display:flex;gap:16px;font-size:12px"><span><b style="color:var(--pos)">${util.flying}</b> flying</span>
             <span><b style="color:var(--brass)">${util.listed}</b> listed</span><span><b class="muted">${util.idle}</b> idle</span></div>
-          ${util.idle>=1?`<div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Idle jets earn nothing — list them for rent so real pilots can fly them, or send them on charters.</span></div>`:''}`
-          :`<p class="muted" style="font-size:13px">No owned aircraft yet. Acquire metal in the Marketplace to build utilization.</p>`}
+          <button class="btn ghost sm" style="margin-top:10px" onclick="nav('fleet')">Manage fleet</button>
+          ${util.idle>=1?`<div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Idle jets earn nothing — list them for rent or dispatch company charters.</span></div>`:''}`
+          :`<p class="muted" style="font-size:13px">No owned aircraft yet. Acquire metal in the Marketplace to build your fleet.</p>
+            <button class="btn brass sm" style="margin-top:8px" onclick="nav('market')">Open marketplace</button>`}
         </div>
       </div>
       <div>
         <div class="card card-pad">
-          <div class="sec-head"><div><div class="eyebrow">Network · the economy lever</div><div class="sec-title">FBO fuel pricing</div></div>
-            <button class="btn brass sm" onclick="openBuyFbo()" ${(S.fbos||[]).length>=fboSlots()?'disabled title="No free slots — reach the next tier"':''}>+ Acquire FBO</button></div>
-          ${(S.fbos||[]).length? (S.fbos||[]).map(fboRow).join('')
-            : `<div class="help" style="margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h0M9 16h0M15 12h0M15 16h0"/></svg>
-               <span>Own an FBO to set Jet-A pricing at a field. It's the single biggest lever on SKYLEDGER's economy — cheap fuel draws traffic and spawns more jobs there; dear fuel fattens your margin. You earn on every gallon the field's traffic uplifts.</span></div>`}
+          <div class="sec-head"><div><div class="eyebrow">Company profile</div><div class="sec-title">Bases &amp; hiring</div></div></div>
+          <div class="form-row" style="margin-top:0"><label>Operating bases</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${baseTags}</div>
+            <div style="display:flex;gap:8px"><input class="field mono" id="opBaseIn" maxlength="4" placeholder="ICAO" style="flex:1" oninput="this.value=this.value.toUpperCase()">
+              <button class="btn ghost sm" onclick="addOperatorBase()">Add base</button></div></div>
+          <div class="form-row"><label>Hiring status</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <button class="btn ${o.hiring?'brass':'ghost'} sm" onclick="setOperatorHiring(true)">Open</button>
+              <button class="btn ${!o.hiring?'brass':'ghost'} sm" onclick="setOperatorHiring(false)">Closed</button>
+              <span class="muted" style="font-size:12px">${o.hiring?'Pilots can apply from the Operators page':'Not accepting applications'}</span></div></div>
+          <div class="form-row"><label>Pay rate ($)</label>
+            <input class="field mono" id="opPayRate" type="number" value="${o.payRate}" style="width:120px" onchange="setOperatorPayRate(this.value)">
+            <span class="muted" style="font-size:12px;margin-left:8px">${o.payNote}</span></div>
         </div>
+        <div class="card card-pad" style="margin-top:14px">
+          <div class="sec-head"><div><div class="eyebrow">Crew</div><div class="sec-title">Pilot roster</div></div>
+            <span class="muted" style="font-size:12px">${pilots}/${slots} slots</span></div>
+          ${roster}
+        </div>
+        ${(o.applications||[]).length?`<div class="card card-pad" style="margin-top:14px">
+          <div class="sec-head"><div><div class="eyebrow">Inbox</div><div class="sec-title">Applications</div></div></div>
+          ${apps}</div>`:''}
         <div class="card card-pad" style="margin-top:14px">
           <div class="sec-head"><div><div class="eyebrow">Operations</div><div class="sec-title">Alerts</div></div></div>
           ${operAlerts().map(a=>`<div class="help" style="margin-top:8px;${a.tone==='good'?'border-color:var(--pos-soft);background:var(--pos-soft)':a.tone==='warn'?'border-color:var(--brass)':''}">
@@ -3059,6 +3095,47 @@ function rOperator(p){
         </div>
       </div>
     </div>`;
+}
+function addOperatorBase(){
+  const ic=($('#opBaseIn').value||'').trim().toUpperCase();
+  if(!APTBY[ic]) return showToast('Unknown ICAO','bad');
+  const o=normalizeOperator(S.operator);
+  if(o.bases.includes(ic)) return showToast('Already a base','bad');
+  o.bases.push(ic); save(); syncOperatorToCloud(); showToast(ic+' added as operating base','good');
+  if(view==='operator') rOperator($('#page'));
+}
+function setOperatorHiring(on){
+  if(!S.operator) return;
+  S.operator.hiring=!!on; save(); syncOperatorToCloud();
+  showToast(on?'Now hiring pilots':'Hiring closed','good');
+  if(view==='operator') rOperator($('#page'));
+}
+function setOperatorPayRate(v){
+  if(!S.operator) return;
+  S.operator.payRate=Math.max(0,Math.round(+v||0)); save(); syncOperatorToCloud();
+}
+function hirePilot(appId){
+  const o=normalizeOperator(S.operator), app=(o.applications||[]).find(a=>a.id===appId);
+  if(!app) return showToast('Application not found','bad');
+  if(operPilotCount()>=pilotSlots()) return showToast('No pilot slots — reach the next tier','bad');
+  o.pilots.push({userId:app.userId,pilot:app.pilot,hiredAt:Date.now()});
+  o.applications=o.applications.filter(a=>a.id!==appId);
+  save(); syncOperatorToCloud();
+  showToast('Hired '+app.pilot,'good');
+  if(view==='operator') rOperator($('#page'));
+}
+function dismissPilot(userId){
+  if(!confirm('Release this pilot from your roster?')) return;
+  const o=normalizeOperator(S.operator);
+  o.pilots=(o.pilots||[]).filter(p=>p.userId!==userId);
+  save(); syncOperatorToCloud(); showToast('Pilot released','good');
+  if(view==='operator') rOperator($('#page'));
+}
+function declineApplication(appId){
+  const o=normalizeOperator(S.operator);
+  o.applications=(o.applications||[]).filter(a=>a.id!==appId);
+  save(); syncOperatorToCloud();
+  if(view==='operator') rOperator($('#page'));
 }
 function setRole(r){
   S.role=r; save(); closePilotMenu();
@@ -3079,46 +3156,20 @@ function tickGlobalFuel(){
   });
 }
 function regionFuelPrice(reg){ const base=FUEL_REGION[reg]||7.8, mult=(S.globalFuel&&S.globalFuel[reg])||1; return +(base*mult).toFixed(2); }
-function rFuel(p){
-  if(operOnlyGate(p)) return;
-  tickGlobalFuel();
-  const regions=Object.keys(FUEL_REGION).map(reg=>{
-    const px=regionFuelPrice(reg), trend=(S.globalFuel[reg]||1);
-    const arrow=trend>1.03?'↑ rising':trend<0.97?'↓ easing':'→ stable';
-    return `<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px">${reg} REGION</div>
-      <div class="mono" style="font-size:22px;font-weight:700;margin-top:4px">$${px.toFixed(2)}<span style="font-size:12px;color:var(--muted)">/gal</span></div>
-      <div class="muted" style="font-size:11.5px;margin-top:4px">${arrow} · wholesale ~$${(px*0.92).toFixed(2)}</div></div>`;
-  }).join('');
-  const hubs=HUBS.map(ic=>{ const a=APTBY[ic]; if(!a)return null;
-    const f=cheapestFuelFbo(ic), dem=demandAt(ic);
-    return {ic,name:a.name,fuel:f.fuel,dem}; }).filter(Boolean).sort((a,b)=>a.fuel-b.fuel);
-  const mine=(S.fbos||[]).map(f=>{ const a=APTBY[f.ic]; return a?{ic:f.ic,name:a.name,fuel:f.fuel,mine:true,dem:demandAt(f.ic)}:null; }).filter(Boolean);
-  const row=(x)=>`<tr><td class="mono" style="font-weight:600">${x.ic}</td><td class="muted">${x.name}</td>
-    <td class="amt">$${x.fuel.toFixed(2)}</td><td>${x.mine?'<span class="tag ok">Your FBO</span>':demandLevel(x.dem)}</td></tr>`;
-  p.innerHTML=`
-    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span>Global Jet-A benchmarks by region. Your FBO retail pricing and competitor fields feed the live charter economy — cheap fuel spawns traffic; dear fuel widens margin.</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px">${regions}</div>
-    <div class="split">
-      <div class="card card-pad"><div class="sec-head"><div><div class="eyebrow">Market scan</div><div class="sec-title">Cheapest hub fuel</div></div></div>
-        <table class="led"><thead><tr><th>ICAO</th><th>Field</th><th style="text-align:right">Jet-A</th><th>Demand</th></tr></thead>
-          <tbody>${hubs.slice(0,12).map(row).join('')}</tbody></table></div>
-      <div class="card card-pad">${mine.length?`<div class="sec-head"><div><div class="eyebrow">Your network</div><div class="sec-title">FBO pump prices</div></div>
-          <button class="btn ghost sm" onclick="nav('operator')">Manage FBOs</button></div>
-          <table class="led"><thead><tr><th>ICAO</th><th>Field</th><th style="text-align:right">Your price</th><th>Traffic</th></tr></thead>
-          <tbody>${mine.map(row).join('')}</tbody></table>`
-        :`<div class="muted" style="font-size:13px">No FBOs yet — acquire fields from the Operator Dashboard to set pump prices and earn fuel margin.</div>
-          <button class="btn brass sm" style="margin-top:12px" onclick="nav('operator')">Open Operator Dashboard</button>`}</div>
-    </div>`;
-}
 function rSpecCharter(p){
   if(operOnlyGate(p)) return;
-  const o=S.operator, posted=(S.board||[]).filter(c=>c.operatorPosted);
+  const o=normalizeOperator(S.operator);
+  const posted=(S.board||[]).filter(c=>c.operatorPosted&&canSeeCharter(c));
   p.innerHTML=`
     <div class="split" style="grid-template-columns:1fr 1fr;align-items:start">
       <div class="card card-pad">
-        <div class="sec-head"><div><div class="eyebrow">Charter ops</div><div class="sec-title">Post a special charter</div></div></div>
-        <p class="muted" style="font-size:12.5px;margin-bottom:12px">Inject a bespoke job onto the live charter board. Real pilots (and your own fleet) can accept it like any other posting.</p>
+        <div class="sec-head"><div><div class="eyebrow">Charter dispatch</div><div class="sec-title">Post a company charter</div></div></div>
+        <p class="muted" style="font-size:12.5px;margin-bottom:12px"><b>PRIVATE</b> charters are visible only to your hired pilots. <b>PUBLIC</b> charters appear on the main charter board for any pilot.</p>
+        <div class="form-row" style="margin-top:0"><label>Visibility</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn brass sm" id="visPriv" onclick="setDispatchVis('private')">Private</button>
+            <button class="btn ghost sm" id="visPub" onclick="setDispatchVis('public')">Public</button></div>
+          <div class="muted" style="font-size:11.5px;margin-top:4px" id="visHint">Only pilots on your roster can see and accept this job.</div></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-row" style="margin-top:0"><label>From</label><input class="field mono" id="scDep" maxlength="4" placeholder="KTEB" style="width:100%" oninput="this.value=this.value.toUpperCase()"></div>
           <div class="form-row" style="margin-top:0"><label>To</label><input class="field mono" id="scArr" maxlength="4" placeholder="KMIA" style="width:100%" oninput="this.value=this.value.toUpperCase()"></div>
@@ -3129,18 +3180,29 @@ function rSpecCharter(p){
           <select class="field" id="scCls" style="width:100%">
             ${TIERS.map(t=>`<option value="${t}">${CLASSES[t].label}</option>`).join('')}
           </select></div>
-        <button class="btn brass" style="width:100%;justify-content:center;margin-top:8px" onclick="injectOperatorCharter()">Post to charter board</button>
+        <button class="btn brass" style="width:100%;justify-content:center;margin-top:8px" onclick="injectOperatorCharter()">Post charter</button>
       </div>
       <div class="card card-pad">
-        <div class="sec-head"><div><div class="eyebrow">Live postings</div><div class="sec-title">Your special charters</div></div></div>
+        <div class="sec-head"><div><div class="eyebrow">Live postings</div><div class="sec-title">Your dispatches</div></div></div>
         ${posted.length?posted.map(c=>`<div class="mini" style="margin-bottom:8px">
-          <div class="grade-pill gNA" style="font-size:11px">OP</div>
-          <div><div class="t mono">${c.dep} → ${c.arr}</div><div class="s">${c.client} · ${money(c.payout)} · ${CLASSES[c.cls].label}</div></div>
+          <div class="grade-pill gNA" style="font-size:11px">${c.operatorVisibility==='private'?'🔒':'🏢'}</div>
+          <div><div class="t mono">${c.dep} → ${c.arr}</div><div class="s">${c.client} · ${money(c.payout)} · ${CLASSES[c.cls].label} · ${c.operatorVisibility==='private'?'Private':'Public'}</div></div>
           <div class="amt">${c.expires>Date.now()?'open':'expired'}</div></div>`).join('')
           :'<div class="muted" style="font-size:13px">No operator postings yet.</div>'}
         <button class="btn ghost sm" style="width:100%;margin-top:12px" onclick="nav('board')">View charter board</button>
       </div>
     </div>`;
+  window._dispatchVis='private';
+  setDispatchVis('private');
+}
+function setDispatchVis(v){
+  window._dispatchVis=v==='public'?'public':'private';
+  const priv=$('#visPriv'), pub=$('#visPub'), hint=$('#visHint');
+  if(priv) priv.className='btn '+(window._dispatchVis==='private'?'brass':'ghost')+' sm';
+  if(pub) pub.className='btn '+(window._dispatchVis==='public'?'brass':'ghost')+' sm';
+  if(hint) hint.textContent=window._dispatchVis==='private'
+    ?'Only pilots on your roster can see and accept this job.'
+    :'Posted to the main charter board — any pilot can accept.';
 }
 function injectOperatorCharter(){
   const dep=($('#scDep').value||'').trim().toUpperCase(), arr=($('#scArr').value||'').trim().toUpperCase();
@@ -3152,57 +3214,143 @@ function injectOperatorCharter(){
   const c=genCharter(dep,{arrTo:arr,capTier:tier});
   const pay=+($('#scPay').value||0); if(pay>0) c.payout=Math.round(pay);
   const client=($('#scClient').value||'').trim();
-  c.client=client||(S.operator.name+' · special charter');
-  c.operatorPosted=true; c.operatorName=S.operator.name;
+  const o=normalizeOperator(S.operator);
+  const vis=window._dispatchVis==='public'?'public':'private';
+  c.client=client||(o.name+' · company charter');
+  c.operatorPosted=true; c.operatorName=o.name; c.operatorId=o.id; c.operatorCloudId=o.cloudId||null;
+  c.operatorVisibility=vis;
   c.hot=true; c.surge=Math.random()<0.35;
   S.board.push(c);
-  S.ledger.push({t:Date.now(),k:'Posted special charter',a:0,note:c.dep+'→'+c.arr});
-  save(); showToast('Charter posted to the board','good');
+  S.ledger.push({t:Date.now(),k:`Posted ${vis} charter`,a:0,note:c.dep+'→'+c.arr});
+  save(); showToast(vis==='public'?'Charter posted to the public board':'Private charter posted for your pilots','good');
   if(view==='spcharter') rSpecCharter($('#page'));
   if(view==='board') rBoard($('#page'));
 }
-function rFboAds(p){
-  if(operOnlyGate(p)) return;
-  const o=S.operator, ads=S.fboAds||[], upcoming=rwUpcoming(90), live=rwLive();
-  const myIcs=new Set((S.fbos||[]).map(f=>f.ic));
-  const adRow=(item,isLive)=>{
-    const ics=item.e.apts.filter(ic=>myIcs.has(ic));
-    if(!ics.length) return '';
-    const ic=ics[0], a=APTBY[ic];
-    const sponsored=ads.some(x=>x.event===item.e.name&&x.ic===ic&&x.until>Date.now());
-    const cost=Math.round(35000+item.e.apts.length*8000+(isLive?15000:0));
-    return `<div class="card card-pad" style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">${item.e.icon}</span>
-        <div style="flex:1"><div style="font-weight:600">${item.e.name}</div>
-          <div class="muted" style="font-size:12px">${isLive?'LIVE NOW':timeUntil(item.o.start)} · sponsor at <b class="mono">${ic}</b> ${a?a.name:''}</div></div>
-        ${sponsored?'<span class="tag ok">Sponsored</span>'
-          :`<button class="btn brass sm" onclick="sponsorFboAd(${JSON.stringify(item.e.name)},'${ic}',${cost})">Sponsor · ${money(cost)}</button>`}
-      </div></div>`;
-  };
-  p.innerHTML=`
-    <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
-      <span>Sponsor real-world style events at fields where you own an FBO. Advertising boosts local demand and spawns extra charter traffic to your field — paid from <b>${o.name}</b> operating cash.</span></div>
-    <div class="sec-head"><div><div class="eyebrow">Live events</div><div class="sec-title">Sponsor now</div></div></div>
-    ${live.length?live.map(x=>adRow(x,true)).join('')||'<div class="muted" style="font-size:13px;margin-bottom:14px">No live events at your FBO locations right now.</div>'
-      :'<div class="muted" style="font-size:13px;margin-bottom:14px">No major events live this week.</div>'}
-    <div class="sec-head" style="margin-top:18px"><div><div class="eyebrow">Pipeline</div><div class="sec-title">Upcoming (90 days)</div></div></div>
-    ${upcoming.length?upcoming.slice(0,10).map(x=>adRow(x,false)).join('')||'<div class="muted">No upcoming events at your FBO airports.</div>'
-      :'<div class="muted">No upcoming events in range.</div>'}
-    ${ads.filter(a=>a.until>Date.now()).length?`<div class="sec-head" style="margin-top:18px"><div class="sec-title">Active campaigns</div></div>
-      ${ads.filter(a=>a.until>Date.now()).map(a=>`<div class="help" style="margin-top:8px"><span><b>${a.event}</b> at <span class="mono">${a.ic}</span> — ${money(a.cost)} · ends ${new Date(a.until).toLocaleDateString()}</span></div>`).join('')}`:''}`;
+/* ---------- PILOT: OPERATORS DIRECTORY ---------- */
+let RT_OPERATORS=[];
+async function loadOperatorsDirectory(){
+  const sb=getSB(); if(!sb){ RT_OPERATORS=[]; return; }
+  try{
+    const {data}=await sb.from('operators').select('*').order('updated_at',{ascending:false});
+    RT_OPERATORS=data||[];
+  }catch(e){ RT_OPERATORS=[]; }
 }
-function sponsorFboAd(eventName,ic,cost){
-  if(!S.fbos.some(f=>f.ic===ic)) return showToast('You need an FBO at '+ic,'bad');
-  if(S.cash<cost) return showToast('Need '+money(cost),'bad');
-  if((S.fboAds||[]).some(a=>a.event===eventName&&a.ic===ic&&a.until>Date.now())) return showToast('Already sponsoring this event','bad');
-  S.cash-=cost;
-  if(!S.fboAds) S.fboAds=[];
-  S.fboAds.push({event:eventName,ic,cost,until:Date.now()+21*864e5});
-  bumpDemand(ic,0.22);
-  refreshBoard(false);
-  S.ledger.push({t:Date.now(),k:'FBO ad · '+eventName,a:-cost,note:ic});
-  save(); showToast('Sponsored '+eventName+' at '+ic,'good');
-  if(view==='fboads') rFboAds($('#page'));
+async function syncOperatorToCloud(){
+  const sb=getSB(); if(!sb||!AUTH.user||!S.operator) return;
+  const o=normalizeOperator(S.operator);
+  const row={owner_id:AUTH.user.id,name:o.name,callsign:o.callsign,color:o.color,cert:o.cert,
+    bases:o.bases,hiring:o.hiring,pay_rate:o.payRate,pay_note:o.payNote,tier:operTier().key,
+    pilots:o.pilots,applications:o.applications,
+    fleet_count:(S.fleet||[]).filter(x=>x.owned).length,
+    founded:o.founded?new Date(o.founded).toISOString():null,updated_at:new Date().toISOString()};
+  try{
+    if(o.cloudId){
+      await sb.from('operators').update(row).eq('id',o.cloudId);
+    }else{
+      const {data,error}=await sb.from('operators').insert(row).select('id').single();
+      if(data&&!error){ o.cloudId=data.id; S.operator.cloudId=data.id; save(); }
+    }
+  }catch(e){ /* table may not exist yet */ }
+}
+async function syncEmploymentFromCloud(){
+  if(!AUTH.user||!S) return;
+  const sb=getSB(); if(!sb) return;
+  try{
+    const {data:ops}=await sb.from('operators').select('id,name,pilots');
+    if(!ops) return;
+    for(const op of ops){
+      const hired=(op.pilots||[]).find(p=>p.userId===AUTH.user.id);
+      if(hired){
+        S.employer={operatorId:op.id,cloudId:op.id,name:op.name,hiredAt:hired.hiredAt||Date.now()};
+        save(); return;
+      }
+    }
+  }catch(e){}
+}
+async function applyToOperator(cloudId){
+  const sb=getSB(); if(!sb||!AUTH.user) return showToast('Sign in to apply','bad');
+  const op=RT_OPERATORS.find(x=>x.id===cloudId);
+  if(!op) return showToast('Operator not found','bad');
+  if(!op.hiring) return showToast('This operator is not hiring','bad');
+  if(S.employer) return showToast('You are already employed — leave your current operator first','bad');
+  if((S.operatorApps||[]).some(a=>a.operatorId===cloudId&&a.status==='pending'))
+    return showToast('Application already pending','bad');
+  const app={id:uid(),userId:AUTH.user.id,pilot:S.pilot,msg:'Interested in flying for '+op.name,at:Date.now()};
+  try{
+    const apps=(op.applications||[]).slice();
+    if(apps.some(a=>a.userId===AUTH.user.id)) return showToast('Already applied','bad');
+    apps.push(app);
+    await sb.from('operators').update({applications:apps,updated_at:new Date().toISOString()}).eq('id',cloudId);
+    if(!S.operatorApps) S.operatorApps=[];
+    S.operatorApps.push({operatorId:cloudId,at:Date.now(),status:'pending'});
+    save();
+    if(S.operator&&S.operator.cloudId===cloudId){
+      S.operator.applications=apps; save();
+      if(view==='operator') rOperator($('#page'));
+    }
+    showToast('Application sent to '+op.name,'good');
+    if(view==='operators') rOperators($('#page'));
+  }catch(e){ showToast('Could not submit application','bad'); }
+}
+function leaveEmployer(){
+  if(!S.employer) return;
+  if(!confirm('Leave '+S.employer.name+'?')) return;
+  S.employer=null; save();
+  showToast('You left the operator','good');
+  if(view==='operators') rOperators($('#page'));
+}
+function rOperators(p){
+  loadOperatorsDirectory().then(()=>{
+    const employed=S.employer;
+    const myOp=S.operator?normalizeOperator(S.operator):null;
+    const localListing=myOp&&cloudEnabled()&&AUTH.user?null:myOp;
+    const cloudList=RT_OPERATORS.filter(op=>!myOp||op.id!==myOp.cloudId);
+    const card=(op,isLocal)=>{
+      const id=op.id||op.cloudId, bases=(op.bases||[]).map(ic=>`<span class="tag mono sm">${ic}</span>`).join(' ')||'<span class="muted">—</span>';
+      const tierName=(OPER_TIERS.find(t=>t.key===op.tier)||OPER_TIERS[0]).name;
+      const pilots=(op.pilots||[]).length, fleet=op.fleet_count||(isLocal?(S.fleet||[]).filter(f=>f.owned).length:0);
+      const pending=(S.operatorApps||[]).some(a=>a.operatorId===id&&a.status==='pending');
+      const isEmployer=employed&&(employed.cloudId===id||employed.operatorId===id);
+      let action='';
+      if(isLocal) action='<span class="tag ok">Your company</span>';
+      else if(isEmployer) action=`<button class="btn ghost sm" onclick="leaveEmployer()">Leave</button>`;
+      else if(op.hiring){
+        action=pending?'<span class="tag warnt">Applied</span>'
+          :`<button class="btn brass sm" onclick="applyToOperator('${id}')">Apply</button>`;
+      } else action='<span class="muted" style="font-size:12px">Not hiring</span>';
+      return `<div class="card card-pad" style="margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <div class="brand-mark" style="width:44px;height:44px;flex-shrink:0;background:${op.color||'#1B2A41'}"><span style="font-family:var(--disp);font-weight:800;color:#fff;font-size:18px">${(op.name||'?')[0]}</span></div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <div style="font-family:var(--disp);font-weight:700;font-size:18px">${esc(op.name)}</div>
+              <span class="tag sm">${certLabel(op.cert)}</span>
+              <span class="tag muted-t sm">${tierName}</span>
+              ${op.hiring?'<span class="tag ok sm">Hiring</span>':''}
+            </div>
+            <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(op.callsign||'')} · ${fleet} aircraft · ${pilots} pilots</div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <span class="muted" style="font-size:11px">Bases:</span> ${bases}
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:6px">Pay: <b>${money(op.pay_rate||op.payRate||0)}</b> ${esc(op.pay_note||op.payNote||'per charter')}</div>
+          </div>
+          <div style="flex-shrink:0">${action}</div>
+        </div>
+      </div>`;
+    };
+    p.innerHTML=`
+      <div class="help" style="margin-bottom:16px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>Browse Part 135 and Part 91 operators. Apply to companies that are hiring — once hired, you can fly their <b>private</b> company charters in addition to public board jobs.</span></div>
+      ${employed?`<div class="card card-pad" style="margin-bottom:14px;border-color:var(--pos-soft);background:var(--pos-soft)">
+        <div class="eyebrow">Current employer</div>
+        <div style="font-family:var(--disp);font-weight:700;font-size:18px">${esc(employed.name)}</div>
+        <div class="muted" style="font-size:12.5px;margin-top:4px">You can see this operator's private dispatches on the charter board.</div></div>`:''}
+      ${!cloudEnabled()||!AUTH.user?`<div class="muted" style="font-size:13px;margin-bottom:12px">Sign in to see live operators from other pilots.</div>`:''}
+      ${localListing?card({...localListing,tier:operTier().key,fleet_count:(S.fleet||[]).filter(f=>f.owned).length},true):''}
+      ${cloudList.length?cloudList.map(op=>card(op,false)).join(''):(!localListing?emptyState('No operators listed','Be the first — found a company from the Operator Dashboard, or check back when more pilots are online.','operator','Found a company'):'')}
+      <button class="btn ghost sm" style="margin-top:8px" onclick="loadOperatorsDirectory().then(()=>rOperators($('#page')))">Refresh</button>`;
+    syncEmploymentFromCloud();
+  });
 }
 function opSpark(arr,w,h){
   const max=Math.max(1,...arr.map(v=>Math.abs(v))), n=arr.length;
@@ -3212,98 +3360,28 @@ function opSpark(arr,w,h){
     <line x1="0" y1="${h/2}" x2="${w}" y2="${h/2}" stroke="var(--line)" stroke-width="1"/>
     <polyline points="${pts}" fill="none" stroke="${last>=0?'var(--pos)':'var(--neg)'}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
 }
-function fboRow(f){
-  const a=APTBY[f.ic]; if(!a)return''; const base=FUEL_REGION[a.region]||7.8, wholesale=base*0.92;
-  const margin=Math.max(0,f.fuel-wholesale), dem=demandAt(f.ic);
-  const lo=+(base*0.85).toFixed(2), hi=+(base*1.6).toFixed(2);
-  return `<div class="card" style="padding:13px 15px;margin-bottom:10px;background:var(--surface-2)">
-    <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
-      <span class="tag ok">★ FBO</span><b class="mono">${f.ic}</b><span class="muted" style="font-size:12px">${a.name}</span>
-      <span class="sec-spacer" style="flex:1"></span><span class="tag ${dem>=1.12?'demand':'muted-t'}">${demandLevel(dem)} traffic</span></div>
-    <label class="muted" style="font-size:11px">Jet-A — your margin <b>${money(margin)}/gal</b> over wholesale</label>
-    <div style="display:flex;align-items:center;gap:10px;margin-top:3px">
-      <input type="range" min="${lo}" max="${hi}" step="0.05" value="${Math.min(hi,Math.max(lo,f.fuel))}" oninput="setFboFuel('${f.ic}',this.value,true)" onchange="setFboFuel('${f.ic}',this.value)" style="flex:1">
-      <b class="mono" id="fboPx-${f.ic}" style="width:62px;text-align:right">$${f.fuel.toFixed(2)}</b></div>
-    <div class="muted" style="font-size:10.5px;margin-top:3px">Cheaper → more traffic &amp; gallons, thinner margin. Dearer → fat margin, less volume.</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
-      <button class="btn ghost sm" onclick="setFboFuel('${f.ic}',${(+(base*0.95)).toFixed(2)})">Undercut</button>
-      <button class="btn ghost sm" onclick="setFboFuel('${f.ic}',${(+(base*1.25)).toFixed(2)})">Premium</button>
-      <span class="sec-spacer" style="flex:1"></span>
-      <span class="muted mono" style="font-size:11px">${Math.round(f.gallons||0).toLocaleString()} gal · ${money(f.margin||0)}</span>
-      <button class="btn ghost sm" style="color:var(--neg)" onclick="sellFbo('${f.ic}')">Sell</button></div>
-  </div>`;
-}
-function setFboFuel(ic,v,liveOnly){
-  const f=myFbo(ic); if(!f)return; v=Math.max(1,+(+v).toFixed(2));
-  const lbl=$('#fboPx-'+ic); if(lbl)lbl.textContent='$'+v.toFixed(2);
-  if(liveOnly)return;                      // mid-drag: update the label only
-  f.fuel=v; save(); renderAll();
-}
-function sellFbo(ic){
-  if(!confirm('Sell your FBO at '+ic+'? You recover 60% of the purchase price.'))return;
-  S.fbos=(S.fbos||[]).filter(f=>f.ic!==ic);
-  invalidateFboCache();
-  const refund=Math.round(1500000*0.6); S.cash+=refund;
-  S.ledger.push({t:Date.now(),k:`Sold FBO ${ic}`,a:refund,note:'60% recovery'}); save(); showToast('FBO sold',' good'.trim()); renderAll();
-}
 function operAlerts(){
   const al=[], util=fleetUtil();
-  if(util.idle>=2) al.push({i:'⚠️',t:`${util.idle} owned jets are idle — list them for rent or send them flying.`,tone:'warn'});
-  (S.fbos||[]).forEach(f=>{ const a=APTBY[f.ic]; if(!a)return; const base=FUEL_REGION[a.region]||7.8;
-    if(f.fuel/base>1.32) al.push({i:'⛽',t:`${f.ic} fuel is priced high — fat margin, but traffic is turning away.`,tone:'warn'});
-    if(demandAt(f.ic)>=1.3) al.push({i:'📈',t:`${f.ic} is hot (${demandLevel(demandAt(f.ic))} traffic) — fuel volume is up.`,tone:'good'}); });
+  if(util.idle>=2) al.push({i:'⚠️',t:`${util.idle} owned jets are idle — dispatch company charters or list them for rent.`,tone:'warn'});
+  if(S.operator&&S.operator.hiring&&operPilotCount()<pilotSlots())
+    al.push({i:'👨‍✈️',t:`Hiring open — ${pilotSlots()-operPilotCount()} pilot slot(s) available.`,tone:'good'});
   const ti=operTierIdx(), n=OPER_TIERS[ti+1];
   if(n && (S.fleet||[]).length>=n.fleet && S.rep>=n.rep && netWorth()>=n.worth)
-    al.push({i:'⭐',t:`You qualify for ${n.name} status — unlocks ${n.fbos} FBO slots and ${n.perk.toLowerCase()}.`,tone:'good'});
-  const ss=safetyScore(); if(ss!==null&&ss<70) al.push({i:'🛡️',t:`Safety score ${Math.round(ss)} — clean landings protect ratings and (later) cut insurance.`,tone:'warn'});
-  if(!al.length) al.push({i:'✅',t:'All nominal. Acquire FBOs and tune fuel pricing to grow your network and bend the market.',tone:'good'});
+    al.push({i:'⭐',t:`You qualify for ${n.name} status — ${n.perk.toLowerCase()}.`,tone:'good'});
+  const ss=safetyScore(); if(ss!==null&&ss<70) al.push({i:'🛡️',t:`Safety score ${Math.round(ss)} — clean landings protect ratings and insurance.`,tone:'warn'});
+  if(S.operator&&!(S.operator.bases||[]).length) al.push({i:'📍',t:'Add at least one operating base so pilots know where you fly from.',tone:'warn'});
+  if(!al.length) al.push({i:'✅',t:'All nominal. Hire pilots and dispatch charters to keep your fleet moving.',tone:'good'});
   return al.slice(0,6);
-}
-function previewFboIc(raw){
-  const el=$('#fboPreview'); if(!el)return;
-  const ic=(raw||'').trim().toUpperCase();
-  if(!ic||ic.length<3){ el.innerHTML=''; return; }
-  if(!APTBY[ic]){ el.innerHTML='<span class="neg">Unknown ICAO</span>'; return; }
-  const a=APTBY[ic], fb=baseFbos(ic).slice(0,3);
-  el.innerHTML=`${a.name} · ${fb.length?fb.map(f=>f.name).join(', '):'regional FBOs'} — your operator FBO will list Jet-A alongside these.`;
-}
-function openBuyFbo(){
-  const slots=fboSlots(), have=(S.fbos||[]).length;
-  if(!S.operator) return showToast('Found your operator company first','bad');
-  if(have>=slots) return showToast(`${operTier().name} allows ${slots} FBO${slots>1?'s':''} — reach the next tier for more`,'bad');
-  if(S.cash<1500000) return showToast('FBOs cost $1,500,000','bad');
-  modal(`<div class="modal-head"><div class="eyebrow">Expand network · ${have}/${slots} slots used</div><h2>Acquire an FBO</h2>
-    <div class="lead">Open a fixed-base operation and set Jet-A pricing at any airport in the network. Your FBO <b>provides fuel services</b> to all traffic at that field.</div></div>
-    <div class="modal-body">
-      <div class="form-row"><label>Airport ICAO</label><input class="field mono" id="fboIc" placeholder="e.g. KTEB" maxlength="4" value="${esc(S.base)}" oninput="this.value=this.value.toUpperCase();previewFboIc(this.value)" style="width:100%"></div>
-      <div id="fboPreview" class="muted" style="font-size:12px;margin-top:4px"></div>
-      <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg><span>Flat acquisition cost ${money(1500000)}. You set pump price after opening — cheap fuel draws traffic; premium pricing earns more per gallon.</span></div>
-      <div style="display:flex;gap:10px;margin-top:18px"><button class="btn ghost" style="flex:1" onclick="closeModal()">Cancel</button>
-        <button class="btn brass" style="flex:2" onclick="buyFboAt()">Acquire · ${money(1500000)}</button></div>
-    </div>`);
-  setTimeout(()=>previewFboIc($('#fboIc')&&$('#fboIc').value),30);
-}
-function buyFboAt(){
-  const ic=($('#fboIc').value||'').toUpperCase();
-  if(!APTBY[ic])return showToast('Unknown ICAO','bad');
-  if(!S.operator)return showToast('Found your operator company first','bad');
-  if(ownsFbo(ic))return showToast('You already own that FBO','bad');
-  if((S.fbos||[]).length>=fboSlots())return showToast('No FBO slots — reach the next tier','bad');
-  if(S.cash<1500000)return showToast('Not enough cash','bad');
-  const startFuel=+(regionFuelPrice(APTBY[ic].region)||medFuel(ic)).toFixed(2);
-  S.cash-=1500000;
-  S.fbos.push({ic,fuel:startFuel,rampMult:1.0,gallons:0,margin:0,bought:Date.now(),providesFuel:true});
-  invalidateFboCache();
-  S.ledger.push({t:Date.now(),k:`Acquired FBO at ${ic}`,a:-1500000,note:APTBY[ic].name});
-  if(typeof cloudActivity==='function')cloudActivity(`opened an FBO at ${ic} ⛽`);
-  save(); closeModal(); showToast(`FBO acquired at ${ic} — Jet-A from $${startFuel.toFixed(2)}/gal`,'good'); renderAll();
 }
 function openFound(){
   modal(`<div class="modal-head"><div class="eyebrow">New operator</div><h2>Name your company</h2>
-    <div class="lead">This brands your fleet and unlocks FBO ownership.</div></div>
+    <div class="lead">Part 135 charter or Part 91 corporate flight department — fleet, crew, and dispatch.</div></div>
     <div class="modal-body">
       <div class="form-row"><label>Company name</label><input class="field" id="opName" placeholder="e.g. Skyledger Aviation" style="width:100%"></div>
       <div class="form-row"><label>Radio callsign</label><input class="field" id="opCs" placeholder="e.g. LEDGER" style="width:100%"></div>
+      <div class="form-row"><label>Certificate</label>
+        <select class="field" id="opCert" style="width:100%"><option value="135">Part 135 — charter / air taxi</option><option value="91">Part 91 — private / corporate</option></select></div>
+      <div class="form-row"><label>Primary base</label><input class="field mono" id="opBase" maxlength="4" value="${esc(S.base||'')}" placeholder="KTEB" style="width:100%" oninput="this.value=this.value.toUpperCase()"></div>
       <div class="form-row"><label>Brand colour</label>
         <div style="display:flex;gap:8px" id="opColors">${['#1B2A41','#B0863B','#1F7A52','#2D6AE3','#8e3b6b','#b03426'].map((c,i)=>`<button onclick="pickColor('${c}')" data-c="${c}" class="opc" style="width:38px;height:38px;border-radius:9px;background:${c};border:3px solid ${i===0?'var(--ink)':'transparent'}"></button>`).join('')}</div></div>
       <div style="display:flex;gap:10px;margin-top:20px"><button class="btn ghost" style="flex:1" onclick="closeModal()">Cancel</button>
@@ -3315,11 +3393,15 @@ function pickColor(c){window._opColor=c;document.querySelectorAll('.opc').forEac
 function foundOperator(){
   const name=($('#opName').value||'').trim()||'Skyledger Aviation';
   const cs=($('#opCs').value||'').trim().toUpperCase()||'LEDGER';
+  const cert=$('#opCert').value==='91'?'91':'135';
+  const baseIc=($('#opBase').value||S.base||'').trim().toUpperCase();
   if(S.cash<250000)return showToast('Not enough cash','bad');
   S.cash-=250000;
-  S.operator={name,callsign:cs,color:window._opColor||'#1B2A41',founded:Date.now()};
-  cloudActivity(`founded operator ${name} 🏢`);
-  S.ledger.push({t:Date.now(),k:`Founded ${name}`,a:-250000,note:'Operator formation'});
+  const bases=APTBY[baseIc]?[baseIc]:(S.base&&APTBY[S.base]?[S.base]:[]);
+  S.operator=normalizeOperator({id:'op_'+uid(),name,callsign:cs,color:window._opColor||'#1B2A41',founded:Date.now(),cert,bases,hiring:false,payRate:2500});
+  cloudActivity(`founded ${certLabel(cert)} operator ${name} 🏢`);
+  S.ledger.push({t:Date.now(),k:`Founded ${name}`,a:-250000,note:certLabel(cert)+' operator formation'});
+  syncOperatorToCloud();
   closeModal();showToast(`${name} is open for business 🎉`,'good');nav('operator');
 }
 
@@ -3596,7 +3678,7 @@ function rAirport(p){
           <span class="tag cls">${clsLabel}</span><span class="tag muted-t">${a.region}</span>${rwyLabel}
           ${d>=1.12?`<span class="tag demand">📈 ${demandLevel(d)} demand</span>`:''}
           ${rw?`<span class="tag evt-tag">${rw.icon} ${rw.name}</span>`:''}
-          ${ownsFbo(ic)?'<span class="tag ok">★ Your FBO</span>':''}
+          ${isOperatorBase(ic)?'<span class="tag ok">★ Company base</span>':''}
         </div>
         <span class="sec-spacer" style="flex:1"></span>
         <div id="aptWx" style="min-width:170px">${wxStrip(ic)}</div>
@@ -3803,8 +3885,9 @@ function initMap(){
     L.marker([a.lat,a.lon],{icon:divIcon('ac',f.tail)}).addTo(MAP)
       .bindPopup(`<b>${f.tail}</b><br>${ACBY[f.type].name}<br>${a.name} (${f.loc})`);
     pts.push([a.lat,a.lon]);});
-  (S.fbos||[]).forEach(fb=>{const a=APTBY[fb.ic];if(!a)return;L.marker([a.lat,a.lon],{icon:divIcon('fbo','FBO '+fb.ic)}).addTo(MAP)
-    .bindPopup(`<b>Your FBO</b><br>${a.name}<br>Jet-A $${fb.fuel.toFixed(2)}/gal`);pts.push([a.lat,a.lon]);});
+  (S.operator&&S.operator.bases||[]).forEach(ic=>{const a=APTBY[ic];if(!a||!a.lat)return;
+    L.marker([a.lat,a.lon],{icon:divIcon('fbo',ic)}).addTo(MAP)
+      .bindPopup(`<b>${esc(S.operator.name)}</b><br>Operating base<br>${a.name}`);pts.push([a.lat,a.lon]);});
   if(S.active){const c=S.active.charter,d=APTBY[c.dep],r=APTBY[c.arr];
     L.marker([d.lat,d.lon],{icon:divIcon('dep',c.dep)}).addTo(MAP);
     L.marker([r.lat,r.lon],{icon:divIcon('dep',c.arr)}).addTo(MAP);
@@ -4732,7 +4815,7 @@ function onboard(){
       <div class="form-row"><label>How do you want to play?</label><select class="field" id="obRole" style="width:100%">
         <option value="both">Pilot &amp; Operator — fly and run a company (recommended)</option>
         <option value="pilot">Pilot — fly charters in the sim</option>
-        <option value="operator">Operator — own jets &amp; FBOs, route work to real pilots</option>
+        <option value="operator">Operator — fleet, crew &amp; charter dispatch</option>
       </select></div>
       <div class="pnl" style="margin-top:16px">
         <div class="pnl-row"><span>Starting cash</span><span class="num pos">${money(CFG.startCash)}</span></div>
@@ -4834,11 +4917,14 @@ function migrateSave(){
   if(!S.pirepCode)S.pirepCode=genPirepCode();
   if(!S.account)S.account={realName:'',company:''};
   else S.account={realName:S.account.realName||'',company:S.account.company||''};
-  if(!S.fbos){ S.fbos=[]; if(S.fbo&&APTBY[S.fbo]) S.fbos.push({ic:S.fbo,fuel:medFuel(S.fbo),rampMult:1.0,gallons:0,margin:0,bought:Date.now(),providesFuel:true}); }
-  (S.fbos||[]).forEach(f=>{ if(f.providesFuel===undefined)f.providesFuel=true; });
+  if(S.operator) S.operator=normalizeOperator(S.operator);
+  if(S.employer===undefined) S.employer=null;
+  if(!S.operatorApps) S.operatorApps=[];
+  if(S.fbos){ delete S.fbos; }
+  if(S.fboAds){ delete S.fboAds; }
+  if(S.lastFbo!==undefined) delete S.lastFbo;
   if(S.fbo!==undefined)delete S.fbo;
-  if(!S.role)S.role='both'; if(S.lastFbo===undefined)S.lastFbo=0;
-  if(!S.fboAds)S.fboAds=[];
+  if(!S.role)S.role='both';
   if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
   if(S.rentStarter===undefined)S.rentStarter=false;
   if(S.vatCallsign===undefined)S.vatCallsign='';
@@ -4847,10 +4933,16 @@ function migrateSave(){
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
+  (S.board||[]).forEach(c=>{
+    if(c.operatorPosted&&!c.operatorVisibility) c.operatorVisibility='public';
+    if(c.operatorPosted&&S.operator&&!c.operatorId){ c.operatorId=S.operator.id; c.operatorCloudId=S.operator.cloudId||null; }
+  });
 }
 function resumeGame(){
   migrateSave();
   refreshUsed(); rentalTick();
+  if(S.operator) syncOperatorToCloud();
+  syncEmploymentFromCloud();
   if(Date.now()-(S.lastBoard||0)>20*60e3) refreshBoard(false);
   renderAll();
   if(IS_ELECTRON) startSimAutoLink();
@@ -5145,7 +5237,6 @@ function rentalTick(){
     }
   });
   // (no bot pilots) listed aircraft are rented by REAL pilots via the board's rent-to-fly
-  operatorTick();                                          // accrue passive FBO fuel margin
   if(changed){ save(); if(view==='fleet'||view==='dash'||view==='ledger') renderAll(); }
 }
 setInterval(rentalTick, 30e3);
