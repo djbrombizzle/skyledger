@@ -14,6 +14,7 @@ create table if not exists public.operators (
   pay_note text default 'Per completed charter',
   tier text default 'taxi',
   fleet_count integer not null default 0,
+  fleet_roster jsonb not null default '[]'::jsonb,
   pilots jsonb not null default '[]'::jsonb,
   applications jsonb not null default '[]'::jsonb,
   founded timestamptz,
@@ -23,6 +24,9 @@ create table if not exists public.operators (
 
 create index if not exists operators_hiring_idx on public.operators (hiring) where hiring = true;
 create index if not exists operators_updated_idx on public.operators (updated_at desc);
+
+-- If upgrading an existing operators table:
+alter table public.operators add column if not exists fleet_roster jsonb not null default '[]'::jsonb;
 
 alter table public.operators enable row level security;
 

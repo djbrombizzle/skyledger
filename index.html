@@ -1526,8 +1526,9 @@ const OPER_TIERS=[
 function fleetValue(){ return (S.fleet||[]).filter(f=>f.owned).reduce((s,f)=>s+Math.round((ACBY[f.type]?ACBY[f.type].price:0)*((f.cond||100)/100)),0); }
 function netWorth(){ return Math.round((S.cash||0)+fleetValue()); }
 function operTierIdx(){ const ss=safetyScore(); const w=netWorth();
+  const fc=S.operator?operatorFleetCount():(S.fleet||[]).filter(f=>f.owned).length;
   let idx=0; for(let i=0;i<OPER_TIERS.length;i++){ const t=OPER_TIERS[i];
-    if((S.fleet||[]).length>=t.fleet && S.rep>=t.rep && w>=t.worth && (t.safety===0||(ss!==null&&ss>=t.safety))) idx=i; }
+    if(fc>=t.fleet && S.rep>=t.rep && w>=t.worth && (t.safety===0||(ss!==null&&ss>=t.safety))) idx=i; }
   return idx; }
 function operTier(){ return OPER_TIERS[operTierIdx()]; }
 function pilotSlots(){ return operTier().pilots; }
@@ -1545,6 +1546,12 @@ function normalizeOperator(op){
   return op;
 }
 function operPilotCount(){ return (S.operator&&S.operator.pilots||[]).length; }
+function isOnOperatorFleet(f){
+  if(!S.operator||!f||!f.opId) return false;
+  return f.opId===S.operator.id||(S.operator.cloudId&&f.opId===S.operator.cloudId);
+}
+function operatorFleet(){ return (S.fleet||[]).filter(f=>f.owned&&isOnOperatorFleet(f)); }
+function operatorFleetCount(){ return operatorFleet().length; }
 function isOperatorBase(ic){ return !!(S.operator&&(S.operator.bases||[]).includes(ic)); }
 function isMyOperator(opId){ const o=S.operator; return !!(o&&opId&&(o.id===opId||o.cloudId===opId)); }
 function isEmployedBy(opId){ const e=S&&S.employer; return !!(e&&opId&&(e.operatorId===opId||e.cloudId===opId)); }
@@ -1570,8 +1577,8 @@ function plDaily(days){
     if(e.a>0)out[i]+=e.a; else if(!capRe.test(e.k))out[i]+=e.a; });
   return out;
 }
-function fleetUtil(){
-  const owned=(S.fleet||[]).filter(f=>f.owned);
+function fleetUtil(opOnly){
+  const owned=(S.fleet||[]).filter(f=>f.owned&&(!opOnly||isOnOperatorFleet(f)));
   const flying=owned.filter(f=>f.busy&&!(f.rentedUntil>Date.now())).length;
   const listed=owned.filter(f=>f.forRent&&!f.busy).length;
   const idle=owned.filter(f=>!f.busy&&!f.forRent).length;
@@ -2739,18 +2746,28 @@ function abandonTrip(){
 
 /* ---------- FLEET ---------- */
 function rFleet(p){
+  const op=S.operator?normalizeOperator(S.operator):null;
+  const onOp=operatorFleetCount();
   p.innerHTML=`
-    <div class="bar"><div class="eyebrow">${S.fleet.length} aircraft</div><div class="sec-spacer" style="flex:1"></div>
+    <div class="bar"><div class="eyebrow">${S.fleet.length} aircraft${op?` · ${onOp} on ${esc(op.name)}`:''}</div><div class="sec-spacer" style="flex:1"></div>
       <button class="btn ghost sm" onclick="nav('market')">Acquire aircraft</button></div>
+    ${op?`<div class="help" style="margin-bottom:12px;padding:8px 12px;font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>Assign owned aircraft to <b>${esc(op.name)}</b> with <b>Add to company</b> on each tail. Only company-assigned jets count toward your operator tier and appear on the operator dashboard.</span></div>`:''}
     <div class="rows">${S.fleet.map(fleetRow).join('')||emptyState('No aircraft','Lease or buy from the marketplace.','market','Open marketplace')}</div>`;
 }
 function fleetRow(f){
   const a=ACBY[f.type];
   const rented=f.rentedUntil&&f.rentedUntil>Date.now();
+  const onOp=isOnOperatorFleet(f);
+  const op=S.operator;
   const statusTag = rented?`<span class="tag warnt">🔑 Rented · back ${minsLeft(f.rentedUntil)}</span>`
     : f.busy?'<span class="tag warnt">On trip</span>'
     : f.forRent?`<span class="tag ok">💰 For rent · ${money(f.rentRate)}/day</span>`
     : '<span class="tag ok">Available</span>';
+  const opTag=onOp&&op?`<span class="tag ok" title="Company fleet">🏢 ${esc(op.name)}</span>`:'';
+  const opBtn=op&&f.owned&&!rented?(onOp
+    ?`<button class="btn ghost sm" onclick="removeFromOperator('${f.id}')">Remove from company</button>`
+    :`<button class="btn brass sm" onclick="assignToOperator('${f.id}')">Add to ${esc(op.name)}</button>`):'';
   return `<div class="fleet-row">
     <div>
       <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">
@@ -2758,6 +2775,7 @@ function fleetRow(f){
         <span style="font-weight:600;font-size:15px">${a.name}</span>
         <span class="tag cls">${CLASSES[a.cls].label}</span>
         <span class="tag ${f.owned?'ok':'muted-t'}">${f.owned?'Owned':'Leased'}</span>
+        ${opTag}
         ${statusTag}
       </div>
       <div class="ch-meta" style="margin-top:9px">
@@ -2771,6 +2789,7 @@ function fleetRow(f){
         <span class="mono" style="font-size:11px">${Math.round(f.cond)}%</span></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">
+      ${opBtn}
       <button class="btn ghost sm" onclick="renameTail('${f.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>Edit tail</button>
       ${f.owned&&!rented?(f.forRent
         ? `<button class="btn ghost sm" onclick="unlistRent('${f.id}')">Stop renting</button>`
@@ -2827,8 +2846,10 @@ function sellAircraft(id){
   const f=S.fleet.find(x=>x.id===id);if(f.busy)return showToast('On a trip','bad');
   const v=Math.round(ACBY[f.type].price*0.78*(f.cond/100));
   if(!confirm(`Sell ${f.tail} for ${money(v)}?`))return;
+  const wasOp=isOnOperatorFleet(f);
   S.cash+=v;S.fleet=S.fleet.filter(x=>x.id!==id);
   S.ledger.push({t:Date.now(),k:`Sold ${f.tail}`,a:v,note:ACBY[f.type].name});
+  if(wasOp) syncOperatorToCloud();
   showToast(`Sold for ${money(v)}`,'good');renderAll();
 }
 function renameTail(id){
@@ -2855,6 +2876,24 @@ function saveTail(id){
   if(S.fleet.some(x=>x.id!==id && x.tail===v)){showToast('Another aircraft already uses that tail','bad');return;}
   const old=f.tail; f.tail=v; save();
   closeModal(); showToast(`Tail updated · ${old} → ${v}`,'good'); renderAll();
+}
+function assignToOperator(id){
+  const f=S.fleet.find(x=>x.id===id);
+  if(!f||!f.owned) return showToast('Only owned aircraft can join your operator','bad');
+  if(!S.operator) return showToast('Found an operator company first','bad');
+  const o=normalizeOperator(S.operator);
+  if(isOnOperatorFleet(f)) return showToast('Already on company fleet','bad');
+  f.opId=o.id;
+  save(); syncOperatorToCloud();
+  showToast(`${f.tail} added to ${o.name}`,'good'); renderAll();
+}
+function removeFromOperator(id){
+  const f=S.fleet.find(x=>x.id===id);
+  if(!f||!isOnOperatorFleet(f)) return;
+  if(f.busy) return showToast('Aircraft is on a trip','bad');
+  const tail=f.tail; delete f.opId;
+  save(); syncOperatorToCloud();
+  showToast(`${tail} removed from company fleet`,'good'); renderAll();
 }
 
 /* ---------- MARKETPLACE ---------- */
@@ -2997,9 +3036,10 @@ function rOperator(p){
   const o=normalizeOperator(S.operator);
   if(cloudEnabled()&&AUTH.user) syncOperatorFromCloud();
   const ti=operTierIdx(), tier=OPER_TIERS[ti], next=OPER_TIERS[ti+1];
-  const nw=netWorth(), pl7=plWindow(7*864e5), util=fleetUtil(), ss=safetyScore();
+  const nw=netWorth(), pl7=plWindow(7*864e5), util=fleetUtil(true), ss=safetyScore();
   const spark=plDaily(14), revTail=util.total?Math.round(pl7.rev/util.total):0;
-  const prog = next? Math.max(0,Math.min(1, Math.min((S.fleet||[]).length/next.fleet, S.rep/next.rep, nw/next.worth))) : 1;
+  const opFleet=operatorFleetCount();
+  const prog = next? Math.max(0,Math.min(1, Math.min(opFleet/next.fleet, S.rep/next.rep, nw/next.worth))) : 1;
   const slots=pilotSlots(), pilots=operPilotCount();
   const kpi=(lab,val,sub,tone)=>`<div class="card card-pad" style="padding:14px 16px"><div class="muted" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">${lab}</div>
     <div class="mono" style="font-size:21px;font-weight:700;margin-top:3px;${tone?`color:var(--${tone})`:''}">${val}</div><div class="muted" style="font-size:11.5px;margin-top:2px">${sub}</div></div>`;
@@ -3018,12 +3058,12 @@ function rOperator(p){
         <div style="flex:1;min-width:200px"><div class="eyebrow">Operator · ${o.callsign} · ${certLabel(o.cert)} · founded ${new Date(o.founded).toLocaleDateString()}</div>
           <div style="font-family:var(--disp);font-weight:700;font-size:23px;line-height:1.1">${o.name}</div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap"><span class="tag" style="background:${tier.color};color:#fff">${tier.name}</span>
-            <span class="muted" style="font-size:12.5px">${(S.fleet||[]).filter(f=>f.owned).length} owned · ${pilots}/${slots} pilots · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
+            <span class="muted" style="font-size:12.5px">${opFleet} company aircraft · ${pilots}/${slots} pilots · safety ${ss==null?'—':Math.round(ss)}</span></div></div>
         <button class="btn ghost sm" onclick="nav('spcharter')">Dispatch charter</button>
       </div>
       ${next?`<div style="margin-top:14px">
         <div style="display:flex;justify-content:space-between;font-size:12px"><span class="muted">Progress to <b>${next.name}</b></span>
-          <span class="muted">fleet ${(S.fleet||[]).length}/${next.fleet} · rep ${S.rep.toLocaleString()}/${next.rep.toLocaleString()} · worth ${money1k(nw)}/${money1k(next.worth)}</span></div>
+          <span class="muted">fleet ${opFleet}/${next.fleet} · rep ${S.rep.toLocaleString()}/${next.rep.toLocaleString()} · worth ${money1k(nw)}/${money1k(next.worth)}</span></div>
         <div style="height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden;margin-top:6px"><div style="height:100%;width:${(prog*100).toFixed(0)}%;background:${next.color}"></div></div>
         <div class="muted" style="font-size:11.5px;margin-top:5px">Next unlock: ${next.perk}</div></div>`
         :`<div class="muted" style="font-size:12px;margin-top:12px">★ Global operator — top tier reached. ${tier.perk}.</div>`}
@@ -3060,9 +3100,16 @@ function rOperator(p){
             <span><b style="color:var(--brass)">${util.listed}</b> listed</span><span><b class="muted">${util.idle}</b> idle</span></div>
           <button class="btn ghost sm" style="margin-top:10px" onclick="nav('fleet')">Manage fleet</button>
           ${util.idle>=1?`<div class="help" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><span>Idle jets earn nothing — list them for rent or dispatch company charters.</span></div>`:''}`
-          :`<p class="muted" style="font-size:13px">No owned aircraft yet. Acquire metal in the Marketplace to build your fleet.</p>
-            <button class="btn brass sm" style="margin-top:8px" onclick="nav('market')">Open marketplace</button>`}
+          :`<p class="muted" style="font-size:13px">No aircraft on your company fleet yet. Buy or lease in the Marketplace, then assign tails from <b>My Fleet</b>.</p>
+            <button class="btn brass sm" style="margin-top:8px" onclick="nav('fleet')">Open My Fleet</button>`}
         </div>
+        ${opFleet?`<div class="card card-pad" style="margin-top:14px">
+          <div class="sec-head"><div><div class="eyebrow">Company metal</div><div class="sec-title">${opFleet} aircraft assigned</div></div>
+            <button class="btn ghost sm" onclick="nav('fleet')">Manage</button></div>
+          ${operatorFleet().map(f=>`<div class="mini" style="margin-bottom:6px">
+            <div class="grade-pill gNA" style="font-size:11px;font-family:var(--mono)">${f.tail.slice(0,4)}</div>
+            <div><div class="t">${f.tail} · ${ACBY[f.type].name}</div><div class="s">@${f.loc} · ${f.busy?'On trip':f.forRent?'Listed for rent':'Available'}</div></div></div>`).join('')}
+        </div>`:''}
       </div>
       <div>
         <div class="card card-pad">
@@ -3241,7 +3288,8 @@ async function syncOperatorToCloud(){
   const row={owner_id:AUTH.user.id,name:o.name,callsign:o.callsign,color:o.color,cert:o.cert,
     bases:o.bases,hiring:o.hiring,pay_rate:o.payRate,pay_note:o.payNote,tier:operTier().key,
     pilots:o.pilots,applications:o.applications,
-    fleet_count:(S.fleet||[]).filter(x=>x.owned).length,
+    fleet_count:operatorFleetCount(),
+    fleet_roster:operatorFleet().map(f=>({id:f.id,tail:f.tail,type:f.type,loc:f.loc})),
     founded:o.founded?new Date(o.founded).toISOString():null,updated_at:new Date().toISOString()};
   try{
     if(o.cloudId){
@@ -3308,7 +3356,7 @@ function rOperators(p){
     const card=(op,isLocal)=>{
       const id=op.id||op.cloudId, bases=(op.bases||[]).map(ic=>`<span class="tag mono sm">${ic}</span>`).join(' ')||'<span class="muted">—</span>';
       const tierName=(OPER_TIERS.find(t=>t.key===op.tier)||OPER_TIERS[0]).name;
-      const pilots=(op.pilots||[]).length, fleet=op.fleet_count||(isLocal?(S.fleet||[]).filter(f=>f.owned).length:0);
+      const pilots=(op.pilots||[]).length, fleet=op.fleet_count||(isLocal?operatorFleetCount():0);
       const pending=(S.operatorApps||[]).some(a=>a.operatorId===id&&a.status==='pending');
       const isEmployer=employed&&(employed.cloudId===id||employed.operatorId===id);
       let action='';
@@ -3346,7 +3394,7 @@ function rOperators(p){
         <div style="font-family:var(--disp);font-weight:700;font-size:18px">${esc(employed.name)}</div>
         <div class="muted" style="font-size:12.5px;margin-top:4px">You can see this operator's private dispatches on the charter board.</div></div>`:''}
       ${!cloudEnabled()||!AUTH.user?`<div class="muted" style="font-size:13px;margin-bottom:12px">Sign in to see live operators from other pilots.</div>`:''}
-      ${localListing?card({...localListing,tier:operTier().key,fleet_count:(S.fleet||[]).filter(f=>f.owned).length},true):''}
+      ${localListing?card({...localListing,tier:operTier().key,fleet_count:operatorFleetCount()},true):''}
       ${cloudList.length?cloudList.map(op=>card(op,false)).join(''):(!localListing?emptyState('No operators listed','Be the first — found a company from the Operator Dashboard, or check back when more pilots are online.','operator','Found a company'):'')}
       <button class="btn ghost sm" style="margin-top:8px" onclick="loadOperatorsDirectory().then(()=>rOperators($('#page')))">Refresh</button>`;
     syncEmploymentFromCloud();
@@ -3361,8 +3409,10 @@ function opSpark(arr,w,h){
     <polyline points="${pts}" fill="none" stroke="${last>=0?'var(--pos)':'var(--neg)'}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
 }
 function operAlerts(){
-  const al=[], util=fleetUtil();
-  if(util.idle>=2) al.push({i:'⚠️',t:`${util.idle} owned jets are idle — dispatch company charters or list them for rent.`,tone:'warn'});
+  const al=[], util=fleetUtil(true);
+  const unassigned=(S.fleet||[]).filter(f=>f.owned&&!isOnOperatorFleet(f)).length;
+  if(unassigned) al.push({i:'✈️',t:`${unassigned} owned aircraft not on your company fleet — assign them from My Fleet.`,tone:'warn'});
+  if(util.idle>=2) al.push({i:'⚠️',t:`${util.idle} company jets are idle — dispatch charters or list them for rent.`,tone:'warn'});
   if(S.operator&&S.operator.hiring&&operPilotCount()<pilotSlots())
     al.push({i:'👨‍✈️',t:`Hiring open — ${pilotSlots()-operPilotCount()} pilot slot(s) available.`,tone:'good'});
   const ti=operTierIdx(), n=OPER_TIERS[ti+1];
@@ -4933,6 +4983,7 @@ function migrateSave(){
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
+  (S.fleet||[]).forEach(f=>{ if(f.opId&&(!S.operator||f.opId!==S.operator.id)) delete f.opId; });
   (S.board||[]).forEach(c=>{
     if(c.operatorPosted&&!c.operatorVisibility) c.operatorVisibility='public';
     if(c.operatorPosted&&S.operator&&!c.operatorId){ c.operatorId=S.operator.id; c.operatorCloudId=S.operator.cloudId||null; }
