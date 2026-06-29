@@ -1974,11 +1974,11 @@ function rDash(p){
   renderVatNet();
 }
 function renderActiveFlightsDash(){
-  const online=(RT.online||[]).filter(o=>o.activeTrip||o.simLink);
+  const online=pilotsWithSimLink();
   if(!online.length) return '<div class="muted" style="font-size:12.5px">No pilots flying with Sim Link right now.</div>';
   return online.slice(0,8).map(o=>`<div class="mini">
     <div class="pilot-av" style="width:28px;height:28px;font-size:12px">${((o.pilot||'P').trim()[0]||'P').toUpperCase()}</div>
-    <div><div class="t">${esc(o.pilot||'Pilot')}</div><div class="s">${o.activeTrip?esc(o.activeTrip):'In sim'}${o.simLink?' · <span class="pos">Sim Link</span>':''}${o.phase&&o.phase!=='—'?' · '+esc(o.phase):''}</div></div>
+    <div><div class="t">${esc(o.pilot||'Pilot')}</div><div class="s">${o.activeTrip?esc(o.activeTrip)+' · ':''}<span class="pos">Sim Link</span>${o.phase&&o.phase!=='—'?' · '+esc(o.phase):''}</div></div>
   </div>`).join('');
 }
 function dashCharterRow(c){
@@ -4114,10 +4114,15 @@ function updatePresenceTrack(){
   clearTimeout(_presenceTimer);
   _presenceTimer=setTimeout(async ()=>{
     try{
-      const t=S&&S.active;
+      if(!simState.connected){
+        await RT.channel.untrack();
+        return;
+      }
+      const t=S&&S.active, tl=simState.telem;
       await RT.channel.track({pilot:(S&&S.pilot)||'Pilot',rep:(S&&S.rep)||0,base:(S&&S.base)||'',at:Date.now(),
-        simLink:!!simState.connected,phase:simState.connected?simState.phase:'',
-        activeTrip:t&&t.charter?`${t.charter.dep}→${t.charter.arr}`:''});
+        simLink:true,phase:simState.phase||'',
+        activeTrip:t&&t.charter?`${t.charter.dep}→${t.charter.arr}`:'',
+        lat:tl&&tl.lat!=null?+tl.lat:null,lon:tl&&tl.lon!=null?+tl.lon:null});
     }catch(e){}
   },800);
 }
@@ -4964,7 +4969,11 @@ async function cloudActivity(text){
   try{ await sb.from('activity').insert({user_id:AUTH.user.id,pilot:(S&&S.pilot)||pendingPilotName||'Pilot',text}); }catch(e){}
 }
 
-/* ---- REALTIME: presence (online now) · leaderboard · live activity feed ---- */
+/* ---- REALTIME: presence (Sim Link pilots only) · leaderboard · live activity feed ---- */
+function pilotsWithSimLink(){
+  const stale=3*60*1000;
+  return (RT.online||[]).filter(o=>o.simLink&&(!o.at||Date.now()-o.at<stale));
+}
 function startRealtime(){
   const sb=getSB(); if(!sb||!AUTH.user)return;
   loadLeaderboard(); loadFeed();
@@ -4980,7 +4989,7 @@ async function loadLeaderboard(){ const sb=getSB(); if(!sb)return; try{ const {d
 async function loadFeed(){ const sb=getSB(); if(!sb)return; try{ const {data}=await sb.from('activity').select('*').order('created_at',{ascending:false}).limit(50); RT.feed=data||[]; if(view==='community')rCommunity($('#page')); }catch(e){} }
 function updateOnlinePill(){
   const b=$('#commBadge'); if(!b)return;
-  const n=(RT.online||[]).length;
+  const n=pilotsWithSimLink().length;
   if(cloudEnabled()&&AUTH.user&&n){ b.style.display='inline-block'; b.textContent=n; } else b.style.display='none';
 }
 
@@ -5056,12 +5065,12 @@ function rCommunity(p){
     return;
   }
   if(!AUTH.user){ p.innerHTML=emptyState('Sign in to join the network','Create an account or sign in to see live players and the leaderboard.'); return; }
-  const online=RT.online||[], board=RT.board||[], feed=RT.feed||[];
+  const flying=pilotsWithSimLink(), board=RT.board||[], feed=RT.feed||[];
   const myRank=board.findIndex(x=>x.id===AUTH.user.id);
   const ago=t=>{ const s=Math.max(0,(Date.now()-new Date(t).getTime())/1000); return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':s<86400?Math.floor(s/3600)+'h ago':Math.floor(s/86400)+'d ago'; };
   p.innerHTML=`
     <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
-      <div class="stat"><div class="k">Online now</div><div class="v">${online.length}</div><div class="d">pilots connected live</div>
+      <div class="stat"><div class="k">Flying now</div><div class="v">${flying.length}</div><div class="d">Sim Link active in MSFS</div>
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
       <div class="stat"><div class="k">Registered operators</div><div class="v">${board.length}</div><div class="d">on the leaderboard</div>
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8z"/></svg></div>
@@ -5080,12 +5089,12 @@ function rCommunity(p){
       </div>
       <div style="display:flex;flex-direction:column;gap:16px">
         <div class="card card-pad">
-          <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Live</div><div class="sec-spacer" style="flex:1"></div><span class="dot live"></span><span class="muted" style="font-size:11px">${online.length} online</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Live</div><div class="sec-spacer" style="flex:1"></div><span class="dot live"></span><span class="muted" style="font-size:11px">${flying.length} flying</span></div>
           <div class="sec-title" style="margin:2px 0 10px">Flying right now</div>
-          ${online.length?online.slice(0,20).map(o=>`<div class="mini">
+          ${flying.length?flying.slice(0,20).map(o=>`<div class="mini">
             <div class="pilot-av" style="width:28px;height:28px;font-size:12px">${((o.pilot||'P').trim()[0]||'P').toUpperCase()}</div>
-            <div><div class="t">${o.pilot||'Pilot'}</div><div class="s">${o.activeTrip?o.activeTrip+' · ':''}${o.simLink?'<span class="pos">Sim Link</span> · ':''}${o.base?('based '+o.base):'in the network'}${o.phase&&o.phase!=='—'?' · '+o.phase:''}</div></div>
-            <div class="amt mono">${(o.rep||0).toLocaleString()}</div></div>`).join(''):'<div class="muted" style="font-size:12.5px">You\'re the only one online right now.</div>'}
+            <div><div class="t">${o.pilot||'Pilot'}</div><div class="s">${o.activeTrip?o.activeTrip+' · ':''}<span class="pos">Sim Link</span>${o.phase&&o.phase!=='—'?' · '+o.phase:''}</div></div>
+            <div class="amt mono">${(o.rep||0).toLocaleString()}</div></div>`).join(''):'<div class="muted" style="font-size:12.5px">No pilots are linked to MSFS via Sim Link right now.</div>'}
         </div>
         <div class="card card-pad">
           <div class="eyebrow">Activity</div><div class="sec-title" style="margin:2px 0 10px">Network feed</div>
