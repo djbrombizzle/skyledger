@@ -1313,7 +1313,40 @@ function baseFbos(ic){
   if(!out.length) out.push({name:a.cls==='i'?'Executive Terminal':'Airport FBO',rampF:1,premium,fuel:+(regBase*clsF*premF).toFixed(2)});
   _fboCache[ic]=out; return out;
 }
-function invalidateFboCache(){ Object.keys(_fboCache).forEach(k=>delete _fboCache[k]); }
+const _nearestFboCache={};
+function invalidateFboCache(){ Object.keys(_fboCache).forEach(k=>delete _fboCache[k]); Object.keys(_nearestFboCache).forEach(k=>delete _nearestFboCache[k]); }
+function hasCuratedFbo(ic){
+  const list=FBOBY[ic];
+  return !!(list&&list.map(n=>String(n).trim()).filter(Boolean).length);
+}
+function nearestFboField(fromIc){
+  if(!APTBY[fromIc]||hasCuratedFbo(fromIc)) return null;
+  if(_nearestFboCache[fromIc]!==undefined) return _nearestFboCache[fromIc];
+  let best=null, bd=1e9;
+  for(const ic of Object.keys(FBOBY)){
+    if(!APTBY[ic]||ic===fromIc||!hasCuratedFbo(ic)) continue;
+    const d=haversine(fromIc,ic);
+    if(d<bd){ bd=d; best=ic; }
+  }
+  const out=best?{ic:best,dist:Math.round(bd),name:APTBY[best].name}:null;
+  _nearestFboCache[fromIc]=out;
+  return out;
+}
+/* warn when a field has no directory FBO — tanker fuel; note nearest repo to fuel */
+function fboTankerWarn(ic, role, withLink){
+  if(hasCuratedFbo(ic)) return '';
+  const near=nearestFboField(ic);
+  let txt=`<b>No FBO at ${ic}</b> (${APTBY[ic].name}) — Jet-A uplift is not available on the field. You may need to <b>tanker fuel</b> aboard`;
+  if(role==='dep') txt+=' for this departure';
+  else if(role==='arr') txt+=' for your return or onward legs';
+  else txt+=' when operating from this field';
+  txt+='.';
+  if(near){
+    txt+=` Nearest field with fuel: <b class="mono">${near.ic}</b> (${near.name}) — <b>${near.dist.toLocaleString()} nm</b> reposition.`;
+    if(withLink) txt+=` <button class="btn ghost sm" onclick="setAirportQ('${near.ic}')">View ${near.ic}</button>`;
+  } else txt+=' No listed FBO found nearby — plan fuel carefully.';
+  return `<div class="help" style="margin-top:12px;border-color:var(--warn);border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>${txt}</span></div>`;
+}
 buildAptIndex(FALLBACK_APT);
 let _fboReady=null;
 function loadFboDB(){
@@ -2425,6 +2458,7 @@ function openAccept(cid, keep){
   // onward options out of the arrival field
   const outs=S.board.filter(x=>x.dep===c.arr&&x.id!==c.id&&x.expires>Date.now());
   const nearHub=nearestHub(c.arr), ferryNm=nearHub?haversine(c.arr,nearHub):0;
+  const nearFuel=nearestFboField(c.arr), fuelRepoNm=nearFuel?nearFuel.dist:0;
   fetchWx([c.dep,c.arr]).then(()=>{const el=$('#accWx');if(el)el.innerHTML=wxStrip(c.dep)+wxStrip(c.arr);});
   modal(`
     <div class="modal-head">
@@ -2450,7 +2484,8 @@ function openAccept(cid, keep){
         <span>This jet is at <b>${ac.loc}</b>. You'll fly a <b>${reposNm}nm positioning leg</b> to ${c.dep} first (counts toward hours &amp; rep), then the revenue leg.</span></div>`:''}
       <div class="help" style="margin-top:12px;border-style:solid;border-color:var(--pos-soft);background:var(--pos-soft)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        <span><b>Way out of ${c.arr}:</b> ${outs.length} onward charter${outs.length===1?'':'s'} currently departing${nearHub?` · closest reposition ${nearHub} <b class="mono">${ferryNm}nm</b>`:''}. You won't be stranded.</span></div>
+        <span><b>Way out of ${c.arr}:</b> ${outs.length} onward charter${outs.length===1?'':'s'} currently departing${!hasCuratedFbo(c.arr)&&nearFuel?` · nearest fuel at <b class="mono">${nearFuel.ic}</b> <b>${fuelRepoNm.toLocaleString()}nm</b> repo`:(nearHub?` · closest reposition ${nearHub} <b class="mono">${ferryNm}nm</b>`:'')}. You won't be stranded.</span></div>
+      ${fboTankerWarn(c.dep,'dep')}${fboTankerWarn(c.arr,'arr')}
       ${c.sportsEvent?`<div class="help" style="margin-top:12px;border-color:var(--brass);border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
         <span><b>${c.sportsEvent.icon} ${esc(c.sportsEvent.name)}</b> · ${esc(c.sportsEvent.legLabel)} · Game ${new Date(c.sportsEvent.gameStart).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} · Window closes ${new Date(c.sportsEvent.windowClose).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>`:''}
       ${c.rwEvent?`<div class="help" style="margin-top:12px;border-color:var(--brass);border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 17l-6.5 5 2-7L2 9h7z"/></svg>
@@ -3910,6 +3945,8 @@ function rAirport(p){
   const rentHere=rentableAt(ic);
   const rw=rwAt(ic), d=demandAt(ic);
   const fbos=fbosFor(ic);
+  const noFbo=!hasCuratedFbo(ic);
+  const nearFuel=nearestFboField(ic);
   const clsLabel={s:'Regional',m:'Metro',i:'International'}[a.cls]||a.cls;
   const rwyLabel=a.rwy?`<span class="tag muted-t">${a.rwy.toLocaleString()} ft paved</span>`:'';
   fetchWx([ic]).then(()=>{const el=$('#aptWx');if(el)el.innerHTML=wxStrip(ic);});
@@ -3938,18 +3975,22 @@ function rAirport(p){
           ${d>=1.12?`<span class="tag demand">📈 ${demandLevel(d)} demand</span>`:''}
           ${rw?`<span class="tag evt-tag">${rw.icon} ${rw.name}</span>`:''}
           ${isOperatorBase(ic)?'<span class="tag ok">★ Company base</span>':''}
+          ${noFbo?'<span class="tag warnt">No FBO</span>':''}
         </div>
         <span class="sec-spacer" style="flex:1"></span>
         <div id="aptWx" style="min-width:170px">${wxStrip(ic)}</div>
       </div>
     </div>
 
+    ${noFbo?fboTankerWarn(ic,null,true):''}
+
     <div class="sec-head"><div><div class="eyebrow">Ground services</div><div class="sec-title">FBOs · fuel &amp; fees</div></div>
-      <div class="sec-spacer"></div><span class="muted" style="font-size:11.5px">landing fee (midsize) ${money(landingFeeFor(ic,'midsize'))}</span></div>
+      <div class="sec-spacer"></div><span class="muted" style="font-size:11.5px">${noFbo?'no on-field fuel — tanker or reposition':`landing fee (midsize) ${money(landingFeeFor(ic,'midsize'))}`}</span></div>
+    ${noFbo?`<div class="card card-pad" style="margin-bottom:18px"><div class="muted" style="font-size:12.5px">This field is not in the Skyledger FBO directory — there is no Jet-A uplift on the ramp.${nearFuel?` Reposition to <b class="mono">${nearFuel.ic}</b> (${nearFuel.name}, ${nearFuel.dist.toLocaleString()} nm) for fuel.`:' Plan tankered fuel before you arrive.'} Handling fees below are regional estimates only.</div></div>`:''}
     <div class="mkt-table" style="margin-bottom:18px">
       <div class="mkt-head" style="grid-template-columns:1.7fr 1fr 1fr 1fr .8fr"><div>FBO</div><div>Jet-A /gal</div><div>Ramp · light</div><div>Ramp · heavy</div><div></div></div>
       ${fbos.map(f=>`<div class="mkt-row" style="grid-template-columns:1.7fr 1fr 1fr 1fr .8fr">
-        <div class="mkt-cell mname" data-l="FBO">${f.name}</div>
+        <div class="mkt-cell mname" data-l="FBO">${f.name}${noFbo?'<span class="tag muted-t sm" style="margin-left:6px">est.</span>':''}</div>
         <div class="mkt-cell mono" data-l="Jet-A">$${f.fuel.toFixed(2)}</div>
         <div class="mkt-cell mono" data-l="Ramp light">${money(rampFeeFor(ic,f,'light'))}</div>
         <div class="mkt-cell mono" data-l="Ramp heavy">${money(rampFeeFor(ic,f,'heavy'))}</div>
@@ -4003,6 +4044,7 @@ function openFerry(kind,ref){
       <h2>Ferry ${owned?tail:acm.name}</h2>
       <div class="lead">${acm.name} · ${CLASSES[acm.cls].label} · from <b class="mono">${dep}</b> (${APTBY[dep].name})${owned?'':` · rental ${money(rate)}/day`}</div></div>
     <div class="modal-body">
+      ${fboTankerWarn(dep,'dep')}
       <div class="form-row" style="margin-top:4px"><label>Destination</label>
         <select class="field" id="ferryDest" onchange="setFerryDest(this.value)" style="width:100%">
           ${dests.map(([x,dd])=>`<option value="${x}" ${x===defDest?'selected':''} ${dd>acm.range*0.95||!runwayOk(x,acm.cls)?'disabled':''}>${x} · ${APTBY[x].name} · ${dd.toLocaleString()}nm${dd>acm.range*0.95?' (out of range)':!runwayOk(x,acm.cls)?' (runway short)':''}</option>`).join('')}
@@ -4031,7 +4073,8 @@ function renderFerryPnl(){
   const e=ferryEcon();
   if(!e){ el.innerHTML='<div class="pnl" style="margin-top:14px"><div class="pnl-row"><span>Select a destination</span></div></div>'; return; }
   const {leg,lease,cost,acm}=e;
-  el.innerHTML=`<div class="pnl" style="margin-top:14px">
+  const dest=_ferry.dest;
+  el.innerHTML=`${fboTankerWarn(dest,'arr')}<div class="pnl" style="margin-top:14px">
       <div class="pnl-row"><span>Charter value (ferry)</span><span class="num">$0</span></div>
       <div class="pnl-row"><span>Fuel · ${Math.round(acm.burn*leg.block).toLocaleString()} gal @ $${leg.fuelPrice.toFixed(2)}</span><span class="num neg">-${money(leg.fuel)}</span></div>
       <div class="pnl-row"><span>Maintenance reserve (${leg.block.toFixed(1)} blk hrs)</span><span class="num neg">-${money(leg.maint)}</span></div>
