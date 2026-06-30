@@ -467,7 +467,7 @@ html[data-theme="dark"] .tag.evt-tag{background:linear-gradient(90deg,#3a2e14,#4
     <a class="nav-item" data-nav="dash" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
     <a class="nav-item" data-nav="board" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h12"/></svg>Charter Board<span class="badge" id="boardBadge">0</span></a>
     <a class="nav-item" data-nav="active" data-zone="pilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9L2 12z"/></svg>Active Trip<span class="badge" id="activeBadge" style="display:none">1</span></a>
-    <a class="nav-item" data-nav="events" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>VATSIM Events<span class="badge" id="eventBadge" style="display:none">0</span></a>
+    <a class="nav-item" data-nav="events" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Events<span class="badge" id="eventBadge" style="display:none">0</span></a>
     <a class="nav-item" data-nav="weather" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 18a4 4 0 000-8 6 6 0 00-11.6 1.5A3.5 3.5 0 006 18h11z"/></svg>Weather</a>
     <a class="nav-item" data-nav="airport" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Airports</a>
     <a class="nav-item" data-nav="community" data-zone="shared"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Community<span class="badge" id="commBadge" style="display:none">0</span></a>
@@ -1875,7 +1875,7 @@ document.addEventListener('click',()=>closePilotMenu());
    ========================================================================= */
 let view='dash';
 const CRUMB={dash:['Dashboard',''],board:['Charter Board','live market'],active:['Active Trip',''],
-  events:['VATSIM Events','live network'],weather:['Weather','live METAR + radar'],
+  events:['Events','sports & network'],weather:['Weather','live METAR + radar'],
   airport:['Airport Explorer','charters · aircraft · fees'],
   community:['Community','live network'],
   fleet:['My Fleet',''],market:['Aircraft Marketplace',''],operator:['Operator Dashboard',''],
@@ -4833,13 +4833,13 @@ function toggleDevAdmin(){
 }
 
 /* ========================= ADMIN CONSOLE ========================= */
-let adminTab='users', ADMIN_USERS=[], adminUserQ='';
+let adminTab='users', ADMIN_USERS=[], adminUserQ='', ADMIN_OPERATORS=[], adminOperQ='';
 function rAdmin(p){
   if(!isAdmin()){ p.innerHTML=emptyState('Admins only','You don\'t have access to the admin console. Enable Admin tools in Settings, or ask an admin to grant your account.'); return; }
-  const tabs={users:'Users',charters:'Charters',aircraft:'Aircraft',economy:'Economy'};
+  const tabs={users:'Users',operators:'Operators',charters:'Charters',aircraft:'Aircraft',economy:'Economy'};
   p.innerHTML=`
     <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/></svg>
-      <span><b>Admin console.</b> Users are managed in the cloud (Supabase); charters, aircraft and economy tools act on this pilot's local game for testing and tuning.</span></div>
+      <span><b>Admin console.</b> Users and operators are managed in the cloud (Supabase); charters, aircraft and economy tools act on this pilot's local game for testing and tuning.</span></div>
     <div class="bar" style="margin-top:12px"><div class="chiprow">
       ${Object.keys(tabs).map(t=>`<button class="chip ${adminTab===t?'on':''}" onclick="setAdminTab('${t}')">${tabs[t]}</button>`).join('')}
     </div></div>
@@ -4848,7 +4848,7 @@ function rAdmin(p){
 }
 function setAdminTab(t){adminTab=t;renderAdminBody();}
 function renderAdminBody(){ const el=$('#adminBody'); if(!el)return;
-  ({users:adminUsers,charters:adminCharters,aircraft:adminAircraft,economy:adminEconomy}[adminTab]||adminUsers)(el); }
+  ({users:adminUsers,operators:adminOperators,charters:adminCharters,aircraft:adminAircraft,economy:adminEconomy}[adminTab]||adminUsers)(el); }
 
 function adminUsers(el){
   const cloud=cloudEnabled()&&AUTH.user;
@@ -4917,6 +4917,121 @@ async function setUserAdmin(id,make){
     const u=ADMIN_USERS.find(x=>x.id===id); if(u)u.is_admin=make; drawUsers();
     showToast(make?'Promoted to admin':'Admin revoked','good');
   }catch(e){ showToast('Update failed','bad'); }
+}
+
+function adminOperators(el){
+  const cloud=cloudEnabled();
+  let localHtml='';
+  if(S.operator){
+    const o=normalizeOperator(S.operator);
+    localHtml=`<div class="card card-pad" style="margin-top:12px">
+      <div class="eyebrow">This device</div>
+      <div class="sec-title" style="margin:4px 0 8px">${esc(o.name)} <span class="tag muted-t">${certLabel(o.cert)}</span></div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">${operPilotCount()} pilots · ${operatorFleetCount()} aircraft · ${money(operCash())} operating cash · ${o.hiring?'hiring':'closed'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn ghost sm" onclick="setOperatorHiring(${!o.hiring})">Toggle hiring</button>
+        <button class="btn ghost sm" onclick="if(confirm('Dissolve local operator company?'))dissolveOperator(false)">Dissolve local</button>
+        <button class="btn ghost sm" onclick="syncOperatorToCloud().then(()=>showToast('Synced to cloud','good'))">Sync to cloud</button>
+      </div></div>`;
+  }
+  if(!cloud){
+    el.innerHTML=localHtml+`<div class="card card-pad" style="margin-top:12px"><div class="muted">Connect multiplayer to manage cloud operators.</div></div>`;
+    return;
+  }
+  el.innerHTML=localHtml+`<div id="operTable" class="muted" style="margin-top:12px">Loading operators…</div>`;
+  const sb=getSB();
+  const usersP=ADMIN_USERS.length?Promise.resolve({data:ADMIN_USERS}):sb.from('profiles').select('id,pilot').limit(300);
+  Promise.all([
+    sb.from('operators').select('*').order('updated_at',{ascending:false}).limit(200),
+    usersP
+  ]).then(([opRes,userRes])=>{
+    if(opRes.error){ $('#operTable').innerHTML=`<span class="neg">Could not load operators: ${esc(opRes.error.message)}</span>`; return; }
+    if(userRes.data&&!ADMIN_USERS.length) ADMIN_USERS=userRes.data;
+    ADMIN_OPERATORS=opRes.data||[]; drawOperators();
+  });
+}
+function drawOperators(){
+  const el=$('#operTable'); if(!el)return;
+  const q=adminOperQ.toLowerCase();
+  const rows=ADMIN_OPERATORS.filter(op=>!q||((op.name||'').toLowerCase().includes(q)||(op.callsign||'').toLowerCase().includes(q)||(op.owner_id||'').includes(q)));
+  const cols='grid-template-columns:1.2fr .5fr .5fr .5fr .5fr .5fr .5fr 2fr';
+  const ownerName=id=>{ const u=ADMIN_USERS.find(x=>x.id===id); return u?esc(u.pilot||'—'):'<span class="muted">—</span>'; };
+  el.innerHTML=`
+   <div class="bar"><input class="field" placeholder="Search operators…" value="${esc(adminOperQ)}" oninput="adminOperQ=this.value;drawOperators()" style="max-width:260px">
+     <div class="sec-spacer" style="flex:1"></div>
+     <button class="btn ghost sm" onclick="adminOperators($('#adminBody'))">Refresh</button>
+     <span class="muted" style="font-size:12px">${rows.length} operators</span></div>
+   <div class="mkt-table" style="margin-top:10px">
+     <div class="mkt-head" style="${cols}"><div>Operator</div><div>Cert</div><div>Tier</div><div>Fleet</div><div>Pilots</div><div>Cash</div><div>Hiring</div><div>Actions</div></div>
+     ${rows.map(op=>`<div class="mkt-row" style="${cols}">
+        <div class="mname">${esc(op.name||'—')}<div class="muted mono" style="font-size:11px">${esc(op.callsign||'')} · ${ownerName(op.owner_id)}</div></div>
+        <div class="mono">${certLabel(op.cert)}</div>
+        <div class="mono">${esc((OPER_TIERS.find(t=>t.key===op.tier)||OPER_TIERS[0]).name)}</div>
+        <div class="mono">${op.fleet_count||0}</div>
+        <div class="mono">${(op.pilots||[]).length}</div>
+        <div class="mono">${money1k(op.cash||0)}</div>
+        <div>${op.hiring?'<span class="tag ok">Yes</span>':'<span class="tag muted-t">No</span>'}</div>
+        <div class="macts" style="flex-wrap:wrap;gap:4px">
+          <button class="btn ghost sm" onclick="adminSetOperHiring('${op.id}',${op.hiring?'false':'true'})">${op.hiring?'Close':'Open'}</button>
+          <button class="btn ghost sm" onclick="adminOperCash('${op.id}',100000)">+$100k</button>
+          <button class="btn ghost sm" onclick="adminOperPay('${op.id}')">Pay rate</button>
+          <button class="btn ghost sm" onclick="adminClearOperApps('${op.id}')">Clear apps</button>
+          <button class="btn ghost sm" onclick="adminClearOperRoster('${op.id}')">Clear roster</button>
+          <button class="btn danger sm" onclick="adminDeleteOperator('${op.id}')">Delete</button>
+        </div>
+     </div>`).join('')||'<div class="mkt-row"><div class="mname muted">No operators match</div></div>'}
+   </div>
+   <div class="muted" style="font-size:11.5px;margin-top:10px">Cloud operator records. Deleting removes the directory listing — owners keep their local save until they dissolve.</div>`;
+}
+async function adminPatchOperator(id,patch,msg){
+  const sb=getSB(); if(!sb)return;
+  patch.updated_at=new Date().toISOString();
+  try{
+    const {error}=await sb.from('operators').update(patch).eq('id',id);
+    if(error) return showToast('Update failed: '+error.message,'bad');
+    const op=ADMIN_OPERATORS.find(x=>x.id===id);
+    if(op) Object.assign(op,patch);
+    if(S.operator&&S.operator.cloudId===id){
+      if(patch.hiring!==undefined) S.operator.hiring=!!patch.hiring;
+      if(patch.pay_rate!==undefined) S.operator.payRate=patch.pay_rate;
+      if(patch.cash!==undefined) S.operator.cash=patch.cash;
+      if(patch.pilots) S.operator.pilots=patch.pilots;
+      if(patch.applications) S.operator.applications=patch.applications;
+      save();
+    }
+    drawOperators(); if(msg) showToast(msg,'good');
+  }catch(e){ showToast('Update failed','bad'); }
+}
+async function adminSetOperHiring(id,on){ await adminPatchOperator(id,{hiring:!!on}, on?'Hiring opened':'Hiring closed'); }
+async function adminOperCash(id,amt){
+  const op=ADMIN_OPERATORS.find(x=>x.id===id); if(!op) return;
+  await adminPatchOperator(id,{cash:Math.max(0,Math.round((op.cash||0)+amt))}, 'Added '+money(amt));
+}
+async function adminOperPay(id){
+  const op=ADMIN_OPERATORS.find(x=>x.id===id); if(!op) return;
+  const v=prompt(`Pay rate for ${op.name}:`, String(op.pay_rate||2500));
+  if(v==null) return;
+  await adminPatchOperator(id,{pay_rate:Math.max(0,Math.round(+v||0))}, 'Pay rate updated');
+}
+async function adminClearOperApps(id){
+  if(!confirm('Clear all pending applications for this operator?')) return;
+  await adminPatchOperator(id,{applications:[]}, 'Applications cleared');
+}
+async function adminClearOperRoster(id){
+  if(!confirm('Remove all pilots from this operator roster?')) return;
+  await adminPatchOperator(id,{pilots:[]}, 'Roster cleared');
+}
+async function adminDeleteOperator(id){
+  const op=ADMIN_OPERATORS.find(x=>x.id===id);
+  if(!confirm(`Delete operator "${op&&op.name||id}" from the cloud directory?`)) return;
+  const sb=getSB(); if(!sb) return;
+  try{
+    const {error}=await sb.from('operators').delete().eq('id',id);
+    if(error) return showToast('Delete failed: '+error.message,'bad');
+    ADMIN_OPERATORS=ADMIN_OPERATORS.filter(x=>x.id!==id);
+    if(S.operator&&S.operator.cloudId===id){ S.operator.cloudId=null; save(); }
+    drawOperators(); showToast('Operator deleted','good');
+  }catch(e){ showToast('Delete failed','bad'); }
 }
 
 function adminCharters(el){
