@@ -1027,6 +1027,10 @@ function capClassByRunway(dep,arr,cls){
   while(t>=0){ const k=TIERS[t]; if(runwayOk(dep,k)&&runwayOk(arr,k)) return k; t--; }
   return null;
 }
+/* can any catalog aircraft in this class actually fly dep→arr at this distance? */
+function classRouteOk(cls,dist,dep,arr){
+  return AIRCRAFT.some(a=>a.cls===cls && a.range>=dist && runwayOk(dep,a.cls) && runwayOk(arr,a.cls));
+}
 function onboardingBases(){
   const hubs=new Set(HUBS);
   return APT.filter(a=>hubs.has(a[0])||a[4]==='i').sort((a,b)=>a[0].localeCompare(b[0]));
@@ -1691,7 +1695,7 @@ function _genCharterOnce(forceDep,opts){
   }
   if(opts.capPax!=null && pax>opts.capPax) pax=opts.capPax;
   cls=capClassByRunway(dep,arr,cls);
-  if(!cls) return null;
+  if(!cls || !classRouteOk(cls,dist,dep,arr)) return null;
   if(opts.capTier!=null && CLASSES[cls].tier>opts.capTier){ cls=TIERS[opts.capTier]; if(!runwayOk(dep,cls)||!runwayOk(arr,cls)) return null; }
   const tier=CLASSES[cls].tier;
   // ---- hourly charter pricing (realistic) × demand × category, with a 1.0h minimum ----
@@ -2278,6 +2282,31 @@ function planFor(c){
   }
   return null;
 }
+function charterBlockReason(c){
+  const sel=selectedFleetAc();
+  if(sel){
+    const a=ACBY[sel.type];
+    if(CLASSES[a.cls].tier<c.tier) return sel.tail+' needs a '+CLASSES[c.cls].label+' rating';
+    if(a.pax<(c.pax||0)) return sel.tail+' only seats '+a.pax+' (need '+(c.pax||0)+')';
+    if(a.range<c.dist) return 'Route '+c.dist.toLocaleString()+' nm exceeds '+sel.tail+' range ('+a.range.toLocaleString()+' nm)';
+    if(!runwayOk(c.dep,a.cls)||!runwayOk(c.arr,a.cls)){
+      const bad=!runwayOk(c.dep,a.cls)?c.dep:c.arr;
+      return 'Runway at '+bad+' too short for '+sel.tail;
+    }
+    return sel.tail+" can't fly this";
+  }
+  if(!ratedFor(c)) return 'Need a '+CLASSES[c.cls].label+' type rating';
+  if(c.pax>=20) return 'Need a high-capacity jet — '+c.pax+' seats';
+  if(!rentalTypeFor(c)){
+    if(!classRouteOk(c.cls,c.dist,c.dep,c.arr)){
+      const maxR=Math.max(0,...AIRCRAFT.filter(a=>a.cls===c.cls).map(a=>a.range));
+      if(maxR<c.dist) return 'Route '+c.dist.toLocaleString()+' nm exceeds '+CLASSES[c.cls].label+' range ('+maxR.toLocaleString()+' nm)';
+      const bad=!runwayOk(c.dep,c.cls)?c.dep:(!runwayOk(c.arr,c.cls)?c.arr:null);
+      if(bad) return 'Runway at '+bad+' limits '+CLASSES[c.cls].label+' ops';
+    }
+  }
+  return 'No suitable aircraft';
+}
 function charterRowEcon(c){
   const plan=planFor(c);
   if(!plan) return {plan:null,net:null,status:'blocked',statusLabel:'—'};
@@ -2337,9 +2366,7 @@ function charterCard(c){
         : `<div class="ready-line">reposition <b class="mono">${reposNm}nm</b> from ${plan.ac.loc}<br>${netLine}</div>
            <button class="btn brass" onclick="openAccept('${c.id}')">Reposition &amp; fly</button>`;
   } else {
-    const why = selectedFleetAc()?selectedFleetAc().tail+' can\'t fly this'
-      : !ratedFor(c)?`Need a ${CLASSES[c.cls].label} type rating`
-      : (c.pax>=20?`Need a high-capacity jet — ${c.pax} seats`:'No suitable aircraft');
+    const why=charterBlockReason(c);
     right = `<div class="ready-line">${why}</div><button class="btn ghost" disabled>Unavailable</button>`;
   }
   return `<div class="charter ${c.rwEvent?'evt':''} ${c.sportsEvent?'evt':''} ${c.repo?'repo':''}">
