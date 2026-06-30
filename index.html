@@ -1565,7 +1565,7 @@ function isOnOperatorFleet(f){
 function operatorFleet(){ return (S.fleet||[]).filter(f=>isOnOperatorFleet(f)); }
 function operatorFleetCount(){ return operatorFleet().length; }
 function pilotOnAnotherOperator(userId, exceptOpId){
-  const ops=RT_OPERATORS.length?RT_OPERATORS:(S.operator?[S.operator]:[]);
+  const ops=buildOperatorsDirectory();
   for(const op of ops){
     const id=op.id||op.cloudId;
     if(exceptOpId&&(id===exceptOpId||op.cloudId===exceptOpId)) continue;
@@ -3204,6 +3204,14 @@ function rOperator(p){
           ${operAlerts().map(a=>`<div class="help" style="margin-top:8px;${a.tone==='good'?'border-color:var(--pos-soft);background:var(--pos-soft)':a.tone==='warn'?'border-color:var(--brass)':''}">
             <span style="font-size:15px">${a.i}</span><span>${a.t}</span></div>`).join('')}
         </div>
+        <div class="card card-pad" style="margin-top:14px;border-color:var(--neg-soft)">
+          <div class="sec-head"><div><div class="eyebrow" style="color:var(--neg)">Danger zone</div><div class="sec-title">Shut down company</div></div></div>
+          <p class="muted" style="font-size:12.5px;margin:8px 0 12px">Dissolve voluntarily (remaining operating cash returns to you) or declare bankruptcy (debts written off, no refund).</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn ghost sm" onclick="dissolveOperator(false)">Dissolve company</button>
+            <button class="btn ghost sm" style="color:var(--neg)" onclick="dissolveOperator(true)">Declare bankruptcy</button>
+          </div>
+        </div>
       </div>
     </div>`;
 }
@@ -3215,11 +3223,48 @@ function addOperatorBase(){
   o.bases.push(ic); save(); syncOperatorToCloud(); showToast(ic+' added as operating base','good');
   if(view==='operator') rOperator($('#page'));
 }
-function setOperatorHiring(on){
+async function setOperatorHiring(on){
   if(!S.operator) return;
-  S.operator.hiring=!!on; save(); syncOperatorToCloud();
-  showToast(on?'Now hiring pilots':'Hiring closed','good');
+  S.operator.hiring=!!on; save();
+  const synced=await syncOperatorToCloud();
+  showToast(on?(synced?'Now hiring — listed on Operators board':'Hiring open locally — sign in to publish to board')
+    :(synced?'Hiring closed':'Hiring closed locally'), synced?'good':'bad');
   if(view==='operator') rOperator($('#page'));
+}
+async function dissolveOperator(bankrupt){
+  if(!S.operator) return;
+  const o=normalizeOperator(S.operator), name=o.name;
+  const busy=(S.fleet||[]).some(f=>isOnOperatorFleet(f)&&f.busy);
+  if(busy) return showToast('Bring company aircraft back from trips before shutting down','bad');
+  const remain=operCash();
+  const msg=bankrupt
+    ? `Declare bankruptcy and shut down ${name}? All company leases end, operating debt is written off, pilots are released, and the company is permanently removed.`
+    : `Dissolve ${name}? ${remain>0?money(remain)+' returns to your personal account. ':''}Company fleet assignments end, leases are returned, and the company is removed.`;
+  if(!confirm(msg)) return;
+  const opId=o.id, cloudId=o.cloudId;
+  if(!bankrupt&&remain>0){
+    S.cash+=remain;
+    S.ledger.push({t:Date.now(),k:'Operator dissolution',a:remain,note:name});
+  }else if(bankrupt){
+    S.ledger.push({t:Date.now(),k:'Operator bankruptcy',a:0,note:name+' · debts written off'});
+  }
+  S.fleet=(S.fleet||[]).filter(f=>{
+    if(f.opLease&&(f.opId===opId||f.opId===cloudId)) return false;
+    return true;
+  });
+  (S.fleet||[]).forEach(f=>{ if(f.opId===opId||f.opId===cloudId) delete f.opId; });
+  S.board=(S.board||[]).filter(c=>!(c.operatorPosted&&(c.operatorId===opId||c.operatorCloudId===cloudId)));
+  if(cloudId&&cloudEnabled()&&AUTH.user){
+    try{
+      const sb=getSB();
+      if(sb) await sb.from('operators').delete().eq('id',cloudId);
+    }catch(e){ console.warn('dissolveOperator cloud delete',e); }
+  }
+  S.operator=null;
+  save();
+  cloudActivity(bankrupt?`declared bankruptcy · ${name} 💥`:`dissolved operator ${name}`);
+  showToast(bankrupt?`${name} shut down — bankruptcy filed`:`${name} dissolved`,'good');
+  nav('dash');
 }
 function depositToOperator(){
   if(!S.operator) return;
@@ -3373,23 +3418,60 @@ async function loadOperatorsDirectory(){
   }catch(e){ RT_OPERATORS=[]; }
 }
 async function syncOperatorToCloud(){
-  const sb=getSB(); if(!sb||!AUTH.user||!S.operator) return;
+  const sb=getSB(); if(!sb||!AUTH.user||!S.operator) return false;
   const o=normalizeOperator(S.operator);
   const row={owner_id:AUTH.user.id,name:o.name,callsign:o.callsign,color:o.color,cert:o.cert,
-    bases:o.bases,hiring:o.hiring,pay_rate:o.payRate,pay_note:o.payNote,tier:operTier().key,
+    bases:o.bases,hiring:!!o.hiring,pay_rate:o.payRate,pay_note:o.payNote,tier:operTier().key,
     pilots:o.pilots,applications:o.applications,cash:operCash(),
     fleet_count:operatorFleetCount(),
     fleet_roster:operatorFleet().map(f=>({id:f.id,tail:f.tail,type:f.type,loc:f.loc})),
     founded:o.founded?new Date(o.founded).toISOString():null,updated_at:new Date().toISOString()};
   try{
     if(o.cloudId){
-      await sb.from('operators').update(row).eq('id',o.cloudId);
+      const {error}=await sb.from('operators').update(row).eq('id',o.cloudId);
+      if(error) throw error;
     }else{
       const {data,error}=await sb.from('operators').insert(row).select('id').single();
-      if(data&&!error){ o.cloudId=data.id; S.operator.cloudId=data.id; save(); }
+      if(error) throw error;
+      if(data){ o.cloudId=data.id; S.operator.cloudId=data.id; save(); }
     }
-  }catch(e){ /* table may not exist yet */ }
+    return true;
+  }catch(e){
+    console.warn('syncOperatorToCloud',e);
+    return false;
+  }
 }
+function localOperatorRow(){
+  if(!S.operator) return null;
+  const o=normalizeOperator(S.operator);
+  return {
+    id:o.cloudId||o.id,
+    cloudId:o.cloudId,
+    owner_id:AUTH.user&&AUTH.user.id,
+    name:o.name,
+    callsign:o.callsign,
+    color:o.color,
+    cert:o.cert,
+    bases:o.bases,
+    hiring:!!o.hiring,
+    pay_rate:o.payRate,
+    pay_note:o.payNote,
+    tier:operTier().key,
+    pilots:o.pilots||[],
+    fleet_count:operatorFleetCount(),
+    _mine:true
+  };
+}
+function buildOperatorsDirectory(){
+  const list=(RT_OPERATORS||[]).slice();
+  const local=localOperatorRow();
+  if(!local) return list;
+  const idx=list.findIndex(op=>op.id===local.cloudId||op.id===local.id||(local.owner_id&&op.owner_id===local.owner_id));
+  if(idx>=0) list[idx]={...list[idx],...local,id:list[idx].id,hiring:local.hiring};
+  else list.unshift(local);
+  return list;
+}
+function isHiringOperator(op){ return !!(op&&(op.hiring===true||op.hiring==='true')); }
 async function syncEmploymentFromCloud(){
   if(!AUTH.user||!S) return;
   const sb=getSB(); if(!sb) return;
@@ -3409,7 +3491,7 @@ async function applyToOperator(cloudId){
   const sb=getSB(); if(!sb||!AUTH.user) return showToast('Sign in to apply','bad');
   const op=RT_OPERATORS.find(x=>x.id===cloudId);
   if(!op) return showToast('Operator not found','bad');
-  if(!op.hiring) return showToast('This operator is not hiring','bad');
+  if(!isHiringOperator(op)) return showToast('This operator is not hiring','bad');
   if(S.employer) return showToast('You are already employed — leave your current operator first','bad');
   const onRoster=pilotOnAnotherOperator(AUTH.user.id, null);
   if(onRoster) return showToast('You already fly for '+onRoster.name,'bad');
@@ -3446,21 +3528,23 @@ function leaveEmployer(){
   if(view==='operators') rOperators($('#page'));
 }
 function rOperators(p){
-  loadOperatorsDirectory().then(()=>{
+  (async()=>{
+    if(S.operator) await syncOperatorToCloud();
+    await loadOperatorsDirectory();
     const employed=S.employer;
-    const myOp=S.operator?normalizeOperator(S.operator):null;
-    const localListing=myOp&&cloudEnabled()&&AUTH.user?null:myOp;
-    const cloudList=RT_OPERATORS.filter(op=>!myOp||op.id!==myOp.cloudId);
-    const card=(op,isLocal)=>{
+    const list=buildOperatorsDirectory();
+    const card=(op)=>{
       const id=op.id||op.cloudId, bases=(op.bases||[]).map(ic=>`<span class="tag mono sm">${ic}</span>`).join(' ')||'<span class="muted">—</span>';
       const tierName=(OPER_TIERS.find(t=>t.key===op.tier)||OPER_TIERS[0]).name;
-      const pilots=(op.pilots||[]).length, fleet=op.fleet_count||(isLocal?operatorFleetCount():0);
+      const pilots=(op.pilots||[]).length, fleet=op.fleet_count||0;
+      const hiring=isHiringOperator(op);
       const pending=(S.operatorApps||[]).some(a=>a.operatorId===id&&a.status==='pending');
       const isEmployer=employed&&(employed.cloudId===id||employed.operatorId===id);
+      const isMine=!!op._mine;
       let action='';
-      if(isLocal) action='<span class="tag ok">Your company</span>';
+      if(isMine) action='<span class="tag ok">Your company</span>';
       else if(isEmployer) action=`<button class="btn ghost sm" onclick="leaveEmployer()">Leave</button>`;
-      else if(op.hiring){
+      else if(hiring){
         action=pending?'<span class="tag warnt">Applied</span>'
           :`<button class="btn brass sm" onclick="applyToOperator('${id}')">Apply</button>`;
       } else action='<span class="muted" style="font-size:12px">Not hiring</span>';
@@ -3472,7 +3556,7 @@ function rOperators(p){
               <div style="font-family:var(--disp);font-weight:700;font-size:18px">${esc(op.name)}</div>
               <span class="tag sm">${certLabel(op.cert)}</span>
               <span class="tag muted-t sm">${tierName}</span>
-              ${op.hiring?'<span class="tag ok sm">Hiring</span>':''}
+              ${hiring?'<span class="tag ok sm">Hiring</span>':''}
             </div>
             <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(op.callsign||'')} · ${fleet} aircraft · ${pilots} pilots</div>
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -3492,11 +3576,10 @@ function rOperators(p){
         <div style="font-family:var(--disp);font-weight:700;font-size:18px">${esc(employed.name)}</div>
         <div class="muted" style="font-size:12.5px;margin-top:4px">You can see this operator's private dispatches on the charter board.</div></div>`:''}
       ${!cloudEnabled()||!AUTH.user?`<div class="muted" style="font-size:13px;margin-bottom:12px">Sign in to see live operators from other pilots.</div>`:''}
-      ${localListing?card({...localListing,tier:operTier().key,fleet_count:operatorFleetCount()},true):''}
-      ${cloudList.length?cloudList.map(op=>card(op,false)).join(''):(!localListing?emptyState('No operators listed','Be the first — found a company from the Operator Dashboard, or check back when more pilots are online.','operator','Found a company'):'')}
-      <button class="btn ghost sm" style="margin-top:8px" onclick="loadOperatorsDirectory().then(()=>rOperators($('#page')))">Refresh</button>`;
+      ${list.length?list.map(op=>card(op)).join(''):emptyState('No operators listed','Be the first — found a company from the Operator Dashboard, or check back when more pilots are online.','operator','Found a company')}
+      <button class="btn ghost sm" style="margin-top:8px" onclick="rOperators($('#page'))">Refresh</button>`;
     syncEmploymentFromCloud();
-  });
+  })();
 }
 function opSpark(arr,w,h){
   const max=Math.max(1,...arr.map(v=>Math.abs(v))), n=arr.length;
