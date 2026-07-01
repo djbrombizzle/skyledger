@@ -4,7 +4,8 @@ async function waitForGameReady(page) {
   for (let i = 0; i < 30; i++) {
     const ready = await page.evaluate(() => {
       try {
-        return !!(typeof S !== 'undefined' && S && S.pilot === 'Test');
+        return !!(typeof S !== 'undefined' && S && S.pilot === 'Test'
+          && typeof AIRCRAFT !== 'undefined' && AIRCRAFT.length >= 50);
       } catch (e) {
         return false;
       }
@@ -87,9 +88,12 @@ test('sports charter filter and board integration', async ({ page }) => {
     S.board.push(charter);
     boardFilter.flags = 'sports';
     nav('board');
-    return S.board.filter(c => c.sportsEvent).length;
+    const teamIds = teamAircraft().map(a => a.id).sort();
+    return { sportsN: S.board.filter(c => c.sportsEvent).length, teamIds, catalogN: AIRCRAFT.length };
   });
-  expect(injected).toBeGreaterThan(0);
+  expect(injected.sportsN).toBeGreaterThan(0);
+  expect(injected.catalogN).toBeGreaterThanOrEqual(50);
+  expect(injected.teamIds).toEqual(['a319', 'bbj']);
 
   await page.waitForTimeout(500);
   const hasSportsOption = await page.locator('select option[value="sports"]').count();

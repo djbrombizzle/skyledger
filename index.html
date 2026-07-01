@@ -971,33 +971,65 @@ const RANKS = [
   {min:4000, name:'Operator'},
 ];
 
-/* ---------- AIRCRAFT CATALOG ---------- */
-const AIRCRAFT = [
-  {id:'c208',name:'Cessna Grand Caravan EX',cls:'turboprop',pax:9,range:950,cruise:185,burn:55,maint:250,price:2700000,lease:1200},
-  {id:'tbm850',name:'Daher TBM 850',cls:'turboprop',pax:5,range:1550,cruise:320,burn:57,maint:300,price:2800000,lease:1400},
-  {id:'tbm930',name:'Daher TBM 930',cls:'turboprop',pax:5,range:1730,cruise:330,burn:60,maint:330,price:4200000,lease:1800},
-  {id:'pc12',name:'Pilatus PC-12 NGX',cls:'turboprop',pax:8,range:1800,cruise:290,burn:66,maint:380,price:5400000,lease:2100},
-  {id:'be250',name:'Beechcraft King Air 250',cls:'turboprop',pax:8,range:1720,cruise:310,burn:95,maint:410,price:6500000,lease:2400},
-  {id:'be350',name:'Beechcraft King Air 350i',cls:'turboprop',pax:9,range:1800,cruise:312,burn:100,maint:430,price:8200000,lease:2600},
-  {id:'cj4',name:'Citation CJ4 Gen2',cls:'light',pax:9,range:2165,cruise:451,burn:200,maint:600,price:10700000,lease:3400},
-  {id:'e55p',name:'Phenom 300E',cls:'light',pax:9,range:2010,cruise:453,burn:210,maint:620,price:11200000,lease:3600},
-  {id:'f50',name:'Dassault Falcon 50',cls:'midsize',pax:9,range:3000,cruise:475,burn:300,maint:800,price:12500000,lease:4400},
-  {id:'cl350lat',name:'Citation Latitude',cls:'midsize',pax:9,range:2700,cruise:483,burn:290,maint:780,price:18500000,lease:5200},
-  {id:'h900',name:'Hawker 900XP',cls:'midsize',pax:8,range:2930,cruise:447,burn:300,maint:760,price:9500000,lease:4200},
-  {id:'sov',name:'Citation Sovereign+',cls:'midsize',pax:12,range:3200,cruise:460,burn:280,maint:790,price:18000000,lease:5000},
-  {id:'prae600',name:'Praetor 600',cls:'supermid',pax:9,range:4018,cruise:466,burn:320,maint:920,price:21000000,lease:6400},
-  {id:'cl350',name:'Challenger 350',cls:'supermid',pax:10,range:3200,cruise:470,burn:340,maint:980,price:27000000,lease:6800},
-  {id:'long',name:'Citation Longitude',cls:'supermid',pax:9,range:3500,cruise:483,burn:330,maint:940,price:28000000,lease:7000},
-  {id:'citx',name:'Citation X+',cls:'supermid',pax:9,range:3460,cruise:525,burn:360,maint:1050,price:23000000,lease:6600},
-  {id:'f8x',name:'Falcon 8X',cls:'heavy',pax:14,range:6450,cruise:488,burn:420,maint:1700,price:60000000,lease:13200},
-  {id:'glex',name:'Global 6500',cls:'heavy',pax:15,range:6600,cruise:513,burn:490,maint:1820,price:62000000,lease:13800},
-  {id:'g650',name:'Gulfstream G650ER',cls:'heavy',pax:14,range:7500,cruise:516,burn:500,maint:1850,price:70000000,lease:14500},
-  {id:'glob7500',name:'Global 7500',cls:'ulr',pax:19,range:7700,cruise:516,burn:510,maint:2050,price:75000000,lease:16000},
-  {id:'g700',name:'Gulfstream G700',cls:'ulr',pax:19,range:7750,cruise:516,burn:520,maint:2100,price:78000000,lease:16500},
-  {id:'a319',name:'Airbus A319',cls:'ulr',pax:124,range:3750,cruise:460,burn:520,maint:2000,price:62000000,lease:15000,minRwy:5000},
-  {id:'bbj',name:'Boeing BBJ MAX 8',cls:'ulr',pax:90,range:6640,cruise:470,burn:800,maint:2600,price:90000000,lease:21000,minRwy:5500},
+/* ---------- AIRCRAFT CATALOG (MSFS 2024 · Option A) ---------- */
+const FROZEN_AIRCRAFT = [
+  {id:'a319',name:'Airbus A319',msfsName:'Airbus A319',edition:'standard',frozen:true,simbriefIcao:'A319',cls:'ulr',pax:124,range:3750,cruise:460,burn:520,maint:2000,price:62000000,lease:15000,minRwy:5000},
+  {id:'bbj',name:'Boeing BBJ MAX 8',msfsName:'Boeing BBJ MAX 8',edition:'standard',frozen:true,simbriefIcao:'B38M',cls:'ulr',pax:90,range:6640,cruise:470,burn:800,maint:2600,price:90000000,lease:21000,minRwy:5500},
 ];
-const ACBY = Object.fromEntries(AIRCRAFT.map(a=>[a.id,a]));
+const AIRCRAFT_RETIRE_MAP = {
+  lr75:'cj4', e55p:'sf50', f50:'long', cl350lat:'long', h900:'cj4', sov:'long',
+  prae600:'pc24', cl350:'pc24', citx:'pc24', f8x:'a332', glex:'b787', g650:'b787',
+  glob7500:'b787', g700:'b787',
+};
+const MSFS_EDITIONS = {standard:0, deluxe:1, premium:2, aviator:3};
+const MSFS_EDITION_LABEL = {standard:'Standard',deluxe:'Deluxe',premium:'Premium',aviator:'Aviator'};
+let AIRCRAFT = [...FROZEN_AIRCRAFT];
+let ACBY = Object.fromEntries(AIRCRAFT.map(a=>[a.id,a]));
+function msfsRowToAircraft(row){
+  const a={...row, name:row.msfsName||row.name};
+  if(a.minRwy==null) delete a.minRwy;
+  return a;
+}
+function rebuildAircraftCatalog(rows){
+  const seen=new Set();
+  const list=[];
+  (rows||[]).filter(r=>r.charterEligible!==false).forEach(r=>{
+    if(r.frozen||r.id==='bbj'||r.id==='a319') return;
+    if(seen.has(r.id)) return;
+    seen.add(r.id);
+    list.push(msfsRowToAircraft(r));
+  });
+  FROZEN_AIRCRAFT.forEach(f=>{ if(!seen.has(f.id)){ seen.add(f.id); list.push({...f}); } });
+  list.sort((a,b)=>(CLASSES[a.cls]?.tier||0)-(CLASSES[b.cls]?.tier||0)||a.price-b.price);
+  AIRCRAFT=list;
+  ACBY=Object.fromEntries(AIRCRAFT.map(a=>[a.id,a]));
+}
+function acDisplayName(a){ return (a&&a.msfsName)||(a&&a.name)||''; }
+function msfsEditionRank(ed){ return MSFS_EDITIONS[ed]??0; }
+function msfsEditionLocked(a){
+  const owned=msfsEditionRank(S&&S.msfsEdition||'standard');
+  return msfsEditionRank(a&&a.edition||'standard')>owned;
+}
+let _msfsAcReady=null;
+function loadMsfsAircraft(){
+  if(_msfsAcReady) return _msfsAcReady;
+  _msfsAcReady=(async()=>{
+    const urls=[skyAsset('data/msfs_aircraft.json'),new URL('data/msfs_aircraft.json',location.href).href];
+    for(const url of urls){
+      try{
+        const r=await fetchWithTimeout(url,{cache:'no-store'},10000);
+        if(!r.ok) continue;
+        const rows=await r.json();
+        rebuildAircraftCatalog(rows);
+        console.log('Skyledger MSFS aircraft catalog loaded ('+AIRCRAFT.length+' types)');
+        return;
+      }catch(e){ /* try next url */ }
+    }
+    console.warn('MSFS aircraft catalog load failed — frozen types only');
+    rebuildAircraftCatalog([]);
+  })();
+  return _msfsAcReady;
+}
 
 /* ---------- AIRPORT DATABASE (OurAirports · hard runway ≥1500 ft) ---------- */
 /* Tuple: [icao, name, lat, lon, cls s|m|i, region, max_hard_rwy_ft] */
@@ -1037,7 +1069,7 @@ function capClassByRunway(dep,arr,cls){
 function classRouteOk(cls,dist,dep,arr){
   return AIRCRAFT.some(a=>a.cls===cls && a.range>=dist && runwayOk(dep,a.cls,a.id) && runwayOk(arr,a.cls,a.id));
 }
-function teamAircraft(){ return AIRCRAFT.filter(a=>a.pax>=50); }
+function teamAircraft(){ return AIRCRAFT.filter(a=>a.id==='bbj'||a.id==='a319'); }
 function teamAcFor(dist){ return teamAircraft().filter(a=>a.range>=dist).sort((x,y)=>x.lease-y.lease)[0]||null; }
 function onboardingBases(){
   const hubs=new Set(HUBS);
@@ -1806,7 +1838,7 @@ function ensureExit(ic){
   if(!APTBY[ic])return;
   const now=Date.now();
   const out=S.board.filter(c=>c.dep===ic&&c.expires>now);
-  for(let i=out.length;i<2;i++) S.board.push(genCharter(ic));        // at least 2 outbound charters
+  for(let i=out.length;i<2;i++){ const c=genCharter(ic); if(c) S.board.push(c); }
   if(!S.board.some(c=>c.dep===ic&&c.repo&&c.expires>now)){           // at least one close reposition
     const hub=nearestHub(ic); if(hub) S.board.push(makeReposition(ic,hub));
   }
@@ -1835,18 +1867,18 @@ function genFlyableFor(f){
 function refreshBoard(full){
   const now=Date.now();
   economyTick();                          // age + stir the market before generating
-  S.board=(S.board||[]).filter(c=>c.expires>now && !full);
+  S.board=(S.board||[]).filter(c=>c&&c.expires>now && !full);
   const idle=S.fleet.filter(f=>!f.busy);
   // 1) seed flyable work out of each idle aircraft's current field (right tier/range/seats)
   idle.forEach(f=>{ for(let i=0;i<3;i++){ const c=genFlyableFor(f); if(c)S.board.push(c); } });
   // 2) real-world events seed themed inbound + outbound charters (priced by demand, no bonus)
   rwTargets().slice(0,10).forEach(t=>{
-    if(S.board.filter(c=>c.rwEvent&&c.rwEvent.name===t.e.name).length>=5) return;
-    S.board.push(genCharter(t.ic));                  // out of the event field
-    S.board.push(genCharter(null,{arrTo:t.ic}));     // into the event field
+    if(S.board.filter(c=>c&&c.rwEvent&&c.rwEvent.name===t.e.name).length>=5) return;
+    { const c1=genCharter(t.ic); if(c1) S.board.push(c1); }
+    { const c=genCharter(null,{arrTo:t.ic}); if(c) S.board.push(c); }     // into the event field
   });
   // 2b) sports schedule — paired inbound/outbound team charters
-  const sportsN=S.board.filter(c=>c.sportsEvent).length;
+  const sportsN=S.board.filter(c=>c&&c.sportsEvent).length;
   let sportsAdded=0;
   sportsCharterTargets().forEach(t=>{
     if(sportsN+sportsAdded>=SPORTS_MAX_BOARD) return;
@@ -1855,7 +1887,7 @@ function refreshBoard(full){
     if(c){ S.board.push(c); sportsAdded++; }
   });
   // 3) general market (any tier — includes aspirational charters above your rating)
-  while(S.board.length<CFG.boardSize) S.board.push(genCharter());
+  while(S.board.length<CFG.boardSize){ const c=genCharter(); if(c) S.board.push(c); else break; }
   // 4) GUARANTEE a minimum number your current fleet can actually fly
   if(idle.length){
     let guard=0;
@@ -1951,7 +1983,7 @@ function renderAll(){
   if(!navVisible(view)) view=effectiveRole()==='operator'?'operator':'dash';
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.nav===view));
   $('#crumb').textContent=CRUMB[view][0]; $('#crumbSub').textContent=CRUMB[view][1];
-  $('#boardBadge').textContent=S.board.filter(c=>c.expires>Date.now()&&canSeeCharter(c)).length;
+  $('#boardBadge').textContent=S.board.filter(c=>c&&c.expires>Date.now()&&canSeeCharter(c)).length;
   $('#activeBadge').style.display=S.active?'inline-block':'none';
   $('#ratingBadge').style.display=upgradeReady()?'inline-block':'none';
   const liveEv=rwLive().length;
@@ -2758,9 +2790,7 @@ function legRow(l,i,acm){
     ${l.done?'<span class="muted" style="font-size:12px">flown</span>':active?'<span class="tag warnt">open</span>':'<span class="muted" style="font-size:12px">queued</span>'}
   </div>`;
 }
-function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12',be250:'BE20',be350:'B350',cj4:'C25C',e55p:'E55P',f50:'FA50',
-  cl350lat:'C68A',h900:'H25B',sov:'C680',prae600:'E550',cl350:'CL35',long:'C700',citx:'C750',f8x:'FA8X',glex:'GL5T',g650:'GLF6',
-  glob7500:'GL7T',g700:'GLF7',a319:'A319',bbj:'B38M'}[acm.id]||'C700';}
+function sbType(acm){ return (acm&&acm.simbriefIcao)||(acm&&ACBY[acm.id]&&ACBY[acm.id].simbriefIcao)||'C700'; }
 
 async function verifyLeg(idx){ pollVatActiveTrip(); }
 function vatsimCid(){
@@ -3095,7 +3125,7 @@ function rMarket(p){
     const list=AIRCRAFT.filter(a=>mktCls==='all'||a.cls===mktCls);
     p.innerHTML=head+`
       <div class="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        <span>Acquire up to your <b>${CLASSES[TIERS[S.maxTier]].label}</b> rating — heavier types unlock in <a onclick="nav('ratings')" style="color:var(--sky);cursor:pointer">Type Ratings</a>. <b>Personal lease</b> bills your pilot account; <b>Company lease</b> bills your operator operating account and adds the jet to your company fleet. New aircraft deliver to <b class="mono">${S.base}</b> (company leases use your first operating base).</span></div>
+        <span>Acquire up to your <b>${CLASSES[TIERS[S.maxTier]].label}</b> rating — heavier types unlock in <a onclick="nav('ratings')" style="color:var(--sky);cursor:pointer">Type Ratings</a>. Listings match <b>default MSFS 2024</b> aircraft (edition badge). <b>Personal lease</b> bills your pilot account; <b>Company lease</b> bills your operator operating account and adds the jet to your company fleet. New aircraft deliver to <b class="mono">${S.base}</b> (company leases use your first operating base).</span></div>
       <div class="mkt-table" style="margin-top:14px">
         <div class="mkt-head"><div>Aircraft</div><div>Pax</div><div>Cruise</div><div>Burn</div><div>Range</div><div>Price</div><div></div></div>
         ${list.map(newRow).join('')}
@@ -3104,6 +3134,11 @@ function rMarket(p){
 }
 function setMkt(c){mktCls=c;rMarket($('#page'));}
 function setMktTab(t){mktTab=t;rMarket($('#page'));}
+function editionTag(a){
+  const ed=a.edition||'standard';
+  const locked=msfsEditionLocked(a);
+  return `<span class="tag muted-t" title="MSFS ${MSFS_EDITION_LABEL[ed]||ed} edition">${MSFS_EDITION_LABEL[ed]||ed}</span>${locked?'<span class="tag warnt" title="Above your MSFS edition in Settings">MSFS+</span>':''}`;
+}
 function ratingTag(a){
   const locked=CLASSES[a.cls].tier>S.maxTier;
   return locked?`<span class="tag warnt">🔒 ${CLASSES[TIERS[CLASSES[a.cls].tier]].label}</span>`:'';
@@ -3113,8 +3148,8 @@ function newRow(a){
   const op=S.operator?normalizeOperator(S.operator):null;
   const opBtns=op?`<button class="btn brass sm" onclick="leaseAircraftForOperator('${a.id}')" title="Lease from ${esc(op.name)} operating account">Company lease</button>`:'';
   return `<div class="mkt-row ${locked?'locked':''}">
-    <div class="mkt-cell mname" data-l="Aircraft">${a.name}
-      <span class="tag cls">${CLASSES[a.cls].label}</span>${a.pax>=50?'<span class="tag sports">👥 Team</span>':''}${ratingTag(a)}</div>
+    <div class="mkt-cell mname" data-l="Aircraft">${esc(acDisplayName(a))}
+      <span class="tag cls">${CLASSES[a.cls].label}</span>${editionTag(a)}${a.pax>=50?'<span class="tag sports">👥 Team</span>':''}${ratingTag(a)}</div>
     <div class="mkt-cell mono" data-l="Pax">${a.pax}</div>
     <div class="mkt-cell mono" data-l="Cruise">${a.cruise} kt</div>
     <div class="mkt-cell mono" data-l="Burn">${a.burn} gph</div>
@@ -3130,8 +3165,8 @@ function usedRow(u,a){
   const condCol=u.cond>78?'var(--pos)':u.cond>60?'var(--warn)':'var(--neg)';
   const save=Math.round((1-u.price/a.price)*100);
   return `<div class="mkt-row ${locked?'locked':''}">
-    <div class="mkt-cell mname" data-l="Aircraft">${a.name}
-      <span class="tag cls">${CLASSES[a.cls].label}</span>${ratingTag(a)}<span class="tag ok">−${save}% vs new</span></div>
+    <div class="mkt-cell mname" data-l="Aircraft">${esc(acDisplayName(a))}
+      <span class="tag cls">${CLASSES[a.cls].label}</span>${editionTag(a)}${ratingTag(a)}<span class="tag ok">−${save}% vs new</span></div>
     <div class="mkt-cell mono" data-l="Location" title="${APTBY[u.loc].name}">${u.loc}</div>
     <div class="mkt-cell" data-l="Cond"><span class="mono" style="color:${condCol};font-weight:700">${u.cond}%</span></div>
     <div class="mkt-cell mono" data-l="Hours">${u.hours.toLocaleString()}</div>
@@ -3974,13 +4009,20 @@ function addWx(v){ v=(v||'').trim().toUpperCase(); if(!v)return; wxAdd='';
 let airportQ='';
 let _rentCache={};
 /* aircraft sitting at a field that you're rated to rent (deterministic per field + rating) */
+function rentPoolWeight(ac, aptCls){
+  const t=CLASSES[ac.cls]?CLASSES[ac.cls].tier:0;
+  if(aptCls==='i') return t>=4?40+t*8+(ac.pax>=50?12:0):t>=2?18+t*4:6+t;
+  if(aptCls==='m') return t>=2&&t<=4?28+t*5:t===1?22:10+t*3;
+  return t<=1?30: t===2?18:8;
+}
 function rentableAt(ic){
   const a=APTBY[ic]; if(!a) return [];
   const key=ic+'|'+S.maxTier;
   if(_rentCache[key]) return _rentCache[key];
   const pool=AIRCRAFT.filter(x=>CLASSES[x.cls].tier<=S.maxTier);
-  const n=Math.min(pool.length, a.cls==='i'?5:a.cls==='m'?4:3);
-  const ranked=pool.map(ac=>({ac,r:hashStr(ac.id+ic)})).sort((p,q)=>p.r-q.r).slice(0,n);
+  const n=Math.min(pool.length, a.cls==='i'?6:a.cls==='m'?4:3);
+  const ranked=pool.map(ac=>({ac,r:hashStr(ac.id+ic),w:rentPoolWeight(ac,a.cls)}))
+    .sort((p,q)=>q.w-p.w||p.r-q.r).slice(0,n);
   const out=ranked.map(({ac,r})=>({type:ac.id, tail:genTail(), rate:rentalRateFor(ac), cond:70+(r%28)}));
   _rentCache[key]=out; return out;
 }
@@ -4850,6 +4892,14 @@ function rSettings(p){
       <div class="sec-head"><div><div class="eyebrow">Operations</div><div class="sec-title">Game preferences</div></div></div>
       <div class="form-row"><label>Home base (ICAO)</label><input class="field mono" id="setBase" value="${esc(S.base)}" maxlength="4" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
       <div class="form-row"><label>SimBrief username / Pilot ID</label><input class="field" id="setSB" value="${esc(S.simbriefUser||'')}" style="width:100%"></div>
+      <div class="form-row"><label>MSFS edition owned</label>
+        <select class="field" id="setMsfsEd" style="width:100%">
+          <option value="standard" ${(S.msfsEdition||'standard')==='standard'?'selected':''}>Standard (70 aircraft)</option>
+          <option value="deluxe" ${S.msfsEdition==='deluxe'?'selected':''}>Deluxe (80 aircraft)</option>
+          <option value="premium" ${S.msfsEdition==='premium'?'selected':''}>Premium Deluxe (95 aircraft)</option>
+          <option value="aviator" ${S.msfsEdition==='aviator'?'selected':''}>Aviator (125 aircraft)</option>
+        </select></div>
+      <p class="muted" style="font-size:11.5px;margin-top:-4px">Informational badge on marketplace listings — does not block purchases.</p>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><label style="margin:0;font-size:12px;color:var(--muted)">Appearance</label>
         <button class="btn ghost sm" onclick="toggleTheme()">Toggle dark / light</button></div>
       <button class="btn brass" style="margin-top:12px" onclick="savePrefs()">Save preferences</button>
@@ -4963,6 +5013,8 @@ function savePrefs(){
   const b=($('#setBase').value||'').trim().toUpperCase();
   if(b && APTBY[b]) S.base=b; else if(b) showToast('Unknown ICAO — base unchanged','bad');
   S.simbriefUser=($('#setSB').value||'').trim();
+  const ed=$('#setMsfsEd')&&$('#setMsfsEd').value;
+  if(ed&&MSFS_EDITIONS[ed]!=null) S.msfsEdition=ed;
   save(); showToast('Preferences saved','good'); renderAll();
 }
 function saveSupa(){ skyConfig(($('#setSupaUrl').value||'').trim(),($('#setSupaKey').value||'').trim()); }
@@ -5414,6 +5466,7 @@ function migrateSave(){
   if(!S.role)S.role='both';
   if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
   if(S.rentStarter===undefined)S.rentStarter=false;
+  if(!S.msfsEdition||MSFS_EDITIONS[S.msfsEdition]==null) S.msfsEdition='standard';
   if(S.vatsimCid===undefined) S.vatsimCid='';
   if(!S.vatsimCid && S.vatCallsign && /^\d+$/.test(String(S.vatCallsign).trim())) S.vatsimCid=String(S.vatCallsign).trim();
   if(S.vatCallsign===undefined)S.vatCallsign='';
@@ -5421,14 +5474,23 @@ function migrateSave(){
   if(S.active&&!S.active.fuel){ initTripFuel(S.active); if(S.active.ofp) applySimbriefFuelAdj(S.active); }
   if(S.active&&S.active.legs) S.active.legs.forEach(l=>{ if(l.verified&&!l.vatsimVerified) l.vatsimVerified=true; });
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
-  (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
-  (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
+  function remapAcType(t){ return AIRCRAFT_RETIRE_MAP[t]||t; }
+  (S.fleet||[]).forEach(f=>{ if(f.type) f.type=remapAcType(f.type); });
+  (S.used||[]).forEach(u=>{ if(u.type) u.type=remapAcType(u.type); });
+  (S.board||[]).forEach(c=>{
+    if(c.aircraft) c.aircraft=remapAcType(c.aircraft);
+    if(c.fleetId){
+      const ff=(S.fleet||[]).find(x=>x.id===c.fleetId);
+      if(ff&&ff.type) c.aircraft=ff.type;
+    }
+  });
   (S.fleet||[]).forEach(f=>{ if(f.opId&&(!S.operator||f.opId!==S.operator.id)) delete f.opId; });
   (S.board||[]).forEach(c=>{
     if(c.operatorPosted&&!c.operatorVisibility) c.operatorVisibility='public';
     if(c.operatorPosted&&S.operator&&!c.operatorId){ c.operatorId=S.operator.id; c.operatorCloudId=S.operator.cloudId||null; }
   });
-  S.board=(S.board||[]).filter(c=>routeMaxTier(c.dep,c.arr)>=CLASSES[c.cls].tier);
+  S.board=(S.board||[]).filter(c=>c&&routeMaxTier(c.dep,c.arr)>=CLASSES[c.cls].tier
+    && classRouteOk(c.cls,c.dist,c.dep,c.arr));
 }
 function resumeGame(){
   migrateSave();
@@ -5666,6 +5728,7 @@ async function boot(){
     tickClock(); setInterval(tickClock,1000);
     { const so=$('#signOutLink'); if(so)so.onclick=signOut; }
     if(IS_ELECTRON){ initDesktopShell(); checkGameVersion(); }
+    await loadMsfsAircraft();
     loadAirportDB().then(()=>{ loadSportsData().then(()=>fetchSportsSchedules().catch(()=>{})).finally(()=>{ if(S){ refreshBoard(false); renderAll(); } }); }).catch(()=>{});
     loadFboDB();
     if(cloudEnabled()){ initCloud(); } else { startLocal(); }
