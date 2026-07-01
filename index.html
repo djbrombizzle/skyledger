@@ -866,6 +866,7 @@ function genSportsCharter(game,leg,teamAbbr){
   }
   const venue=game.venueIcao;
   if(!hub||!venue||!APTBY[hub]||!APTBY[venue]) return null;
+  if(isTurbopropOnlyField(venue)||isTurbopropOnlyField(hub)) return null;
   const dep=leg==='inbound'?hub:venue, arr=leg==='inbound'?venue:hub;
   const dist=Math.round(haversine(dep,arr));
   if(dist<50) return null;
@@ -1319,6 +1320,11 @@ function hasCuratedFbo(ic){
   const list=FBOBY[ic];
   return !!(list&&list.map(n=>String(n).trim()).filter(Boolean).length);
 }
+/* grass strips & fields without a directory FBO — turboprop ops only */
+function isTurbopropOnlyField(ic){ return APTBY[ic] && !hasCuratedFbo(ic); }
+function routeMaxTier(dep,arr){
+  return Math.min(isTurbopropOnlyField(dep)?0:5, isTurbopropOnlyField(arr)?0:5);
+}
 function nearestFboField(fromIc){
   if(!APTBY[fromIc]||hasCuratedFbo(fromIc)) return null;
   if(_nearestFboCache[fromIc]!==undefined) return _nearestFboCache[fromIc];
@@ -1336,7 +1342,7 @@ function nearestFboField(fromIc){
 function fboTankerWarn(ic, role, withLink){
   if(hasCuratedFbo(ic)) return '';
   const near=nearestFboField(ic);
-  let txt=`<b>No FBO at ${ic}</b> (${APTBY[ic].name}) — Jet-A uplift is not available on the field. You may need to <b>tanker fuel</b> aboard`;
+  let txt=`<b>No FBO at ${ic}</b> (${APTBY[ic].name}) — Jet-A uplift is not available on the field. <b>Turboprop only</b>; jets cannot be chartered here. You may need to <b>tanker fuel</b> aboard`;
   if(role==='dep') txt+=' for this departure';
   else if(role==='arr') txt+=' for your return or onward legs';
   else txt+=' when operating from this field';
@@ -1474,7 +1480,7 @@ function newGame(name,base){
     fleet:[],                       // pilot picks their first aircraft
     board:[], active:null, ledger:[],
     operator:null, role:'both',
-    lastBoard:0, vatCallsign:'', tankerFuelLb:0,
+    lastBoard:0, vatsimCid:'', tankerFuelLb:0,
     maxTier:CFG.startTier,          // type rating cap (0 = turboprop only)
     grades:[],                      // per-flight performance grades
     tierQual:0,                     // clean charters flown at current top tier
@@ -1727,9 +1733,18 @@ function _genCharterOnce(forceDep,opts){
     pax=Math.min(cap, Math.max(r[0], Math.round(rnd(r[0],r[1]))));
   }
   if(opts.capPax!=null && pax>opts.capPax) pax=opts.capPax;
+  if(isTurbopropOnlyField(dep)||isTurbopropOnlyField(arr)){
+    if(cat==='sports') return null;
+    cls='turboprop';
+  }
   cls=capClassByRunway(dep,arr,cls);
+  if(isTurbopropOnlyField(dep)||isTurbopropOnlyField(arr)) cls='turboprop';
   if(!cls || !classRouteOk(cls,dist,dep,arr)) return null;
+  if(isTurbopropOnlyField(dep)||isTurbopropOnlyField(arr)){
+    pax=Math.min(pax||0, CLASS_SEATS.turboprop||9);
+  }
   if(opts.capTier!=null && CLASSES[cls].tier>opts.capTier){ cls=TIERS[opts.capTier]; if(!runwayOk(dep,cls)||!runwayOk(arr,cls)) return null; }
+  if((isTurbopropOnlyField(dep)||isTurbopropOnlyField(arr)) && CLASSES[cls].tier>0) return null;
   const tier=CLASSES[cls].tier;
   // ---- hourly charter pricing (realistic) × demand × category, with a 1.0h minimum ----
   const acmRef=AIRCRAFT.find(a=>a.cls===cls)||AIRCRAFT[0];
@@ -1771,7 +1786,7 @@ function rwClient(rw,cat){
 function vatEventAt(ic){ for(const e of VATEVENTS){ if(isEventLive(e)&&e.airports.includes(ic)) return e.name; } return null; }
 /* a cheap discounted reposition (empty leg) from `from` to a nearby hub */
 function makeReposition(from,to){
-  const dist=haversine(from,to), cls=classForDistance(dist), acmRef=AIRCRAFT.find(a=>a.cls===cls)||AIRCRAFT[0];
+  const dist=haversine(from,to), cls=isTurbopropOnlyField(from)||isTurbopropOnlyField(to)?'turboprop':classForDistance(dist), acmRef=AIRCRAFT.find(a=>a.cls===cls)||AIRCRAFT[0];
   const block=dist/acmRef.cruise+CFG.taxiPad;
   return {id:uid(),dep:from,arr:to,dist,cls,tier:CLASSES[cls].tier,cat:'empty_leg',pax:0,
     payout:Math.round(CLASSES[cls].hourly*Math.max(block,1.0)*CAT.empty_leg.mult*0.95/50)*50,
@@ -1791,8 +1806,9 @@ function ensureExit(ic){
 }
 /* can any idle aircraft currently fly this charter? (range + rating tier + seats) */
 function fleetCanFly(c){
+  const maxTier=routeMaxTier(c.dep,c.arr);
   return S.fleet.some(f=>{ if(f.busy) return false; const a=ACBY[f.type];
-    return a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
+    return CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
       && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls); });
 }
 /* generate a charter guaranteed flyable by a specific idle aircraft (right tier, range, seats) */
@@ -1851,8 +1867,9 @@ function refreshBoard(full){
 
 /* find best idle aircraft to serve a charter (suitable class+range, prefer at dep) */
 function bestAircraftFor(c){
+  const maxTier=routeMaxTier(c.dep,c.arr);
   const cand=S.fleet.filter(f=>{ if(f.busy) return false; const a=ACBY[f.type];
-    return a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
+    return CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
       && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls); });
   if(!cand.length) return null;
   cand.sort((a,b)=>{
@@ -1940,6 +1957,7 @@ function renderAll(){
   if(view!=='board'&&BOARD_MAP){ BOARD_MAP.remove(); BOARD_MAP=null; }
   ({dash:rDash,board:rBoard,active:rActive,events:rEvents,weather:rWeather,airport:rAirport,community:rCommunity,fleet:rFleet,market:rMarket,operator:rOperator,spcharter:rSpecCharter,operators:rOperators,ratings:rRatings,ledger:rLedger,map:rMap,settings:rSettings,admin:rAdmin}[view])(p);
   if(view==='map') setTimeout(initMap,40);
+  if(view==='active'&&S.active) startVatTripPoll(); else stopVatTripPoll();
   if(typeof updateSimPill==='function'){updateSimPill();renderSimLive();}
   if(typeof updatePresenceTrack==='function') updatePresenceTrack();
   save();
@@ -1972,7 +1990,7 @@ function rDash(p){
        btn:'Open marketplace',go:'market'}
     : S.active
     ? {eb:'TRIP IN PROGRESS',h:'You have an active trip',
-       p:'Fly the open leg in your sim. With Sim Link connected, legs auto-complete and get graded for your type-rating progress; you can also verify against the live VATSIM feed for the bonus.',
+       p:'Fly the open leg in your sim. With Sim Link connected, legs auto-complete and get graded for your type-rating progress. Fly on VATSIM with your profile CID for an automatic online bonus.',
        btn:'Open active trip',go:'active'}
     : {eb:'NEXT STEP',h:'Pick up a charter and fly',
        p:`There are ${flyable} charter${flyable===1?'':'s'} you can dispatch right now from where your aircraft are sitting. Bigger metal and longer legs pay more — and the full P&L is shown before you accept.`,
@@ -2065,8 +2083,9 @@ function selectedFleetAc(){
 /* aircraft used to evaluate a charter: the board-selected one (if it can fly it), else best idle */
 function acForCharter(c){
   const sel=selectedFleetAc();
+  const maxTier=routeMaxTier(c.dep,c.arr);
   if(sel){ const a=ACBY[sel.type];
-    return (a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0) && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls))?sel:null; }
+    return (CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0) && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls))?sel:null; }
   return bestAircraftFor(c);
 }
 function boardStatusKey(c){
@@ -2296,7 +2315,8 @@ function rentalTypeFor(c){ return rentalTypesFor(c)[0]||null; }
    Preference: aircraft in the charter's own class first; if that group can't cover the
    range/seats, widen to larger classes you hold a rating for. Sorted cheapest-first. */
 function rentalTypesFor(c){
-  const fits=a=>a.range>=c.dist && a.pax>=(c.pax||0) && CLASSES[a.cls].tier<=S.maxTier && CLASSES[a.cls].tier>=c.tier
+  const maxTier=routeMaxTier(c.dep,c.arr);
+  const fits=a=>a.range>=c.dist && a.pax>=(c.pax||0) && CLASSES[a.cls].tier<=maxTier && CLASSES[a.cls].tier<=S.maxTier && CLASSES[a.cls].tier>=c.tier
     && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls);
   let group=AIRCRAFT.filter(a=>a.cls===c.cls && fits(a));
   if(!group.length) group=AIRCRAFT.filter(fits);          // widen if the native class can't do it
@@ -2330,6 +2350,11 @@ function charterBlockReason(c){
   }
   if(!ratedFor(c)) return 'Need a '+CLASSES[c.cls].label+' type rating';
   if(c.pax>=20) return 'Need a high-capacity jet — '+c.pax+' seats';
+  const maxTier=routeMaxTier(c.dep,c.arr);
+  if(maxTier<CLASSES[c.cls].tier){
+    const fld=isTurbopropOnlyField(c.dep)?c.dep:c.arr;
+    return fld+' has no FBO — turboprop only';
+  }
   if(!rentalTypeFor(c)){
     if(!classRouteOk(c.cls,c.dist,c.dep,c.arr)){
       const maxR=Math.max(0,...AIRCRAFT.filter(a=>a.cls===c.cls).map(a=>a.range));
@@ -2602,21 +2627,19 @@ function rActive(p){
 
       <div style="display:flex;flex-direction:column;gap:18px">
         <div class="card card-pad">
-          <div class="eyebrow">Verify on VATSIM</div>
-          <div class="sec-title" style="margin:2px 0 6px">${curLeg?'Confirm your flight':'All legs flown'}</div>
-          ${curLeg?`<p class="muted" style="font-size:12.5px;margin-bottom:12px">Fly <b class="mono" style="color:var(--ink)">${curLeg.from} → ${curLeg.to}</b> in MSFS. Connect to VATSIM with your callsign, then verify — we'll match it against the live feed and stamp the card. Online flights earn the bonus.</p>
-            ${S.vatCallsign?`<div class="help" style="margin-bottom:12px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
-              <span>Using VATSIM callsign <b class="mono">${esc(S.vatCallsign)}</b> from Settings.</span></div>`
-            :`<div class="help" style="margin-bottom:12px;border-color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-              <span>Set your VATSIM callsign in <a onclick="nav('settings')" style="color:var(--sky);cursor:pointer">Settings</a> before verifying.</span></div>`}
-            <div style="display:flex;gap:9px;margin-top:13px">
-              <button class="btn sky" style="flex:1" onclick="verifyLeg(${t.legs.indexOf(curLeg)})">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>Verify online</button>
-              <button class="btn ghost" onclick="completeLeg(${t.legs.indexOf(curLeg)},false)">Mark flown</button>
-            </div>
-            <div id="verifyOut" style="margin-top:11px;font-size:12.5px"></div>`
-          :`<div class="help" style="border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg><span>Both legs are flown. Settle the trip to bank the payout and relocate ${ac.tail} to ${c.arr}.</span></div>
-            <button class="btn brass" style="width:100%;margin-top:14px;justify-content:center" onclick="settleTrip()">Settle trip &amp; collect ${money(c.payout)}</button>`}
+          <div class="eyebrow">VATSIM online bonus</div>
+          <div class="sec-title" style="margin:2px 0 6px">${curLeg?'Auto network check':'All legs flown'}</div>
+          ${curLeg?`<p class="muted" style="font-size:12.5px;margin-bottom:12px">Fly <b class="mono" style="color:var(--ink)">${curLeg.from} → ${curLeg.to}</b> on VATSIM. We automatically match your profile CID against the live network — no manual submit.</p>`:''}
+          ${vatsimCid()?`<div class="help" style="margin-bottom:12px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+              <span>Profile VATSIM CID <b class="mono">${vatsimCid()}</b> — scanned every 45s while this page is open.</span></div>
+            <div id="vatTripStatus" class="muted" style="font-size:12.5px;margin-bottom:12px">Checking VATSIM network…</div>`
+          :`<div class="help" style="margin-bottom:12px;border-color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              <span>Add your VATSIM CID in <a onclick="nav('settings')" style="color:var(--sky);cursor:pointer">Settings → Pilot profile</a> to qualify for the online bonus.</span></div>`}
+          ${curLeg?`<div style="display:flex;gap:9px;margin-top:4px">
+              <button class="btn ghost" onclick="completeLeg(${t.legs.indexOf(curLeg)})">Mark flown (offline)</button>
+            </div>`
+          :`<div class="help" style="border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg><span>Both legs are flown. Settle the trip to bank the payout${t.verifiedAny?' and VATSIM bonus':''} and relocate ${ac.tail} to ${c.arr}.</span></div>
+            <button class="btn brass" style="width:100%;margin-top:14px;justify-content:center" onclick="settleTrip()">Settle trip &amp; collect ${money(c.payout)}${t.verifiedAny?` + ${money(Math.round(c.payout*CFG.onlineBonus))} VATSIM`:''}</button>`}
         </div>
         <div class="card card-pad">
           <div style="display:flex;align-items:center;gap:8px"><div class="eyebrow">Sim Link</div><div class="sec-spacer" style="flex:1"></div>
@@ -2724,7 +2747,7 @@ function legRow(l,i,acm){
   const active=!l.done && S.active.legs.slice(0,i).every(x=>x.done);
   return `<div class="leg ${l.done?'done':''} ${active?'active':''}">
     <div class="leg-num">${l.done?'✓':i+1}</div>
-    <div style="flex:1"><div class="leg-rt">${l.from} → ${l.to} ${l.verified?'<span class="tag ok" style="margin-left:6px">✓ VATSIM</span>':''}</div>
+    <div style="flex:1"><div class="leg-rt">${l.from} → ${l.to} ${l.vatsimVerified?'<span class="tag ok" style="margin-left:6px">✓ VATSIM</span>':''}</div>
       <div class="leg-tag">${l.kind==='position'?'Positioning leg (no revenue)':'Revenue leg'} · ${e.dist}nm · ${e.block.toFixed(1)}h · fuel est ${money(e.fuel)}</div></div>
     ${l.done?'<span class="muted" style="font-size:12px">flown</span>':active?'<span class="tag warnt">open</span>':'<span class="muted" style="font-size:12px">queued</span>'}
   </div>`;
@@ -2733,28 +2756,61 @@ function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12'
   cl350lat:'C68A',h900:'H25B',sov:'C680',prae600:'E550',cl350:'CL35',long:'C700',citx:'C750',f8x:'FA8X',glex:'GL5T',g650:'GLF6',
   glob7500:'GL7T',g700:'GLF7',bbj:'B38M'}[acm.id]||'C700';}
 
-async function verifyLeg(idx){
-  const cs=(S.vatCallsign||'').trim().toUpperCase();
-  const out=$('#verifyOut');
-  if(!cs){out.innerHTML='<span class="neg">Set your VATSIM callsign in Settings first.</span>';return;}
-  out.innerHTML='<span class="muted">Checking the live VATSIM feed…</span>';
+async function verifyLeg(idx){ pollVatActiveTrip(); }
+function vatsimCid(){
+  const raw=String(S.vatsimCid||'').trim();
+  if(/^\d+$/.test(raw)) return +raw;
+  if(S.vatCallsign && /^\d+$/.test(String(S.vatCallsign).trim())) return +String(S.vatCallsign).trim();
+  return 0;
+}
+let vatTripPoll=null;
+function stopVatTripPoll(){ if(vatTripPoll){ clearInterval(vatTripPoll); vatTripPoll=null; } }
+function startVatTripPoll(){
+  stopVatTripPoll();
+  if(!S.active) return;
+  pollVatActiveTrip();
+  vatTripPoll=setInterval(pollVatActiveTrip, 45000);
+}
+async function pollVatActiveTrip(){
+  const el=$('#vatTripStatus'), stamp=$('#jcStamp');
+  const t=S.active;
+  if(!t) return;
+  const cid=vatsimCid();
+  if(!cid){
+    if(el) el.innerHTML='<span class="warnt">Add your VATSIM CID in Settings to qualify for the online bonus.</span>';
+    return;
+  }
+  const revLeg=t.legs.find(l=>l.kind==='revenue');
+  const curLeg=t.legs.find(l=>!l.done);
+  const target=curLeg||(revLeg&&!revLeg.done?revLeg:null);
   try{
     const d=await fetchVat();
-    const me=d.pilots.find(p=>p.callsign.toUpperCase()===cs);
-    const leg=S.active.legs[idx];
-    if(!me){out.innerHTML=`<span class="neg">Callsign <b>${cs}</b> isn't connected to VATSIM right now. Connect and try again, or use “Mark flown”.</span>`;return;}
-    const fp=me.flight_plan||{};
-    const depOk=!fp.departure||fp.departure.toUpperCase()===leg.from;
-    const arrOk=!fp.arrival||fp.arrival.toUpperCase()===leg.to;
-    leg.verified=true; S.active.verifiedAny=true;
-    const atc=atcCoverage(d,leg.from,leg.to);
-    out.innerHTML=`<span class="pos">✓ Found <b>${cs}</b> online${fp.departure?` · plan ${fp.departure}→${fp.arrival}`:''}.</span> ${(!depOk||!arrOk)?'<span class="muted">(route differs from leg — still credited)</span>':''} ${atc?`<br><span class="muted">ATC online near route: ${atc} → coverage bonus applies.</span>`:''}`;
-    completeLeg(idx,true,atc>0);
+    const me=(d.pilots||[]).find(p=>+p.cid===cid);
+    if(!me){
+      if(el) el.innerHTML=`<span class="muted">CID <b class="mono">${cid}</b> is not connected to VATSIM right now.${target?` Connect and file <b class="mono">${target.from}→${target.to}</b> for the bonus.`:''}</span>`;
+      return;
+    }
+    const fp=me.flight_plan||{}, cs=esc(me.callsign||'');
+    if(!target){
+      if(el) el.innerHTML=`<span class="muted">CID <b class="mono">${cid}</b> online as <b class="mono">${cs}</b>.</span>`;
+      return;
+    }
+    const depOk=fp.departure&&fp.departure.toUpperCase()===target.from;
+    const arrOk=fp.arrival&&fp.arrival.toUpperCase()===target.to;
+    if(depOk&&arrOk){
+      target.vatsimVerified=true;
+      if(revLeg) revLeg.vatsimVerified=true;
+      t.verifiedAny=true;
+      if(el) el.innerHTML=`<span class="pos">✓ CID <b class="mono">${cid}</b> online as <b class="mono">${cs}</b> · plan ${fp.departure}→${fp.arrival} matches — online bonus locked in.</span>`;
+      if(stamp){ stamp.className='stamp ok'; stamp.textContent='✓ VATSIM VERIFIED'; }
+    }else{
+      if(el) el.innerHTML=`<span class="muted">CID <b class="mono">${cid}</b> online as <b class="mono">${cs}</b>${fp.departure?` · plan ${fp.departure}→${fp.arrival||'?'}`:''} — needs <b class="mono">${target.from}→${target.to}</b> for the bonus.</span>`;
+    }
   }catch(e){
-    out.innerHTML=`<span class="neg">Couldn't reach the VATSIM feed (CORS or offline). Use “Mark flown” to log it manually.</span>`;
+    if(el) el.innerHTML='<span class="neg">Could not reach VATSIM — will retry automatically.</span>';
   }
 }
-function completeLeg(idx,verified,atc,capArg){
+function completeLeg(idx,atc,capArg){
   const t=S.active, leg=t.legs[idx], ac=S.fleet.find(f=>f.id===t.acId), acm=ACBY[ac.type];
   if(leg.done)return;
   const e=(leg.kind==='revenue'&&t.fbo)?legEcon(leg.from,leg.to,acm,t.fbo.depFuel,t.fbo.arrRamp):legEcon(leg.from,leg.to,acm);
@@ -2773,7 +2829,7 @@ function completeLeg(idx,verified,atc,capArg){
     S.ledger.push({t:Date.now(),k:legKey,a:-(cost-fuelCost),note:acm.name});
     if(fuelCost) S.ledger.push({t:Date.now(),k:`Fuel burn ${leg.from}→${leg.to}`,a:-fuelCost,note:leg.fuelUsedLb?Math.round(leg.fuelUsedLb)+' lb':'actual'});
   }
-  leg.done=true; leg.verified=leg.verified||!!verified;
+  leg.done=true;
   ac.loc=leg.to; ac.hours+=e.block; ac.cond=Math.max(40,ac.cond-rnd(0.4,1.6));
   S.hours+=e.block; S.nm+=e.dist;
   // ---- flight grading (Sim Link telemetry, else manual) ----
@@ -2798,8 +2854,9 @@ function completeLeg(idx,verified,atc,capArg){
 function settleTrip(){
   const t=S.active, c=t.charter, ac=S.fleet.find(f=>f.id===t.acId);
   const ferry=!!c.ferry;
+  const revLeg=t.legs.find(l=>l.kind==='revenue');
   let payout=ferry?0:c.payout, bonusNote=[];
-  if(!ferry && t.legs.find(l=>l.kind==='revenue').verified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
+  if(!ferry && revLeg&&revLeg.vatsimVerified){const b=Math.round(c.payout*CFG.onlineBonus);payout+=b;bonusNote.push(`online +${money(b)}`);}
   if(payout){
     if(isOnOperatorFleet(ac)) operCredit(payout, `Charter payout ${c.dep}→${c.arr}`, c.client+(bonusNote.length?' · '+bonusNote.join(', '):''));
     else{
@@ -2810,7 +2867,7 @@ function settleTrip(){
   // reputation (a no-revenue ferry earns only token rep)
   let rep=ferry?Math.max(1,Math.round(c.dist/120)):Math.round(c.dist/22)+12;
   if(!ferry){
-    if(t.legs.find(l=>l.kind==='revenue').verified)rep=Math.round(rep*1.5);
+    if(revLeg&&revLeg.vatsimVerified)rep=Math.round(rep*1.5);
     if(c.cat==='medevac'||c.cat==='vvip')rep+=25;
     if(c.rwEvent)rep+=15;                       // small prestige for working a real-world event
     if(c.sportsEvent)rep+=12;                   // team charter prestige
@@ -3975,7 +4032,7 @@ function rAirport(p){
           ${d>=1.12?`<span class="tag demand">📈 ${demandLevel(d)} demand</span>`:''}
           ${rw?`<span class="tag evt-tag">${rw.icon} ${rw.name}</span>`:''}
           ${isOperatorBase(ic)?'<span class="tag ok">★ Company base</span>':''}
-          ${noFbo?'<span class="tag warnt">No FBO</span>':''}
+          ${noFbo?'<span class="tag warnt">No FBO · turboprop only</span>':''}
         </div>
         <span class="sec-spacer" style="flex:1"></span>
         <div id="aptWx" style="min-width:170px">${wxStrip(ic)}</div>
@@ -3986,7 +4043,7 @@ function rAirport(p){
 
     <div class="sec-head"><div><div class="eyebrow">Ground services</div><div class="sec-title">FBOs · fuel &amp; fees</div></div>
       <div class="sec-spacer"></div><span class="muted" style="font-size:11.5px">${noFbo?'no on-field fuel — tanker or reposition':`landing fee (midsize) ${money(landingFeeFor(ic,'midsize'))}`}</span></div>
-    ${noFbo?`<div class="card card-pad" style="margin-bottom:18px"><div class="muted" style="font-size:12.5px">This field is not in the Skyledger FBO directory — there is no Jet-A uplift on the ramp.${nearFuel?` Reposition to <b class="mono">${nearFuel.ic}</b> (${nearFuel.name}, ${nearFuel.dist.toLocaleString()} nm) for fuel.`:' Plan tankered fuel before you arrive.'} Handling fees below are regional estimates only.</div></div>`:''}
+    ${noFbo?`<div class="card card-pad" style="margin-bottom:18px"><div class="muted" style="font-size:12.5px">This field is not in the Skyledger FBO directory — <b>turboprop only</b>, no Jet-A uplift on the ramp.${nearFuel?` Reposition to <b class="mono">${nearFuel.ic}</b> (${nearFuel.name}, ${nearFuel.dist.toLocaleString()} nm) for fuel.`:' Plan tankered fuel before you arrive.'} Handling fees below are regional estimates only.</div></div>`:''}
     <div class="mkt-table" style="margin-bottom:18px">
       <div class="mkt-head" style="grid-template-columns:1.7fr 1fr 1fr 1fr .8fr"><div>FBO</div><div>Jet-A /gal</div><div>Ramp · light</div><div>Ramp · heavy</div><div></div></div>
       ${fbos.map(f=>`<div class="mkt-row" style="grid-template-columns:1.7fr 1fr 1fr 1fr .8fr">
@@ -4482,7 +4539,7 @@ function onTelemetry(d){
         if(simState.wasAir && cap.departed){ cap.landingFpm=Math.abs(simState.lastVs||d.vsFpm||0); }
         if(typeof d.fuelLb==='number') leg.fuelEndLb=d.fuelLb;
         const dist=distToApt(d.lat,d.lon,leg.to);
-        if(cap.departed && d.gsKt<35 && dist<6){ leg.capture=cap; simState.legIdx=-1; completeLeg(idx,false,false,cap); return; }
+        if(cap.departed && d.gsKt<35 && dist<6){ leg.capture=cap; simState.legIdx=-1; completeLeg(idx,false,cap); return; }
       }
       simState.wasAir=!d.onGround;
     }
@@ -4768,6 +4825,8 @@ function rSettings(p){
         <div class="form-row"><label>Company / flight dept</label><input class="field" id="setCo" value="${esc(a.company)}" style="width:100%"></div>
       </div>
       <div class="form-row"><label>Email</label><input class="field" id="setEmail" type="email" value="${esc(cloud?(AUTH.user.email||''):'')}" ${cloud?'':'disabled placeholder="offline — connect cloud"'} style="width:100%"></div>
+      <div class="form-row"><label>VATSIM CID</label><input class="field mono" id="setVatCid" value="${esc(S.vatsimCid||'')}" placeholder="e.g. 1234567" inputmode="numeric" style="width:100%"></div>
+      <p class="muted" style="font-size:11.5px;margin-top:-4px">Your permanent VATSIM member ID — checked automatically on active trips for the online flying bonus.</p>
       <button class="btn brass" style="margin-top:14px" onclick="saveAccount()">Save account</button>
     </div>
     ${cloud?`<div class="card card-pad" style="margin-top:16px">
@@ -4780,7 +4839,6 @@ function rSettings(p){
     <div class="card card-pad">
       <div class="sec-head"><div><div class="eyebrow">Operations</div><div class="sec-title">Game preferences</div></div></div>
       <div class="form-row"><label>Home base (ICAO)</label><input class="field mono" id="setBase" value="${esc(S.base)}" maxlength="4" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
-      <div class="form-row"><label>VATSIM callsign</label><input class="field mono" id="setVat" value="${esc(S.vatCallsign||'')}" placeholder="e.g. DAL123" oninput="this.value=this.value.toUpperCase()" style="width:100%"></div>
       <div class="form-row"><label>SimBrief username / Pilot ID</label><input class="field" id="setSB" value="${esc(S.simbriefUser||'')}" style="width:100%"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><label style="margin:0;font-size:12px;color:var(--muted)">Appearance</label>
         <button class="btn ghost sm" onclick="toggleTheme()">Toggle dark / light</button></div>
@@ -4820,6 +4878,9 @@ function rSettings(p){
 function saveAccount(){
   S.pilot=($('#setPilot').value||'').trim()||S.pilot;
   S.account={realName:$('#setReal').value.trim(),company:$('#setCo').value.trim()};
+  const cid=($('#setVatCid')&&$('#setVatCid').value||'').trim();
+  if(cid && !/^\d+$/.test(cid)) showToast('VATSIM CID must be numeric','bad');
+  else S.vatsimCid=cid;
   save(); renderTop();
   const cloud=cloudEnabled()&&AUTH.user, newEmail=($('#setEmail')&&$('#setEmail').value||'').trim();
   if(cloud && newEmail && newEmail!==AUTH.user.email) updateEmail(newEmail);
@@ -4891,7 +4952,6 @@ async function changePassword(){
 function savePrefs(){
   const b=($('#setBase').value||'').trim().toUpperCase();
   if(b && APTBY[b]) S.base=b; else if(b) showToast('Unknown ICAO — base unchanged','bad');
-  S.vatCallsign=($('#setVat').value||'').trim().toUpperCase();
   S.simbriefUser=($('#setSB').value||'').trim();
   save(); showToast('Preferences saved','good'); renderAll();
 }
@@ -5344,9 +5404,12 @@ function migrateSave(){
   if(!S.role)S.role='both';
   if(!S.globalFuel)S.globalFuel={NA:1,EU:1,ME:1,AS:1,OC:1,SA:1,AF:1};
   if(S.rentStarter===undefined)S.rentStarter=false;
+  if(S.vatsimCid===undefined) S.vatsimCid='';
+  if(!S.vatsimCid && S.vatCallsign && /^\d+$/.test(String(S.vatCallsign).trim())) S.vatsimCid=String(S.vatCallsign).trim();
   if(S.vatCallsign===undefined)S.vatCallsign='';
   if(S.tankerFuelLb===undefined)S.tankerFuelLb=0;
   if(S.active&&!S.active.fuel){ initTripFuel(S.active); if(S.active.ofp) applySimbriefFuelAdj(S.active); }
+  if(S.active&&S.active.legs) S.active.legs.forEach(l=>{ if(l.verified&&!l.vatsimVerified) l.vatsimVerified=true; });
   (S.fleet||[]).forEach(f=>{ if(f.rentedUntil){f.rentedUntil=0;f.busy=false;f.renter='';} });   // retire legacy auto-rentals
   (S.fleet||[]).forEach(f=>{ if(f.type==='lr75')f.type='cj4'; });   // retired Learjet 75 -> CJ4
   (S.used||[]).forEach(u=>{ if(u.type==='lr75')u.type='cj4'; });
@@ -5355,6 +5418,7 @@ function migrateSave(){
     if(c.operatorPosted&&!c.operatorVisibility) c.operatorVisibility='public';
     if(c.operatorPosted&&S.operator&&!c.operatorId){ c.operatorId=S.operator.id; c.operatorCloudId=S.operator.cloudId||null; }
   });
+  S.board=(S.board||[]).filter(c=>routeMaxTier(c.dep,c.arr)>=CLASSES[c.cls].tier);
 }
 function resumeGame(){
   migrateSave();
@@ -5471,7 +5535,7 @@ async function cloudSaveNow(){
   try{
     await sb.from('saves').upsert({user_id:AUTH.user.id,data:S,updated_at:new Date().toISOString()},{onConflict:'user_id'});
     await sb.from('profiles').upsert({id:AUTH.user.id,pilot:S.pilot,rep:Math.round(S.rep||0),cash:Math.round(S.cash||0),
-      flights:S.flights||0,base:S.base||'',pirep_code:S.pirepCode||'',updated_at:new Date().toISOString()},{onConflict:'id'});
+      flights:S.flights||0,base:S.base||'',pirep_code:S.pirepCode||'',vatsim_cid:S.vatsimCid||'',updated_at:new Date().toISOString()},{onConflict:'id'});
   }catch(e){ /* offline / RLS — ignore */ }
 }
 async function cloudActivity(text){
@@ -5527,7 +5591,7 @@ function applyPirep(pirep){
     fuelBurnedLb:c.fuelBurnedLb!=null?+c.fuelBurnedLb:(c.fuelBurned!=null?+c.fuelBurned:null),
     fuelAddedLb:c.fuelAddedLb!=null?+c.fuelAddedLb:null };
   applyPirepFuelToLeg(leg,cap);
-  completeLeg(idx,false,false,cap);
+  completeLeg(idx,false,cap);
   return true;
 }
 function submitPirepText(){
