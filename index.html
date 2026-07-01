@@ -870,7 +870,7 @@ function genSportsCharter(game,leg,teamAbbr){
   const dep=leg==='inbound'?hub:venue, arr=leg==='inbound'?venue:hub;
   const dist=Math.round(haversine(dep,arr));
   if(dist<50) return null;
-  const acmRef=ACBY.bbj||AIRCRAFT.find(a=>a.cls==='ulr')||AIRCRAFT[0];
+  const acmRef=teamAcFor(dist)||ACBY.bbj||AIRCRAFT.find(a=>a.cls==='ulr')||AIRCRAFT[0];
   const block=dist/acmRef.cruise+CFG.taxiPad;
   const mktD=demandAt(venue);
   const demand=mktD*1.15;
@@ -953,7 +953,7 @@ const CAT = {
   family:   {label:'Family Trip',    mult:0.98},
   attendee: {label:'Event Traveler', mult:1.06},
   group:    {label:'Private Group',  mult:1.08},
-  sports:   {label:'Team Charter',   mult:1.30},   // 50+ pax — BBJ-class or bigger only
+  sports:   {label:'Team Charter',   mult:1.30},   // 50+ pax — BBJ / A319 class only
   medevac:  {label:'Medevac',        mult:1.45},
   gov:      {label:'Government',      mult:1.30},
   vvip:     {label:'VVIP',           mult:1.62},
@@ -994,7 +994,8 @@ const AIRCRAFT = [
   {id:'g650',name:'Gulfstream G650ER',cls:'heavy',pax:14,range:7500,cruise:516,burn:500,maint:1850,price:70000000,lease:14500},
   {id:'glob7500',name:'Global 7500',cls:'ulr',pax:19,range:7700,cruise:516,burn:510,maint:2050,price:75000000,lease:16000},
   {id:'g700',name:'Gulfstream G700',cls:'ulr',pax:19,range:7750,cruise:516,burn:520,maint:2100,price:78000000,lease:16500},
-  {id:'bbj',name:'Boeing BBJ MAX 8',cls:'ulr',pax:90,range:6640,cruise:470,burn:800,maint:2600,price:90000000,lease:21000},
+  {id:'a319',name:'Airbus A319',cls:'ulr',pax:124,range:3750,cruise:460,burn:520,maint:2000,price:62000000,lease:15000,minRwy:5000},
+  {id:'bbj',name:'Boeing BBJ MAX 8',cls:'ulr',pax:90,range:6640,cruise:470,burn:800,maint:2600,price:90000000,lease:21000,minRwy:5500},
 ];
 const ACBY = Object.fromEntries(AIRCRAFT.map(a=>[a.id,a]));
 
@@ -1022,7 +1023,11 @@ function buildAptIndex(rows){
   invalidateFboCache();
 }
 function runwayFt(ic){ return (APTBY[ic]&&APTBY[ic].rwy)||0; }
-function runwayOk(ic,cls){ const c=CLASSES[cls]; return c&&runwayFt(ic)>=c.minRwy; }
+function acMinRwy(ac){ return ac&&ac.minRwy!=null?ac.minRwy:(CLASSES[ac.cls]&&CLASSES[ac.cls].minRwy)||99999; }
+function runwayOk(ic,cls,acId){
+  const min=acId&&ACBY[acId]?acMinRwy(ACBY[acId]):(CLASSES[cls]&&CLASSES[cls].minRwy);
+  return min!=null&&runwayFt(ic)>=min;
+}
 function capClassByRunway(dep,arr,cls){
   let t=CLASSES[cls]?CLASSES[cls].tier:0;
   while(t>=0){ const k=TIERS[t]; if(runwayOk(dep,k)&&runwayOk(arr,k)) return k; t--; }
@@ -1030,8 +1035,10 @@ function capClassByRunway(dep,arr,cls){
 }
 /* can any catalog aircraft in this class actually fly dep→arr at this distance? */
 function classRouteOk(cls,dist,dep,arr){
-  return AIRCRAFT.some(a=>a.cls===cls && a.range>=dist && runwayOk(dep,a.cls) && runwayOk(arr,a.cls));
+  return AIRCRAFT.some(a=>a.cls===cls && a.range>=dist && runwayOk(dep,a.cls,a.id) && runwayOk(arr,a.cls,a.id));
 }
+function teamAircraft(){ return AIRCRAFT.filter(a=>a.pax>=50); }
+function teamAcFor(dist){ return teamAircraft().filter(a=>a.range>=dist).sort((x,y)=>x.lease-y.lease)[0]||null; }
 function onboardingBases(){
   const hubs=new Set(HUBS);
   return APT.filter(a=>hubs.has(a[0])||a[4]==='i').sort((a,b)=>a[0].localeCompare(b[0]));
@@ -1701,7 +1708,7 @@ function _genCharterOnce(forceDep,opts){
   const rw = rwAt(dep)||rwAt(arr);
   // ---- category: a varied mix of who's actually flying ----
   let cat;
-  const canTeam = dist<=ACBY.bbj.range;   // a 50+ team needs a BBJ, which has finite range
+  const canTeam = !!teamAcFor(dist);
   if(rw){
     // events are mostly ordinary people travelling TO/FROM them — not the team itself
     const w = rw.type==='summit' ? {gov:10,vvip:10,exec:14,attendee:18,group:14,family:8}
@@ -1809,7 +1816,7 @@ function fleetCanFly(c){
   const maxTier=routeMaxTier(c.dep,c.arr);
   return S.fleet.some(f=>{ if(f.busy) return false; const a=ACBY[f.type];
     return CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
-      && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls); });
+      && runwayOk(c.dep,a.cls,f.type) && runwayOk(c.arr,a.cls,f.type); });
 }
 /* generate a charter guaranteed flyable by a specific idle aircraft (right tier, range, seats) */
 function genFlyableFor(f){
@@ -1817,10 +1824,10 @@ function genFlyableFor(f){
   let arr=null;
   for(let t=0;t<40 && !arr;t++){
     const cand=weightedArr(f.loc); const d=haversine(f.loc,cand);
-    if(d>=90&&d<=a.range*0.95&&runwayOk(cand,a.cls)&&runwayOk(f.loc,a.cls)) arr=cand;
+    if(d>=90&&d<=a.range*0.95&&runwayOk(cand,a.cls,a.id)&&runwayOk(f.loc,a.cls,a.id)) arr=cand;
   }
   if(!arr){ const inrange=APT.map(x=>x[0]).filter(ic=>ic!==f.loc).map(ic=>[ic,haversine(f.loc,ic)])
-    .filter(x=>x[1]>=90&&x[1]<=a.range*0.95&&runwayOk(x[0],a.cls)&&runwayOk(f.loc,a.cls))
+    .filter(x=>x[1]>=90&&x[1]<=a.range*0.95&&runwayOk(x[0],a.cls,a.id)&&runwayOk(f.loc,a.cls,a.id))
     .sort((p,q)=>p[1]-q[1]); arr=inrange.length?inrange[Math.floor(Math.random()*Math.min(8,inrange.length))][0]:null; }
   if(!arr) return null;
   return genCharter(f.loc,{arrTo:arr, capTier, capPax:a.pax});
@@ -1870,7 +1877,7 @@ function bestAircraftFor(c){
   const maxTier=routeMaxTier(c.dep,c.arr);
   const cand=S.fleet.filter(f=>{ if(f.busy) return false; const a=ACBY[f.type];
     return CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0)
-      && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls); });
+      && runwayOk(c.dep,a.cls,f.type) && runwayOk(c.arr,a.cls,f.type); });
   if(!cand.length) return null;
   cand.sort((a,b)=>{
     const da=a.loc===c.dep?0:haversine(a.loc,c.dep), db=b.loc===c.dep?0:haversine(b.loc,c.dep);
@@ -2085,7 +2092,7 @@ function acForCharter(c){
   const sel=selectedFleetAc();
   const maxTier=routeMaxTier(c.dep,c.arr);
   if(sel){ const a=ACBY[sel.type];
-    return (CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0) && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls))?sel:null; }
+    return (CLASSES[a.cls].tier<=maxTier && a.range>=c.dist && CLASSES[a.cls].tier>=c.tier && a.pax>=(c.pax||0) && runwayOk(c.dep,a.cls,sel.type) && runwayOk(c.arr,a.cls,sel.type))?sel:null; }
   return bestAircraftFor(c);
 }
 function boardStatusKey(c){
@@ -2317,7 +2324,7 @@ function rentalTypeFor(c){ return rentalTypesFor(c)[0]||null; }
 function rentalTypesFor(c){
   const maxTier=routeMaxTier(c.dep,c.arr);
   const fits=a=>a.range>=c.dist && a.pax>=(c.pax||0) && CLASSES[a.cls].tier<=maxTier && CLASSES[a.cls].tier<=S.maxTier && CLASSES[a.cls].tier>=c.tier
-    && runwayOk(c.dep,a.cls) && runwayOk(c.arr,a.cls);
+    && runwayOk(c.dep,a.cls,a.id) && runwayOk(c.arr,a.cls,a.id);
   let group=AIRCRAFT.filter(a=>a.cls===c.cls && fits(a));
   if(!group.length) group=AIRCRAFT.filter(fits);          // widen if the native class can't do it
   return group.sort((x,y)=>x.lease-y.lease);
@@ -2342,8 +2349,8 @@ function charterBlockReason(c){
     if(CLASSES[a.cls].tier<c.tier) return sel.tail+' needs a '+CLASSES[c.cls].label+' rating';
     if(a.pax<(c.pax||0)) return sel.tail+' only seats '+a.pax+' (need '+(c.pax||0)+')';
     if(a.range<c.dist) return 'Route '+c.dist.toLocaleString()+' nm exceeds '+sel.tail+' range ('+a.range.toLocaleString()+' nm)';
-    if(!runwayOk(c.dep,a.cls)||!runwayOk(c.arr,a.cls)){
-      const bad=!runwayOk(c.dep,a.cls)?c.dep:c.arr;
+    if(!runwayOk(c.dep,a.cls,sel.type)||!runwayOk(c.arr,a.cls,sel.type)){
+      const bad=!runwayOk(c.dep,a.cls,sel.type)?c.dep:c.arr;
       return 'Runway at '+bad+' too short for '+sel.tail;
     }
     return sel.tail+" can't fly this";
@@ -2635,9 +2642,8 @@ function rActive(p){
             <div id="vatTripStatus" class="muted" style="font-size:12.5px;margin-bottom:12px">Checking VATSIM network…</div>`
           :`<div class="help" style="margin-bottom:12px;border-color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
               <span>Add your VATSIM CID in <a onclick="nav('settings')" style="color:var(--sky);cursor:pointer">Settings → Pilot profile</a> to qualify for the online bonus.</span></div>`}
-          ${curLeg?`<div style="display:flex;gap:9px;margin-top:4px">
-              <button class="btn ghost" onclick="completeLeg(${t.legs.indexOf(curLeg)})">Mark flown (offline)</button>
-            </div>`
+          ${curLeg?`<div class="help" style="margin-top:4px;border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
+              <span>Legs complete automatically when you land with <b>Sim Link</b> connected — manual “mark flown” is disabled.</span></div>`
           :`<div class="help" style="border-style:solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg><span>Both legs are flown. Settle the trip to bank the payout${t.verifiedAny?' and VATSIM bonus':''} and relocate ${ac.tail} to ${c.arr}.</span></div>
             <button class="btn brass" style="width:100%;margin-top:14px;justify-content:center" onclick="settleTrip()">Settle trip &amp; collect ${money(c.payout)}${t.verifiedAny?` + ${money(Math.round(c.payout*CFG.onlineBonus))} VATSIM`:''}</button>`}
         </div>
@@ -2646,7 +2652,7 @@ function rActive(p){
             <span class="dot ${simState.connected?'live':'off'}"></span><span class="muted" style="font-size:11px">${simState.connected?'tracking':'offline'}</span></div>
           <div class="sec-title" style="margin:2px 0 10px">SimConnect tracking</div>
           ${simState.connected
-            ? `<div id="simLiveBody"></div><p class="muted" style="font-size:11.5px;margin-top:10px">Fly the open leg — touchdown within 6&nbsp;nm of the destination auto-completes it and grades your landing.</p>`
+            ? `<div id="simLiveBody"></div><p class="muted" style="font-size:11.5px;margin-top:10px"><b>Required:</b> fly the open leg in MSFS — touchdown within 6&nbsp;nm of the destination auto-completes it and grades your landing.</p>`
             : IS_ELECTRON
               ? `<p class="muted" style="font-size:12.5px;margin-bottom:11px">${simUserDisconnected?'Auto-link paused.':'MSFS auto-link is on — start the sim and load a flight.'} The status pill at the top shows when you're linked.</p>
                  ${simUserDisconnected?`<button class="btn sky sm" style="width:100%;justify-content:center" onclick="resumeAutoSim()">Resume auto-link</button>`:''}`
@@ -2754,7 +2760,7 @@ function legRow(l,i,acm){
 }
 function sbType(acm){return {c208:'C208',tbm850:'TBM8',tbm930:'TBM9',pc12:'PC12',be250:'BE20',be350:'B350',cj4:'C25C',e55p:'E55P',f50:'FA50',
   cl350lat:'C68A',h900:'H25B',sov:'C680',prae600:'E550',cl350:'CL35',long:'C700',citx:'C750',f8x:'FA8X',glex:'GL5T',g650:'GLF6',
-  glob7500:'GL7T',g700:'GLF7',bbj:'B38M'}[acm.id]||'C700';}
+  glob7500:'GL7T',g700:'GLF7',a319:'A319',bbj:'B38M'}[acm.id]||'C700';}
 
 async function verifyLeg(idx){ pollVatActiveTrip(); }
 function vatsimCid(){
@@ -2810,7 +2816,11 @@ async function pollVatActiveTrip(){
     if(el) el.innerHTML='<span class="neg">Could not reach VATSIM — will retry automatically.</span>';
   }
 }
-function completeLeg(idx,atc,capArg){
+function completeLeg(idx,capArg){
+  if(!capArg){
+    showToast('Connect Sim Link in MSFS and fly the leg — landing auto-completes the trip','bad');
+    return;
+  }
   const t=S.active, leg=t.legs[idx], ac=S.fleet.find(f=>f.id===t.acId), acm=ACBY[ac.type];
   if(leg.done)return;
   const e=(leg.kind==='revenue'&&t.fbo)?legEcon(leg.from,leg.to,acm,t.fbo.depFuel,t.fbo.arrRamp):legEcon(leg.from,leg.to,acm);
@@ -2848,7 +2858,7 @@ function completeLeg(idx,atc,capArg){
     const nd=demandAt(leg.to);
     if(nd>1.12) mktMsg=` · ${leg.to} outbound demand ↑ ${demandLevel(nd)}`;
   }
-  showToast(`${leg.from}→${leg.to} logged · ${cap?`landing graded ${grade.letter}`:'manual log'} · ${money(-cost)} costs${mktMsg}`,'good');
+  showToast(`${leg.from}→${leg.to} logged · landing graded ${grade.letter} · ${money(-cost)} costs${mktMsg}`,'good');
   renderAll();
 }
 function settleTrip(){
@@ -4093,7 +4103,7 @@ function openFerry(kind,ref){
   }
   const acm=ACBY[type];
   const dests=APT.map(x=>x[0]).filter(x=>x!==dep&&APTBY[x]).map(x=>[x,haversine(dep,x)]).filter(x=>x[1]>=60).sort((p,q)=>p[1]-q[1]);
-  const inRange=dests.filter(x=>x[1]<=acm.range*0.95&&runwayOk(x[0],acm.cls));
+  const inRange=dests.filter(x=>x[1]<=acm.range*0.95&&runwayOk(x[0],acm.cls,type));
   const defDest=((inRange[0]||dests[0])||[null])[0];
   _ferry={kind,ref,type,rate,dep,owned,tail,dest:defDest};
   modal(`
@@ -4104,7 +4114,7 @@ function openFerry(kind,ref){
       ${fboTankerWarn(dep,'dep')}
       <div class="form-row" style="margin-top:4px"><label>Destination</label>
         <select class="field" id="ferryDest" onchange="setFerryDest(this.value)" style="width:100%">
-          ${dests.map(([x,dd])=>`<option value="${x}" ${x===defDest?'selected':''} ${dd>acm.range*0.95||!runwayOk(x,acm.cls)?'disabled':''}>${x} · ${APTBY[x].name} · ${dd.toLocaleString()}nm${dd>acm.range*0.95?' (out of range)':!runwayOk(x,acm.cls)?' (runway short)':''}</option>`).join('')}
+          ${dests.map(([x,dd])=>`<option value="${x}" ${x===defDest?'selected':''} ${dd>acm.range*0.95||!runwayOk(x,acm.cls,type)?'disabled':''}>${x} · ${APTBY[x].name} · ${dd.toLocaleString()}nm${dd>acm.range*0.95?' (out of range)':!runwayOk(x,acm.cls,type)?' (runway short)':''}</option>`).join('')}
         </select></div>
       <div id="ferryPnl"></div>
       <div class="help" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12l20-8-8 20-2.5-9z"/></svg>
@@ -4145,7 +4155,7 @@ function launchFerry(){
   if(S.active){ showToast('Finish your active trip first','bad'); return; }
   const {kind,ref,type,rate,dep,dest,owned}=_ferry, acm=ACBY[type];
   if(haversine(dep,dest)>acm.range*0.95){ showToast('Destination is out of range','bad'); return; }
-  if(!runwayOk(dest,acm.cls)||!runwayOk(dep,acm.cls)){ showToast('Runway too short for this aircraft at dep or destination','bad'); return; }
+  if(!runwayOk(dest,acm.cls,type)||!runwayOk(dep,acm.cls,type)){ showToast('Runway too short for this aircraft at dep or destination','bad'); return; }
   let ac;
   if(kind==='owned'){
     ac=S.fleet.find(x=>x.id===ref);
@@ -4539,7 +4549,7 @@ function onTelemetry(d){
         if(simState.wasAir && cap.departed){ cap.landingFpm=Math.abs(simState.lastVs||d.vsFpm||0); }
         if(typeof d.fuelLb==='number') leg.fuelEndLb=d.fuelLb;
         const dist=distToApt(d.lat,d.lon,leg.to);
-        if(cap.departed && d.gsKt<35 && dist<6){ leg.capture=cap; simState.legIdx=-1; completeLeg(idx,false,cap); return; }
+        if(cap.departed && d.gsKt<35 && dist<6){ leg.capture=cap; simState.legIdx=-1; completeLeg(idx,cap); return; }
       }
       simState.wasAir=!d.onGround;
     }
@@ -5578,54 +5588,18 @@ function decodePirep(text){
   return null;
 }
 function applyPirep(pirep){
-  if(!pirep){ showToast("Couldn't read that PIREP code",'bad'); return false; }
-  if(!S.active){ showToast('No active trip to log this PIREP against','bad'); return false; }
-  const t=S.active, idx=t.legs.findIndex(l=>!l.done);
-  if(idx<0){ showToast('All legs already flown — settle the trip','bad'); return false; }
-  const leg=t.legs[idx];
-  const c=pirep.cap||pirep;
-  const cap={ departed:c.departed!==false, landingFpm:Math.abs(+c.landingFpm||0),
-    overspeed:!!c.overspeed, stall:!!c.stall, overstress:!!c.overstress, maxG:+c.maxG||1, crashed:!!c.crashed,
-    fuelStartLb:c.fuelStartLb!=null?+c.fuelStartLb:(c.fuelStart!=null?+c.fuelStart:null),
-    fuelEndLb:c.fuelEndLb!=null?+c.fuelEndLb:(c.fuelEnd!=null?+c.fuelEnd:null),
-    fuelBurnedLb:c.fuelBurnedLb!=null?+c.fuelBurnedLb:(c.fuelBurned!=null?+c.fuelBurned:null),
-    fuelAddedLb:c.fuelAddedLb!=null?+c.fuelAddedLb:null };
-  applyPirepFuelToLeg(leg,cap);
-  completeLeg(idx,false,cap);
-  return true;
+  showToast('Legs must be completed in MSFS with Sim Link connected','bad');
+  return false;
 }
 function submitPirepText(){
   const el=$('#pirepIn'); if(!el)return;
   if(applyPirep(decodePirep(el.value))) el.value='';
 }
 async function cloudPullPireps(quiet){
-  const sb=getSB(); if(!sb||!AUTH.user||!S||!S.pirepCode)return;
-  try{
-    const {data,error}=await sb.from('pireps').select('*').eq('code',S.pirepCode).order('created_at',{ascending:true});
-    if(error){ if(!quiet)showToast('Could not check for PIREPs','bad'); return; }
-    if(!data||!data.length){ if(!quiet)showToast('No new PIREP found yet','bad'); return; }
-    let applied=0;
-    for(const row of data){
-      if(S.active && applyPirep(row.data)) applied++;
-      try{ await sb.from('pireps').delete().eq('id',row.id); }catch(e){}
-    }
-    if(!quiet && !applied) showToast('PIREP received, but no open leg to apply it to','bad');
-  }catch(e){}
+  if(!quiet) showToast('Legs complete via Sim Link in MSFS — PIREP filing is disabled','bad');
 }
 function pirepCard(){
-  if(typeof SkySimConnect!=='undefined'&&SkySimConnect.available()) return '';
-  const code=S.pirepCode||'', cloud=cloudEnabled()&&AUTH.user;
-  return `<div class="card card-pad">
-    <div class="eyebrow">MSFS toolbar PIREP</div>
-    <div class="sec-title" style="margin:2px 0 8px">Log this leg from the sim</div>
-    <p class="muted" style="font-size:12.5px;margin-bottom:10px">Track the flight with the Skyledger toolbar panel in MSFS, then file the PIREP here to grade the open leg and bill <b>actual fuel burned</b> against your SimBrief plan.</p>
-    ${cloud?`<div class="help" style="margin-bottom:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="10"/></svg>
-        <span>Panel pairing code: <b class="mono" style="font-size:14px">${code}</b> — enter it once in the MSFS panel and your PIREPs arrive automatically.</span></div>
-      <button class="btn sky sm" style="width:100%;justify-content:center;margin-bottom:12px" onclick="cloudPullPireps(false)">Check for submitted PIREP</button>`:''}
-    <div class="form-row" style="margin-top:0"><label>Or paste a PIREP code</label>
-      <textarea class="field" id="pirepIn" placeholder="Paste the code shown in the MSFS panel…" style="width:100%;min-height:58px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea></div>
-    <button class="btn brass sm" style="width:100%;justify-content:center;margin-top:10px" onclick="submitPirepText()">File PIREP &amp; grade leg</button>
-  </div>`;
+  return '';
 }
 
 /* ---- COMMUNITY PAGE ---- */
@@ -5733,8 +5707,7 @@ async function pollLive(first){
   if(S && (view==='events'||view==='weather'||view==='dash'||view==='board')) renderAll();
 }
 
-/* auto-pick up PIREPs submitted from the MSFS toolbar panel while a trip is open */
-setInterval(()=>{ if(S&&S.active&&view==='active'&&cloudEnabled()&&AUTH.user&&!(typeof SkySimConnect!=='undefined'&&SkySimConnect.available())) cloudPullPireps(true); }, 15000);
+/* auto-pick up PIREPs disabled — legs complete via Sim Link only */
 
 </script>
 </body>
